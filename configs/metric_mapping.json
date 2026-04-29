@@ -1,0 +1,55 @@
+{
+  "topic_to_device_type": {
+    "dcim.raw.network": "network_switch",
+    "dcim.raw.power.ups": "ups",
+    "dcim.raw.storage.nas": "nas",
+    "dcim.raw.server": "server",
+    "dcim.raw.cctv": "cctv",
+    "dcim.raw.device.isapi": "cctv"
+  },
+  "measurement_to_device_type": {
+    "interface": "network_switch",
+    "ups_apc": "ups",
+    "dcim_nas": "nas",
+    "server_redfish": "server",
+    "cctv_metrics": "cctv"
+  },
+  "dcim_nas": {
+    "metric_name": "disk_temperature",
+    "metric_field": "diskTemp",
+    "metric_unit": "celsius",
+    "severity_field": "diskStatus",
+    "severity_map": {
+      "1": "info",
+      "2": "warning",
+      "3": "critical"
+    }
+  },
+  "ups_apc": {
+    "metric_name": "battery_capacity",
+    "metric_field": "upsBatteryCapacity",
+    "metric_unit": "percent",
+    "secondary_metrics": [
+      {
+        "field": "upsBatteryTemp",
+        "name": "battery_temperature",
+        "unit": "celsius"
+      },
+      {
+        "field": "upsOutputVoltage",
+        "name": "output_voltage",
+        "unit": "volt"
+      }
+    ]
+  },
+  "interface": {
+    "metric_name": "interface_status",
+    "metric_field": "ifOperStatus",
+    "metric_unit": "status_code"
+  },
+  "default": {
+    "metric_name": "general_metric",
+    "metric_field": null,
+    "metric_unit": null
+  }
+}
