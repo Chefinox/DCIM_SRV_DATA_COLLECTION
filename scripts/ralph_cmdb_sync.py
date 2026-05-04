@@ -336,8 +336,8 @@ def sync_network_storage(row):
 
 # --- PRUNE STALE ASSETS ---
 def prune_stale_assets():
-    """Hapus aset dari Ralph jika Last Sync > 7 hari."""
-    logging.info("--- Pruning Stale Assets (>7 Days) ---")
+    """Hapus tulisan 'Last Sync' dari remarks jika Last Sync > 7 hari (bukan hapus aset)."""
+    logging.info("--- Pruning Stale 'Last Sync' Remarks (>7 Days) ---")
     assets = ralph_get_all(f"{RALPH_API_BASE}/data-center-assets/")
     now = datetime.now()
     count = 0
@@ -349,12 +349,17 @@ def prune_stale_assets():
             try:
                 last_sync = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
                 if (now - last_sync).days > 7:
-                    r = requests.delete(f"{RALPH_API_BASE}/data-center-assets/{asset['id']}/", headers=RALPH_HEADERS, verify=False)
-                    logging.info(f"  [PRUNE] Deleted Stale Asset {asset['hostname']} (Last Sync: {date_str}) → HTTP {r.status_code}")
+                    # Hapus tulisan Last Sync dari remarks
+                    new_remarks = re.sub(r"\|\s*Last Sync:\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", "", remarks)
+                    new_remarks = re.sub(r"Last Sync:\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", "", new_remarks).strip()
+                    
+                    payload = {"remarks": new_remarks}
+                    r = requests.patch(f"{RALPH_API_BASE}/data-center-assets/{asset['id']}/", headers=RALPH_HEADERS, json=payload, verify=False)
+                    logging.info(f"  [PRUNE] Cleared 'Last Sync' for {asset['hostname']} (Last Sync was: {date_str}) → HTTP {r.status_code}")
                     count += 1
             except Exception as e:
                 pass
-    logging.info(f"  Total {count} stale assets pruned.")
+    logging.info(f"  Total {count} stale remarks cleared.")
 
 
 # --- MAIN ---
