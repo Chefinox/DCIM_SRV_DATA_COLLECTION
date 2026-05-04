@@ -274,6 +274,48 @@ def sync_ups(row):
     update_management_ip(asset_id, ip, hostname)
 
 
+# --- NAS & NETWORK SWITCH SYNC ---
+
+def sync_network_storage(row):
+    """Sync NAS atau Network Switch dari PostgreSQL ke Ralph."""
+    sn = row.get("serial_number")
+    hostname = row.get("hostname")
+    ip = str(row["ip"])
+    firmware = row.get("tag_fw")
+    model = row.get("model")
+    device_type = row.get("device_type").upper()
+
+    if not sn or sn == 'NO_SN':
+        logging.warning(f"  [{device_type}] Serial number kosong/valid untuk IP {ip}, skip.")
+        return
+
+    asset = find_ralph_asset_by_sn(sn)
+    if not asset:
+        logging.warning(f"  [{device_type}] Aset SN {sn} tidak ditemukan di Ralph, skip.")
+        return
+
+    asset_id = asset["id"]
+    logging.info(f"  [{device_type}] Sync {hostname} (SN:{sn}, ID:{asset_id})")
+
+    # Basic Info
+    payload = {
+        "hostname": hostname,
+    }
+    if firmware:
+        payload["firmware_version"] = firmware
+
+    # Update remarks dengan detail model asli
+    if model:
+        payload["remarks"] = f"Model SNMP: {model}"
+
+    r = requests.patch(f"{RALPH_API_BASE}/data-center-assets/{asset_id}/",
+                       headers=RALPH_HEADERS, json=payload, verify=False)
+    logging.info(f"  [BASIC] PATCH asset → HTTP {r.status_code}")
+
+    # Management IP
+    update_management_ip(asset_id, ip, hostname)
+
+
 # --- MAIN ---
 
 def run():
@@ -326,6 +368,27 @@ def run():
                 sync_ups(row)
             except Exception as e:
                 logging.error(f"  ERROR UPS {row['ip']}: {e}")
+
+        # === SYNC NAS & NETWORK SWITCH ===
+        logging.info("--- Syncing NAS & NETWORK SWITCH ---")
+        cur.execute("""
+            SELECT DISTINCT ON (ip)
+                device_type, hostname, ip, serial_number,
+                model, manufacturer, raw_tags->>'firmware' as tag_fw
+            FROM dcim_events
+            WHERE device_type IN ('nas', 'network_switch')
+              AND ip IS NOT NULL
+              AND serial_number IS NOT NULL
+              AND serial_number != 'NO_SN'
+            ORDER BY ip, event_time DESC
+        """)
+        net_list = cur.fetchall()
+        logging.info(f"  Ditemukan {len(net_list)} NAS/Network Switch unik di PostgreSQL")
+        for row in net_list:
+            try:
+                sync_network_storage(row)
+            except Exception as e:
+                logging.error(f"  ERROR {row['device_type']} {row['ip']}: {e}")
 
     conn.close()
     logging.info("=== RALPH CMDB UNIFIED SYNC: DONE ===")
