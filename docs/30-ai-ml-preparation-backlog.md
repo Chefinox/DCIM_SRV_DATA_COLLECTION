@@ -18,7 +18,7 @@ Menyelesaikan masalah duplikasi data, nilai `NULL` pada timeseries, serta optima
 - [x] **Task 2: Penambahan Fitur "Last Sync" & Pruning 7 Hari di CMDB**
   - Mengupdate `ralph_cmdb_sync.py` untuk menulis waktu sinkronisasi terakhir di kolom *Remarks* (UPS dan perangkat lain).
   - Menambahkan *logic* penghapusan aset dari Ralph secara otomatis jika "Last Sync" sudah melewati batas waktu 7 hari.
-- [ ] **Task 7: Investigasi CCTV/NVR (`NO_SN`)**
+- [x] **Task 7: Investigasi CCTV/NVR (`NO_SN`)**
   - Mendiagnosis konfigurasi Telegraf/SNMP untuk perangkat Hikvision/CCTV guna memperbaiki *serial number* yang tidak terbaca.
 
 ### FASE 2: Validasi Streaming & Observabilitas (Fokus Elasticsearch)

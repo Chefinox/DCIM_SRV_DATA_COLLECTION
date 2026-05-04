@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 from requests.auth import HTTPDigestAuth
 import urllib3
 import os
+import re
 from dotenv import load_dotenv
 
 # Disable insecure request warnings
@@ -104,12 +105,13 @@ def metrics_to_influx_line(metrics):
     ts_ns = int(datetime.datetime.utcnow().timestamp() * 1e9)
     return f"{measurement},{tag_str} {field_str} {ts_ns}"
 
-def poll_device(ip, user, password, device_type="CCTV"):
+def poll_device(ip, user, password, device_type="CCTV", default_sn="NO_SN"):
     metrics = {
         "category": "security",
         "device_type": device_type,
         "ip": ip,
-        "status": "Offline"
+        "status": "Offline",
+        "serial_number": default_sn
     }
 
     info_xml = get_isapi(ip, "/System/deviceInfo", user, password)
@@ -126,14 +128,37 @@ def poll_device(ip, user, password, device_type="CCTV"):
             metrics["system_status"] = parse_xml_to_dict(status_xml)
     return metrics
 
+def get_camera_info_from_nvr(nvr_ip, user, password):
+    """Fetch camera serial numbers from NVR since direct CCTV ISAPI is unauthorized/offline."""
+    xml_data = get_isapi(nvr_ip, "/ContentMgmt/InputProxy/channels", user, password)
+    mapping = {}
+    if not xml_data:
+        return mapping
+    try:
+        # Strip namespace for easier parsing
+        xml_data = re.sub(r'\sxmlns="[^"]+"', '', xml_data)
+        root = ET.fromstring(xml_data)
+        for channel in root.findall(".//InputProxyChannel"):
+            ip_elem = channel.find(".//ipAddress")
+            sn_elem = channel.find(".//serialNumber")
+            if ip_elem is not None and sn_elem is not None:
+                mapping[ip_elem.text.strip()] = sn_elem.text.strip()
+    except Exception as e:
+        pass
+    return mapping
+
 def main():
     # Poll NVR
     nvr_m = poll_device(NVR_IP, NVR_USER, NVR_PASS, "NVR")
     print(metrics_to_influx_line(nvr_m))
 
+    # Fetch mapping from NVR
+    cam_mapping = get_camera_info_from_nvr(NVR_IP, NVR_USER, NVR_PASS)
+
     # Poll Cameras
     for ip in CCTV_IPS:
-        cam_m = poll_device(ip, DEVICE_USER, DEVICE_PASS, "CCTV")
+        sn = cam_mapping.get(ip, "NO_SN")
+        cam_m = poll_device(ip, DEVICE_USER, DEVICE_PASS, "CCTV", default_sn=sn)
         print(metrics_to_influx_line(cam_m))
 
 if __name__ == "__main__":
