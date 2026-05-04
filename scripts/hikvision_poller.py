@@ -25,7 +25,7 @@ CCTV_IPS = [
 
 # CCTV Credentials
 DEVICE_USER = os.getenv("HIKVISION_CAM_USER", "admin")
-DEVICE_PASS = os.getenv("HIKVISION_CAM_PASS", "qRvbi883=Zk[Q)@5")
+DEVICE_PASS = os.getenv("HIKVISION_CAM_PASS", "F!tech0918")
 
 # NVR Credentials
 NVR_USER = os.getenv("HIKVISION_NVR_USER", "admin")
