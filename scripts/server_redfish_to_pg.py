@@ -212,7 +212,45 @@ def upsert_to_postgres(conn, data):
     }
 
     with conn.cursor() as cur:
+        # 1. Insert ke tabel historis dcim_events
         cur.execute(sql, params)
+        
+        ip = data["ip"]
+        
+        # 2. Hapus data komponen lama untuk IP ini
+        cur.execute("DELETE FROM dcim_server_disks WHERE server_ip = %s", (ip,))
+        cur.execute("DELETE FROM dcim_server_ram WHERE server_ip = %s", (ip,))
+        cur.execute("DELETE FROM dcim_server_processors WHERE server_ip = %s", (ip,))
+        cur.execute("DELETE FROM dcim_server_nics WHERE server_ip = %s", (ip,))
+        
+        # 3. Insert Disks
+        for d in data["disks"]:
+            cur.execute("""
+                INSERT INTO dcim_server_disks (server_ip, serial_number, model_name, size_gb, slot, firmware_version)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (ip, d.get("serial_number"), d.get("model_name"), d.get("size"), d.get("slot"), d.get("firmware_version")))
+            
+        # 4. Insert RAM
+        for r in data["memory"]:
+            cur.execute("""
+                INSERT INTO dcim_server_ram (server_ip, model_name, size_mb, speed_mhz)
+                VALUES (%s, %s, %s, %s)
+            """, (ip, r.get("model_name"), r.get("size"), r.get("speed")))
+            
+        # 5. Insert CPU
+        for c in data["processors"]:
+            cur.execute("""
+                INSERT INTO dcim_server_processors (server_ip, model_name, cores, logical_cores, speed_mhz)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (ip, c.get("model_name"), c.get("cores"), c.get("logical_cores"), c.get("speed")))
+            
+        # 6. Insert NIC
+        for n in data["ethernets"]:
+            cur.execute("""
+                INSERT INTO dcim_server_nics (server_ip, label, mac_address, speed_gbps, model_name)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (ip, n.get("label"), n.get("mac"), n.get("speed"), n.get("model_name")))
+
     conn.commit()
 
 
