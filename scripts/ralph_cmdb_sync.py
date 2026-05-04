@@ -18,6 +18,8 @@ import logging
 import requests
 import psycopg2
 import urllib3
+import re
+from datetime import datetime, timedelta
 from psycopg2.extras import RealDictCursor
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -210,10 +212,12 @@ def sync_server(row):
     logging.info(f"  [SERVER] Sync {hostname} (SN:{sn}, ID:{asset_id})")
 
     # Basic Info
+    last_sync_str = row.get("event_time").strftime("%Y-%m-%d %H:%M:%S") if row.get("event_time") else "Unknown"
     basic_payload = {
         "hostname": hostname,
         "firmware_version": row.get("srv_firmware"),
         "bios_version": row.get("srv_bios_version"),
+        "remarks": f"Last Sync: {last_sync_str}",
         "custom_fields": {"power_consumption": None, "device_temperature": None}
     }
     r = requests.patch(f"{RALPH_API_BASE}/data-center-assets/{asset_id}/",
@@ -223,11 +227,20 @@ def sync_server(row):
     # Management IP
     update_management_ip(asset_id, ip, hostname)
 
-    # Components (dari JSONB)
-    disks   = row.get("srv_disk_components") or []
-    nics    = row.get("srv_nic_components") or []
-    memory  = row.get("srv_memory_components") or []
-    cpus    = row.get("srv_cpu_components") or []
+    # Components (dari Tabel Relasional)
+    with psycopg2.connect(**DB_CONFIG) as subconn:
+        with subconn.cursor(cursor_factory=RealDictCursor) as subcur:
+            subcur.execute("SELECT serial_number, model_name, size_gb as size, firmware_version, slot FROM dcim_server_disks WHERE server_ip = %s", (ip,))
+            disks = subcur.fetchall()
+            
+            subcur.execute("SELECT label, mac_address as mac, speed_gbps as speed, model_name FROM dcim_server_nics WHERE server_ip = %s", (ip,))
+            nics = subcur.fetchall()
+            
+            subcur.execute("SELECT model_name, size_mb as size, speed_mhz as speed FROM dcim_server_ram WHERE server_ip = %s", (ip,))
+            memory = subcur.fetchall()
+            
+            subcur.execute("SELECT model_name, cores, logical_cores, speed_mhz as speed FROM dcim_server_processors WHERE server_ip = %s", (ip,))
+            cpus = subcur.fetchall()
 
     sync_server_disks(asset_id, disks)
     sync_server_ethernets(asset_id, nics)
@@ -258,13 +271,15 @@ def sync_ups(row):
     logging.info(f"  [UPS] Sync {hostname} (SN:{sn}, ID:{asset_id})")
 
     # Basic Info
+    last_sync_str = row.get("event_time").strftime("%Y-%m-%d %H:%M:%S") if row.get("event_time") else "Unknown"
     payload = {
         "hostname": hostname,
         "firmware_version": firmware,
     }
-    # Update model hanya jika tersedia dan berbeda
+    remarks = f"Last Sync: {last_sync_str}"
     if model:
-        payload["remarks"] = f"Model SNMP: {model}"
+        remarks = f"Model SNMP: {model} | " + remarks
+    payload["remarks"] = remarks
 
     r = requests.patch(f"{RALPH_API_BASE}/data-center-assets/{asset_id}/",
                        headers=RALPH_HEADERS, json=payload, verify=False)
@@ -298,6 +313,7 @@ def sync_network_storage(row):
     logging.info(f"  [{device_type}] Sync {hostname} (SN:{sn}, ID:{asset_id})")
 
     # Basic Info
+    last_sync_str = row.get("event_time").strftime("%Y-%m-%d %H:%M:%S") if row.get("event_time") else "Unknown"
     payload = {
         "hostname": hostname,
     }
@@ -305,8 +321,10 @@ def sync_network_storage(row):
         payload["firmware_version"] = firmware
 
     # Update remarks dengan detail model asli
+    remarks = f"Last Sync: {last_sync_str}"
     if model:
-        payload["remarks"] = f"Model SNMP: {model}"
+        remarks = f"Model SNMP: {model} | " + remarks
+    payload["remarks"] = remarks
 
     r = requests.patch(f"{RALPH_API_BASE}/data-center-assets/{asset_id}/",
                        headers=RALPH_HEADERS, json=payload, verify=False)
@@ -314,6 +332,29 @@ def sync_network_storage(row):
 
     # Management IP
     update_management_ip(asset_id, ip, hostname)
+
+
+# --- PRUNE STALE ASSETS ---
+def prune_stale_assets():
+    """Hapus aset dari Ralph jika Last Sync > 7 hari."""
+    logging.info("--- Pruning Stale Assets (>7 Days) ---")
+    assets = ralph_get_all(f"{RALPH_API_BASE}/data-center-assets/")
+    now = datetime.now()
+    count = 0
+    for asset in assets:
+        remarks = asset.get("remarks") or ""
+        match = re.search(r"Last Sync:\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", remarks)
+        if match:
+            date_str = match.group(1)
+            try:
+                last_sync = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+                if (now - last_sync).days > 7:
+                    r = requests.delete(f"{RALPH_API_BASE}/data-center-assets/{asset['id']}/", headers=RALPH_HEADERS, verify=False)
+                    logging.info(f"  [PRUNE] Deleted Stale Asset {asset['hostname']} (Last Sync: {date_str}) → HTTP {r.status_code}")
+                    count += 1
+            except Exception as e:
+                pass
+    logging.info(f"  Total {count} stale assets pruned.")
 
 
 # --- MAIN ---
@@ -332,10 +373,8 @@ def run():
         logging.info("--- Syncing SERVERS ---")
         cur.execute("""
             SELECT DISTINCT ON (serial_number)
-                hostname, ip, serial_number, model,
-                srv_firmware, srv_bios_version, srv_system_name, srv_management_ip,
-                srv_disk_components, srv_nic_components,
-                srv_memory_components, srv_cpu_components
+                event_time, hostname, ip, serial_number, model,
+                srv_firmware, srv_bios_version, srv_system_name, srv_management_ip
             FROM dcim_events
             WHERE device_type = 'server'
               AND serial_number IS NOT NULL
@@ -354,7 +393,7 @@ def run():
         logging.info("--- Syncing UPS ---")
         cur.execute("""
             SELECT DISTINCT ON (ip)
-                hostname, ip, serial_number,
+                event_time, hostname, ip, serial_number,
                 ups_serial_snmp, ups_firmware, ups_model_snmp
             FROM dcim_events
             WHERE device_type = 'ups'
@@ -373,7 +412,7 @@ def run():
         logging.info("--- Syncing NAS & NETWORK SWITCH ---")
         cur.execute("""
             SELECT DISTINCT ON (ip)
-                device_type, hostname, ip, serial_number,
+                event_time, device_type, hostname, ip, serial_number,
                 model, manufacturer, raw_tags->>'firmware' as tag_fw
             FROM dcim_events
             WHERE device_type IN ('nas', 'network_switch')
@@ -391,6 +430,10 @@ def run():
                 logging.error(f"  ERROR {row['device_type']} {row['ip']}: {e}")
 
     conn.close()
+    
+    # Prune stale assets
+    prune_stale_assets()
+    
     logging.info("=== RALPH CMDB UNIFIED SYNC: DONE ===")
 
 
