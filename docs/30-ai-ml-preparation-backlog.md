@@ -24,12 +24,12 @@ Menyelesaikan masalah duplikasi data, nilai `NULL` pada timeseries, serta optima
 ### FASE 2: Validasi Streaming & Observabilitas (Fokus Elasticsearch)
 Memastikan seluruh *pipeline* data berfungsi tanpa *error* hingga visualisasi Kibana.
 
-- [ ] **Task 8: Validasi Kafka Pipeline End-to-End**
+- [x] **Task 8: Validasi Kafka Pipeline End-to-End**
   - Mengecek perpindahan data tanpa *bottleneck* dari topik `raw` -> `normalized` -> `enrichment`.
-- [ ] **Task 4: Pengecekan Bug Elasticsearch**
+- [x] **Task 4: Pengecekan Bug Elasticsearch**
   - Verifikasi log *indexing* dan mapping di Elasticsearch, menelusuri penyebab data tidak terbaca dengan baik.
-- [ ] **Task 5: Perbaikan Dashboard Kibana (No Result Found)**
-  - Memperbaiki pola indeks (*Index Pattern*) atau konfigurasi JSON Dashboard untuk menyesuaikan dengan field metrik terbaru.
+- [x] **Task 5: Perbaikan Dashboard Kibana (No Result Found)**
+  - Memperbaiki pola indeks (*Index Pattern*) atau konfigurasi JSON Dashboard untuk menyesuaikan dengan field metrik terbaru (Flattening Starlark).
 
 ### FASE 3: Finalisasi & Penyerahan (Handover ke AI)
 Mengkondisikan agar *warehouse* siap dihubungkan langsung ke modul AI/ML.
@@ -46,3 +46,4 @@ Mengkondisikan agar *warehouse* siap dihubungkan langsung ke modul AI/ML.
 *Dokumen ini akan diupdate setiap kali sebuah Task selesai dieksekusi.*
 
 - **[2026-05-04]**: Dokumen backlog ini dibuat. Persiapan eksekusi Fase 1 dimulai.
+- **[2026-05-04 16:55]**: Fase 2 Selesai. Elasticsearch telah diflatkan menggunakan Starlark Processor. Pipeline Kafka terverifikasi stabil. Audit kualitas data menunjukkan fill rate site/rack ~100%.

@@ -1,0 +1,774 @@
+]633;E;} > /home/infra/dcim_metrics_project/docs/raw_server_redfish_full.txt;d6b18c79-e78c-4ffd-97fe-484b312ddf62]633;C--- ENDPOINT: /redfish/v1/Systems/1 ---
+{
+  "SKU": "7D9ACTO1WW",
+  "PowerState": "On",
+  "PartNumber": null,
+  "SerialNumber": "J901F8KE",
+  "BiosVersion": "KAE116K",
+  "Manufacturer": "Lenovo",
+  "@odata.context": "/redfish/v1/$metadata#ComputerSystem.ComputerSystem",
+  "NetworkInterfaces": {
+    "@odata.id": "/redfish/v1/Systems/1/NetworkInterfaces"
+  },
+  "HostWatchdogTimer": {
+    "Status": {
+      "State": "Disabled"
+    },
+    "TimeoutAction@Redfish.AllowableValues": [
+      "PowerCycle"
+    ],
+    "WarningAction": "None",
+    "WarningAction@Redfish.AllowableValues": [
+      "None"
+    ],
+    "TimeoutAction": "PowerCycle",
+    "FunctionEnabled": false
+  },
+  "Processors": {
+    "@odata.id": "/redfish/v1/Systems/1/Processors"
+  },
+  "SystemType": "Physical",
+  "Memory": {
+    "@odata.id": "/redfish/v1/Systems/1/Memory"
+  },
+  "LogServices": {
+    "@odata.id": "/redfish/v1/Systems/1/LogServices"
+  },
+  "KeyManagement": {
+    "KMIPCertificates": {
+      "@odata.id": "/redfish/v1/Systems/1/KeyManagement/KMIPCertificates"
+    },
+    "KMIPServers": [
+      {
+        "Address": null,
+        "Port": 5696
+      },
+      {
+        "Address": null,
+        "Port": 5696
+      },
+      {
+        "Address": null,
+        "Port": 5696
+      },
+      {
+        "Address": null,
+        "Port": 5696
+      }
+    ]
+  },
+  "Bios": {
+    "@odata.id": "/redfish/v1/Systems/1/Bios"
+  },
+  "EthernetInterfaces": {
+    "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces"
+  },
+  "Storage": {
+    "@odata.id": "/redfish/v1/Systems/1/Storage"
+  },
+  "Boot": {
+    "BootSourceOverrideTarget": "None",
+    "BootSourceOverrideMode": "UEFI",
+    "UefiTargetBootSourceOverride": null,
+    "BootSourceOverrideEnabled": "Disabled",
+    "BootOrder": [
+      "Boot0000",
+      "Boot0001",
+      "Boot0002",
+      "Boot0003"
+    ],
+    "BootSourceOverrideTarget@Redfish.AllowableValues": [
+      "None",
+      "Pxe",
+      "Cd",
+      "Usb",
+      "Hdd",
+      "BiosSetup",
+      "Diags",
+      "UefiTarget"
+    ],
+    "BootOrderPropertySelection": "BootOrder",
+    "AutomaticRetryAttempts": 50,
+    "BootOptions": {
+      "@odata.id": "/redfish/v1/Systems/1/BootOptions"
+    },
+    "AutomaticRetryConfig": "RetryAttempts",
+    "BootSourceOverrideEnabled@Redfish.AllowableValues": [
+      "Once",
+      "Disabled"
+    ]
+  },
+  "UUID": "95977c64-d7d6-11ee-a529-3a7c7672538d",
+  "PCIeDevices": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_5"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_2"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_13"
+    }
+  ],
+  "IndicatorLED": "Off",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+  },
+  "MemorySummary": {
+    "TotalSystemMemoryGiB": 128,
+    "Metrics": {
+      "@odata.id": "/redfish/v1/Systems/1/MemorySummary/MemoryMetrics"
+    },
+    "Status": {
+      "State": "Enabled",
+      "Health": "OK",
+      "HealthRollup": "OK"
+    }
+  },
+  "PCIeFunctions@odata.count": 12,
+  "@Redfish.Settings": {
+    "Messages": [],
+    "SettingsObject": {
+      "@odata.id": "/redfish/v1/Systems/1/Pending"
+    },
+    "SupportedApplyTimes": [
+      "OnReset"
+    ],
+    "@odata.type": "#Settings.v1_3_0.Settings",
+    "Time": null
+  },
+  "Oem": {
+    "Lenovo": {
+      "SystemStatus": "BootingOSOrInUndetectedOS",
+      "HistorySysPerf": {
+        "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/HistorySysPerf"
+      },
+      "ScheduledPowerActions": {
+        "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/ScheduledPowerActions"
+      },
+      "SSDWearThreshold": 8,
+      "BootSettings@Redfish.Deprecated": "The property is deprecated. Please use BootOrder instead.",
+      "NumberOfReboots": 89,
+      "USBManagementPortAssignment": {
+        "FPMode": "Shared",
+        "InactivityTimeoutMins": 5,
+        "IDButton": "On",
+        "PortSwitchingTo": "Server"
+      },
+      "Metrics": {
+        "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/Metrics"
+      },
+      "TotalPowerOnHours": 16995,
+      "Sensors": {
+        "@odata.id": "/redfish/v1/Chassis/1/Sensors"
+      },
+      "TPMSettings": {
+        "AssertRPP": false,
+        "AssertDurationMins": 30,
+        "EnableRPP": true
+      },
+      "BootSettings": {
+        "@odata.id": "/redfish/v1/Systems/1/Oem/Lenovo/BootSettings"
+      },
+      "@odata.type": "#LenovoComputerSystem.v1_0_0.LenovoSystemProperties",
+      "LXPMDiagFlag": null,
+      "SecureBootOverKCSSettings": {
+        "AllowDisableSecureBootOverKCS": false,
+        "AllowEnableSecureBootOverKCS": true
+      }
+    }
+  },
+  "Model": "ThinkSystem SR665 V3",
+  "Name": "ComputerSystem",
+  "Actions": {
+    "Oem": {
+      "#LenovoComputerSystem.CustomizedReset": {
+        "title": "CustomizedReset",
+        "ResetType@Redfish.AllowableValues": [
+          "On"
+        ],
+        "target": "/redfish/v1/Systems/1/Actions/Oem/LenovoComputerSystem.CustomizedReset"
+      },
+      "#LenovoComputerSystem.RemoteClearCMOS": {
+        "target": "/redfish/v1/Systems/1/Actions/Oem/LenovoComputerSystem.RemoteClearCMOS",
+        "title": "RemoteClearCMOS"
+      },
+      "#LenovoComputerSystem.SystemReset": {
+        "title": "SystemReset",
+        "target": "/redfish/v1/Systems/1/Actions/Oem/LenovoComputerSystem.SystemReset",
+        "ResetType@Redfish.AllowableValues": [
+          "ACPowerCycle"
+        ]
+      },
+      "#LenovoComputerSystem.BootToBIOSSetup": {
+        "target": "/redfish/v1/Systems/1/Actions/Oem/LenovoComputerSystem.BootToBIOSSetup",
+        "title": "BootToBIOSSetup"
+      }
+    },
+    "#ComputerSystem.Reset": {
+      "title": "Reset",
+      "@Redfish.ActionInfo": "/redfish/v1/Systems/1/ResetActionInfo",
+      "ResetType@Redfish.AllowableValues": [
+        "On",
+        "Nmi",
+        "GracefulShutdown",
+        "GracefulRestart",
+        "ForceOn",
+        "ForceOff",
+        "ForceRestart"
+      ],
+      "target": "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset"
+    }
+  },
+  "PCIeFunctions": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_13/PCIeFunctions/slot_13.02"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_13/PCIeFunctions/slot_13.03"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_5/PCIeFunctions/slot_5.00"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_13/PCIeFunctions/slot_13.01"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4/PCIeFunctions/ob_4.00"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2/PCIeFunctions/ob_2.01"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1/PCIeFunctions/ob_1.00"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2/PCIeFunctions/ob_2.00"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_13/PCIeFunctions/slot_13.00"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_2/PCIeFunctions/slot_2.00"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4/PCIeFunctions/ob_4.01"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_3/PCIeFunctions/slot_3.00"
+    }
+  ],
+  "@odata.etag": "\"340a20af6a3db30e9e8af7\"",
+  "VirtualMedia": {
+    "@odata.id": "/redfish/v1/Systems/1/VirtualMedia"
+  },
+  "HostName": "XCC-7D9A-J901F8KE",
+  "AssetTag": "None",
+  "SubModel": "7D9A",
+  "SecureBoot": {
+    "@odata.id": "/redfish/v1/Systems/1/SecureBoot"
+  },
+  "ProcessorSummary": {
+    "Status": {
+      "State": "Enabled",
+      "Health": "OK",
+      "HealthRollup": "OK"
+    },
+    "LogicalProcessorCount": 96,
+    "Count": 2,
+    "Metrics": {
+      "@odata.id": "/redfish/v1/Systems/1/ProcessorSummary/ProcessorMetrics"
+    },
+    "Model": "AMD EPYC 9254 24-Core Processor"
+  },
+  "Links": {
+    "ManagedBy": [
+      {
+        "@odata.id": "/redfish/v1/Managers/1"
+      }
+    ],
+    "Chassis": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/1"
+      }
+    ],
+    "CooledBy": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/0"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/1"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/2"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/3"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/4"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/5"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/6"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/7"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/8"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/9"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/10"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/11"
+      }
+    ],
+    "PoweredBy": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerSupplies/0"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerSupplies/1"
+      }
+    ]
+  },
+  "Id": "1",
+  "PCIeDevices@odata.count": 7,
+  "@odata.type": "#ComputerSystem.v1_19_0.ComputerSystem",
+  "@odata.id": "/redfish/v1/Systems/1",
+  "Description": "This resource is used to represent a computing system for a Redfish implementation."
+}
+
+--- ENDPOINT: /redfish/v1/Managers/1 ---
+{
+  "CommandShell": {
+    "ConnectTypesSupported": [
+      "SSH"
+    ],
+    "ServiceEnabled": true,
+    "MaxConcurrentSessions": 2
+  },
+  "DateTime": "2026-04-16T10:20:47+00:00",
+  "DateTimeLocalOffset": "+00:00",
+  "UUID": "95977C64-D7D6-11EE-A529-3A7C7672538D",
+  "Id": "1",
+  "LogServices": {
+    "@odata.id": "/redfish/v1/Systems/1/LogServices"
+  },
+  "NetworkProtocol": {
+    "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol"
+  },
+  "FirmwareVersion": "KAX322Z 2.31 2024-01-19",
+  "Name": "Manager",
+  "EthernetInterfaces": {
+    "@odata.id": "/redfish/v1/Managers/1/EthernetInterfaces"
+  },
+  "@odata.id": "/redfish/v1/Managers/1",
+  "PowerState": "On",
+  "@odata.etag": "\"1d778317d5e7833b471dd4\"",
+  "Oem": {
+    "Lenovo": {
+      "SecureKeyLifecycleService": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService"
+      },
+      "ServiceData": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/ServiceData"
+      },
+      "ServerProfile": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/ServerProfile"
+      },
+      "Security": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Security"
+      },
+      "TrespassMessage": "",
+      "SystemGuard": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/SystemGuard"
+      },
+      "DateTimeService": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/DateTimeService"
+      },
+      "Configuration": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Configuration"
+      },
+      "RemoteMap": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/RemoteMap"
+      },
+      "Watchdogs": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Watchdogs"
+      },
+      "OPSettings": {
+        "SSOState": false,
+        "UserInfoUri": "",
+        "ClientID": null,
+        "PubKey": null,
+        "AuthorizationServerUri": null
+      },
+      "RecipientsSettings": {
+        "RetryCount": 5,
+        "RetryInterval": 0.5,
+        "RntryRetryInterval": 0.5
+      },
+      "AgentlessCapabilities": [
+        "RaidLink",
+        "OOB_PCIe",
+        "RaidLinkConfig",
+        "RaidLinkAlert",
+        "OOB_PCIe_Config",
+        "OOB_Option_Firmware_Update",
+        "PreStandardPLDM",
+        "StandardPLDM",
+        "Storlib",
+        "M2"
+      ],
+      "MPFAMemoryPollingStopped": null,
+      "GroupService": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/GroupService"
+      },
+      "Recipients": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/Recipients"
+      },
+      "RemoteControl": {
+        "@odata.id": "/redfish/v1/Managers/1/Oem/Lenovo/RemoteControl"
+      },
+      "ServiceAdvisor": "/redfish/v1/Managers/1/Oem/Lenovo/ServiceAdvisor",
+      "@odata.type": "#LenovoManager.v1_0_0.LenovoManagerProperties",
+      "MPFAHealthStatusEnabled": false,
+      "KCSEnabled": "Enabled",
+      "release_name": "egs_gp_23-5"
+    }
+  },
+  "SerialInterfaces": {
+    "@odata.id": "/redfish/v1/Managers/1/SerialInterfaces"
+  },
+  "@odata.type": "#Manager.v1_16_0.Manager",
+  "@odata.context": "/redfish/v1/$metadata#Manager.Manager",
+  "AutoDSTEnabled": false,
+  "HostInterfaces": {
+    "@odata.id": "/redfish/v1/Managers/1/HostInterfaces"
+  },
+  "Status": {
+    "State": "Enabled"
+  },
+  "SharedNetworkPorts": {
+    "@odata.id": "/redfish/v1/Managers/1/SharedNetworkPorts"
+  },
+  "ServiceEntryPointUUID": "95977C64-D7D6-11EE-A529-3A7C7672538D",
+  "DedicatedNetworkPorts": {
+    "@odata.id": "/redfish/v1/Managers/1/DedicatedNetworkPorts"
+  },
+  "Actions": {
+    "#Manager.ResetToDefaults": {
+      "title": "ResetToDefaults",
+      "@Redfish.ActionInfo": "/redfish/v1/Managers/1/ResetToDefaultsActionInfo",
+      "target": "/redfish/v1/Managers/1/Actions/Manager.ResetToDefaults",
+      "ResetType@Redfish.AllowableValues": [
+        "ResetAll",
+        "PreserveNetworkAndUsers",
+        "PreserveNetwork"
+      ]
+    },
+    "#Manager.Reset": {
+      "title": "Reset",
+      "@Redfish.ActionInfo": "/redfish/v1/Managers/1/ResetActionInfo",
+      "target": "/redfish/v1/Managers/1/Actions/Manager.Reset",
+      "ResetType@Redfish.AllowableValues": [
+        "GracefulRestart",
+        "ForceRestart"
+      ]
+    },
+    "Oem": {
+      "#LenovoManager.SetiHDTStatus": {
+        "title": "SetiHDTStatus",
+        "target": "/redfish/v1/Managers/1/Actions/Oem/LenovoManager.SetiHDTStatus"
+      }
+    }
+  },
+  "Model": "Lenovo XClarity Controller 2",
+  "Links": {
+    "ManagerForServers": [
+      {
+        "@odata.id": "/redfish/v1/Systems/1"
+      }
+    ],
+    "ManagerForChassis@odata.count": 1,
+    "ManagerForServers@odata.count": 1,
+    "SoftwareImages": [
+      {
+        "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Primary"
+      },
+      {
+        "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Backup"
+      }
+    ],
+    "ActiveSoftwareImage": {
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC-Primary"
+    },
+    "SoftwareImages@odata.count": 2,
+    "ManagerForChassis": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/1"
+      }
+    ]
+  },
+  "ManagerType": "BMC",
+  "SerialConsole": {
+    "ConnectTypesSupported": [
+      "IPMI",
+      "SSH"
+    ],
+    "ServiceEnabled": true,
+    "MaxConcurrentSessions": 2
+  },
+  "ServiceIdentification": "",
+  "GraphicalConsole": {
+    "ConnectTypesSupported": [
+      "KVMIP"
+    ],
+    "ServiceEnabled": true,
+    "MaxConcurrentSessions": 6
+  },
+  "Description": "This resource is used to represent a management subsystem for a Redfish implementation."
+}
+
+--- ENDPOINT: /redfish/v1/Chassis/1 ---
+{
+  "Manufacturer": "Lenovo",
+  "Description": "This resource is used to represent a chassis or other physical enclosure for a Redfish implementation.",
+  "PCIeDevices": {
+    "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices"
+  },
+  "@odata.context": "/redfish/v1/$metadata#Chassis.Chassis",
+  "Version": "6",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Model": "7D9ACTO1WW",
+  "UUID": "95977C64-D7D6-11EE-A529-3A7C7672538D",
+  "ChassisType": "RackMount",
+  "Location": {
+    "PostalAddress": {
+      "Name": "",
+      "Building": "",
+      "Location": "",
+      "Room": ""
+    },
+    "Placement": {
+      "RackOffsetUnits": "EIA_310",
+      "Rack": "",
+      "RackOffset": 1
+    },
+    "Contacts": [
+      {
+        "ContactName": ""
+      }
+    ],
+    "PartLocation": {}
+  },
+  "MaxPowerWatts": 1800,
+  "MinPowerWatts": 0,
+  "EnvironmentalClass": "A4",
+  "ThermalManagedByParent": false,
+  "LogServices": {
+    "@odata.id": "/redfish/v1/Systems/1/LogServices"
+  },
+  "IndicatorLED": "Off",
+  "SKU": "7D9ACTO1WW",
+  "NetworkAdapters": {
+    "@odata.id": "/redfish/v1/Chassis/1/NetworkAdapters"
+  },
+  "PowerState": "On",
+  "EnvironmentMetrics": {
+    "@odata.id": "/redfish/v1/Chassis/1/EnvironmentMetrics"
+  },
+  "PartNumber": "SB27B75430",
+  "PoweredByParent": false,
+  "Oem": {
+    "Lenovo": {
+      "ProductName": "ThinkSystem SR665 V3",
+      "SolutionServiceEnabled": false,
+      "FruPartNumber": "03LC517",
+      "FanSpeedBoost": "Normal",
+      "LEDs": {
+        "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs"
+      },
+      "@odata.type": "#LenovoChassis.v1_0_0.LenovoChassisProperties",
+      "Slots": {
+        "@odata.id": "/redfish/v1/Chassis/1/Oem/Lenovo/Slots"
+      },
+      "SystemBoardSerialNumber": "V3HZ41G30EV"
+    }
+  },
+  "Sensors": {
+    "@odata.id": "/redfish/v1/Chassis/1/Sensors"
+  },
+  "Power": {
+    "@odata.id": "/redfish/v1/Chassis/1/Power"
+  },
+  "Controls": {
+    "@odata.id": "/redfish/v1/Chassis/1/Controls"
+  },
+  "HeightMm": 88.9,
+  "SerialNumber": "J901F8KE",
+  "Thermal": {
+    "@odata.id": "/redfish/v1/Chassis/1/Thermal"
+  },
+  "PowerSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+  },
+  "Memory": {
+    "@odata.id": "/redfish/v1/Systems/1/Memory"
+  },
+  "AssetTag": "None",
+  "@odata.etag": "\"1ab88b1e2c0dc2e15e6e73\"",
+  "ThermalSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/1/ThermalSubsystem"
+  },
+  "Links": {
+    "ManagedBy": [
+      {
+        "@odata.id": "/redfish/v1/Managers/1"
+      }
+    ],
+    "ManagersInChassis": [
+      {
+        "@odata.id": "/redfish/v1/Managers/1"
+      }
+    ],
+    "Drives": [
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Drives/Disk.0"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Drives/Disk.1"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Drives/Disk.2"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3/Drives/Disk.3"
+      }
+    ],
+    "Fans": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/0"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/1"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/2"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/3"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/4"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/5"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/6"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/7"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/8"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/9"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/10"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Thermal#/Fans/11"
+      }
+    ],
+    "Processors": [
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Processors/1"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Processors/2"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Processors/GPU1"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Processors/GPU2"
+      }
+    ],
+    "PCIeDevices": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_1"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_2"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/ob_4"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_2"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_3"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_5"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/slot_13"
+      }
+    ],
+    "Storage": [
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Storage/RAID_Slot3"
+      }
+    ],
+    "PowerSupplies": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerSupplies/0"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/1/Power#/PowerSupplies/1"
+      }
+    ],
+    "ComputerSystems": [
+      {
+        "@odata.id": "/redfish/v1/Systems/1"
+      }
+    ]
+  },
+  "Id": "1",
+  "Name": "Chassis",
+  "@odata.type": "#Chassis.v1_21_0.Chassis",
+  "@odata.id": "/redfish/v1/Chassis/1",
+  "PCIeSlots": {
+    "@odata.id": "/redfish/v1/Chassis/1/PCIeSlots"
+  }
+}

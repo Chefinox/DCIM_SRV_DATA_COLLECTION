@@ -1,0 +1,24 @@
+No,Fields Name,Path,Type,Deskripsi,Status
+1,id,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+2,ipAddress,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+3,online,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+4,managePortNo,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+5,userName,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+6,chanDetectResult,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+7,PasswordStatus,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+8,deviceName,ISAPI,XML Field,,TRUE
+9,deviceID,ISAPI,XML Field,,TRUE
+10,model,ISAPI,XML Field,,TRUE
+11,serialNumber,ISAPI,XML Field,,TRUE
+12,macAddress,ISAPI,XML Field,,TRUE
+13,firmwareVersion,ISAPI,XML Field,,TRUE
+14,deviceType,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+15,deviceUpTime,ISAPI,XML Field,,TRUE
+16,cpuUtilization,ISAPI,XML Field,,FALSE
+17,memoryUsage,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+18,id,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+19,channelName,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+20,videoCodecType,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+21,videoResolutionWidth,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+22,videoResolutionHeight,ISAPI,XML Field,Direct camera ISAPI field,FALSE
+23,outputBitrate,ISAPI,XML Field,Direct camera ISAPI field,FALSE

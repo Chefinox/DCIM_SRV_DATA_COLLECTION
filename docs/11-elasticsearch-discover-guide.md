@@ -1,99 +1,100 @@
-# Elasticsearch Discover Guide — Unified Metrics & Filtering
+# Elasticsearch Discover Guide — Unified Metrics & Filtering (v3.4)
 
-Panduan ini menjelaskan cara mencari dan memfilter metrik perangkat menggunakan standar **8-Points Universal Metrics**.
+Panduan ini menjelaskan cara mencari, memfilter, dan memahami struktur metrik perangkat di Kibana Discover pada arsitektur **Unified Pipeline (Kafka -> Telegraf -> Elasticsearch)**.
 
-## 🧱 Universal Tags (Global Filters)
+## 🧱 1. Index Pattern Utama: `dcim-metrics-unified-*`
 
-Setiap dokumen di Elasticsearch sekarang memiliki tag berikut yang seragam di semua kategori (UPS, Server, MikroTik, CCTV). Gunakan tag ini untuk pencarian cepat:
+Seluruh data telemetri dari berbagai jenis perangkat keras kini digabungkan ke dalam **satu index pattern tunggal**. Anda tidak perlu lagi berpindah-pindah antar index (`telegraf-server-*`, `telegraf-mikrotik-*`, dll).
 
-| Tag Field | Description | Example Kibana Filter |
+Untuk memulai pencarian:
+1. Buka halaman **Discover** di Kibana.
+2. Pastikan Index Pattern yang dipilih adalah **`dcim-metrics-unified-*`**.
+
+---
+
+## 🔍 2. Universal Tags (Global Filters)
+
+Setiap dokumen di Elasticsearch dilengkapi dengan objek `tag` yang seragam di semua kategori perangkat (Server, UPS, Network, NAS, CCTV). Field ini adalah hasil pengayaan (*enrichment*) dari CMDB Ralph.
+
+Tambahkan field berikut sebagai **kolom** di Discover atau gunakan sebagai filter utama:
+
+| Field Discover | Deskripsi | Contoh Filter KQL |
 | :--- | :--- | :--- |
-| `tag.serial_number` | **Primary Key** (Unik per perangkat) | `tag.serial_number : "J901F8KE"` |
-| `tag.model` | Model/Tipe Hardware | `tag.model : "30KH"` |
-| `tag.hostname` | Nama Identity Perangkat | `tag.hostname : "FIT-Core-SW"` |
-| `tag.ip` | Management IP Address | `tag.ip : "10.50.0.5"` |
-| `tag.device_type` | Kategori (server, ups, mikrotik, cctv) | `tag.device_type : "server"` |
-| `tag.category` | Grup (infrastructure, security) | `tag.category : "infrastructure"` |
-| `tag.firmware` | Versi OS/Firmware/BIOS | `tag.firmware : "7.16.2"` |
+| `tag.device_type` | Kategori Perangkat | `tag.device_type: "network_switch"` |
+| `tag.hostname` | Nama Identitas Perangkat | `tag.hostname: "FIT-Core-SW"` |
+| `tag.ip` | Management IP Address | `tag.ip: "172.16.35.2"` |
+| `tag.serial_number` | Primary Key / SN dari Vendor | `tag.serial_number: "HFH09B9A7A3"` |
+| `tag.model` | Model Perangkat Fisik | `tag.model: "CCR2004-16G-2S+"` |
+| `tag.manufacturer` | Nama Vendor | `tag.manufacturer: "MikroTik"` |
+| `tag.site` | Lokasi Geografis (Site) | `tag.site: "Local Instance"` |
+| `tag.room_name` | Nama Ruangan | `tag.room_name: "FIT-HeadOffice Room"` |
+| `tag.rack_name` | Nama Rak (Lokasi Fisik) | `tag.rack_name: "Rack Server 1"` |
+| `tag.environment` | Status Environment (Production/Staging) | `tag.environment: "Production"` |
+| `tag.business_unit` | Unit/Departemen Pemilik | `tag.business_unit: "IT Infrastructure Departement"` |
+| `tag.enrichment_status` | Status sinkronisasi dengan CMDB | `tag.enrichment_status: "FULL"` |
+| `measurement_name` | Objek nama metrik | `measurement_name: "interface"` |
 
 ---
 
-## 🔑 Unified Inventory (Index: `dcim-inventory-*`)
+## 📈 3. Platform Specific Metrics (Raw Fields)
 
-Gunakan index ini untuk melihat **Master List Asset** seluruh infrastruktur dalam satu tabel. Index ini menggabungkan data dari Redfish, SNMP, dan ISAPI.
+Nilai metrik asli (*raw metric*) yang diambil dari perangkat fisik akan dibungkus ke dalam sebuah objek yang sesuai dengan nama `measurement_name`. **Prefix `raw_fields_` telah dihapus** agar *backward-compatible* dengan visualisasi *dashboard* Kibana bawaan.
 
-### Langkah-langkah di Kibana Discover:
-1. Pilih Index Pattern: `dcim-inventory-*`.
-2. Tambahkan kolom dari sidebar: `tag.serial_number`, `tag.hostname`, `tag.model`, `tag.status`.
-3. Filter berdasarkan `tag.category` : `"infrastructure"` untuk melihat aset server/network.
+Berikut adalah panduan field khusus untuk setiap jenis perangkat yang dapat Anda cari di Discover:
 
-| Field Utama | Deskripsi |
-| :--- | :--- |
-| `tag.serial_number` | Serial Number dari Vendor (Primary Identifier) |
-| `dcim_inventory.manufacturer` | Vendor perangkat (mis: Lenovo, Synology) |
-| `dcim_inventory.processor_count` | Jumlah socket prosesor (khusus server) |
-| `dcim_inventory.processor_logical_count`| Jumlah core thread prosesor (khusus server) |
-| `dcim_inventory.status` | Status Online/Offline/Health |
-| `dcim_inventory.power_state` | Status Power (On/Off) |
-| `nas_inventory.volumes_total_bytes` | Total kapasitas penyimpanan NAS |
+### A. Network Switch & Router (`measurement_name: "interface"`)
+Digunakan untuk lalu lintas jaringan dan status port.
+- **Filter KQL Utama:** `tag.device_type: "network_switch"`
+- **Daftar Field:**
+    - `interface.if_name` : Nama antarmuka (contoh: ether1, sfp-1)
+    - `interface.ifAdminStatus` / `ifOperStatus` : Status port (Up/Down)
+    - `interface.ifInOctets` : Total trafik masuk (Bytes)
+    - `interface.ifOutOctets` : Total trafik keluar (Bytes)
 
----
+### B. APC UPS (`measurement_name: "ups_apc"`)
+Digunakan untuk memantau kesehatan baterai dan beban listrik.
+- **Filter KQL Utama:** `tag.device_type: "ups"`
+- **Daftar Field:**
+    - `ups_apc.upsBatteryCapacity` : Kapasitas persentase baterai (%)
+    - `ups_apc.upsBatteryTemp` : Suhu fisik baterai (°C)
+    - `ups_apc.upsOutputVoltage` : Tegangan output listrik (Volt)
 
-## 📈 Platform Specific Metrics
+### C. Lenovo Servers (`measurement_name: "server_redfish"`)
+Digunakan untuk data sensor internal sasis server.
+- **Filter KQL Utama:** `tag.device_type: "server"`
+- **Daftar Field:**
+    - `server_redfish.power_output_watts` : Konsumsi daya saat ini (Watts)
+    - `server_redfish.reading_celsius` : Suhu termal (°C)
+    - `server_redfish.reading_rpm` : Putaran kipas server (RPM)
+    - *(Catatan: Data inventory hardware statis seperti CPU/RAM kini berada di `dcim_sot` PostgreSQL).*
 
-Selain Tag Universal di atas, setiap platform memiliki metrik detilnya sendiri:
+### D. Synology NAS (`measurement_name: "dcim_nas"`)
+Digunakan untuk kesehatan *array storage* dan disk.
+- **Filter KQL Utama:** `tag.device_type: "nas"`
+- **Daftar Field:**
+    - `dcim_nas.diskTemp` : Suhu fisik per hard drive (°C)
+    - `dcim_nas.diskStatus` : Kode status kesehatan (Normal/Degraded)
+    - `dcim_nas.storageUsed` / `storageSize` : Utilisasi kapasitas NAS
 
-### 1. APC UPS (`telegraf-ups-*`)
-- **Filter Utama:** `tag.device_type : "ups"`
-- **Daftar Field Populer:**
-    - `ups_apc.ups_apc.battery_capacity`: Kapasitas baterai (%)
-    - `ups_apc.ups_apc.battery_temp`: Suhu baterai (°C)
-    - `ups_apc.ups_apc.input_voltage`: Tegangan input (Volt)
-    - `ups_apc.ups_apc.output_load`: Beban UPS saat ini (%)
-    - `ups_apc.ups_apc.battery_runtime_remain`: Sisa waktu backup (Detik)
-
-### 2. Lenovo Servers (`telegraf-server-*`)
-- **Filter Utama:** `tag.device_type : "server"`
-- **Daftar Field Populer:**
-    - `server_redfish.server_redfish.power_output_watts`: Konsumsi daya (Watts)
-    - `server_redfish.server_redfish.reading_celsius`: Nilai suhu sensor (°C)
-    - `server_redfish.server_redfish.reading_rpm`: Kecepatan kipas (RPM)
-    - `server_redfish.server_redfish.reading_volts`: Tegangan sensor (V)
-    - `tag.name`: Nama sensor (Contoh: "AmbientTemp", "CPU1Temp", "Fan1FrontTach")
-    - `tag.health`: Status kesehatan komponen (OK, Warning, Critical)
-
-### 3. MikroTik Switches (`telegraf-mikrotik-*`)
-- **Filter Utama:** `tag.device_type : "mikrotik"`
-- **Daftar Field Populer:**
-    - `interface.if_name`: Nama interface (ether1, sfp-sfpplus1, dll)
-    - `interface.if_speed`: Kecepatan link (bps)
-    - `interface.if_in_octets`: Total data masuk (Bytes)
-    - `interface.if_out_octets`: Total data keluar (Bytes)
-    - `interface.if_in_errors`: Paket error masuk (Count)
-    - `mikrotik.mikrotik.cpu_load`: Beban CPU MikroTik (%)
-
-### 4. Synology NAS (`telegraf-nas-*`)
-- **Filter Utama:** `tag.device_type : "nas"`
-- **Daftar Field Populer:**
-    - `nas_volume.nas_volume.used_bytes`: Kapasitas terpakai per-volume
-    - `nas_volume.nas_volume.total_bytes`: Kapasitas total per-volume
-    - `nas_volume.nas_volume.status`: Kondisi RAID (normal, degraded)
-    - `nas_disk.nas_disk.temp_celsius`: Suhu fisik hard drive (°C)
-    - `nas_disk.nas_disk.disk_model`: Model vendor hard drive
-    - `nas_inventory.nas_inventory.uptime`: Waktu aktif NAS (Detik/String)
-
-### 5. Hikvision Security (`cctv-metrics-*`)
-- **Filter Utama:** `tag.category : "security"`
-- **Daftar Field Populer:**
-    - `status`: Status Online/Offline kamera
-    - `system_status.CPUList.CPU.cpuUtilization`: Penggunaan CPU NVR (%)
-    - `system_status.MemoryList.Memory.memoryUsage`: Penggunaan RAM NVR (%)
-    - `storage.hddList.hdd.freeSpace`: Sisa HDD rekaman (MB)
-    - `storage.hddList.hdd.hddStatus`: Kondisi kesehatan HDD NVR
-    - `device_info.firmwareVersion`: Versi firmware kamera
+### E. CCTV & NVR (`measurement_name: "cctv_metrics"`)
+Digunakan untuk pemantauan ketersediaan sistem pengawasan.
+- **Filter KQL Utama:** `tag.device_type: "cctv"` atau `tag.device_type: "nvr"`
+- **Daftar Field:**
+    - `cctv_metrics.cpuUtilization` : Beban CPU unit (%)
+    - `cctv_metrics.memoryUsage` : Penggunaan RAM unit (%)
+    - `cctv_metrics.hddStatus` : Kesehatan penyimpan rekaman (HDD)
 
 ---
 
-## 💡 Tips Cepat
-- **Refresh Field List:** Jika tag `u_` atau tag baru tidak muncul, buka *Stack Management* -> *Index Patterns* lalu klik **Refresh** pada index pattern terkait.
-- **Dumping JSON:** Klik tombol ekspansi (>) di sebelah baris data untuk melihat struktur JSON lengkap dan memastikan semua tag universal (`tag.serial_number`, dll) terisi.
+## 💡 4. Tips Pemecahan Masalah (Troubleshooting)
+
+1. **"No Results Found" di Visualisasi:** 
+   Pastikan Anda tidak mencari *field name* yang lama. Struktur *flat JSON* sudah tidak berlaku. Anda harus selalu menggunakan pola bersarang seperti `tag.[nama_field]` atau `[measurement].raw_fields_[nama_field]`.
+   
+2. **Data Baru Tidak Muncul di Dropdown Filter:**
+   Jika field baru yang ditambahkan (`tag.site`, dll.) muncul dengan ikon 'tanda tanya' atau tidak muncul sama sekali di opsi sidebar:
+   * Buka menu **Stack Management** -> **Data Views / Index Patterns** -> Pilih `dcim-metrics-unified-*`.
+   * Klik tombol **Refresh Field List** di pojok kanan atas.
+
+3. **Memverifikasi Struktur JSON Mentah:**
+   Buka salah satu entri data di halaman Discover dengan mengeklik tanda panah `(>)` pada salah satu dokumen, lalu beralih ke *tab* **JSON**. Pastikan terdapat dua grup objek utama: `"tag": {...}` dan `"{measurement_name}": {...}`.

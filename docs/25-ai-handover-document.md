@@ -41,24 +41,27 @@
 ## 4. Server CMDB Auto-Sync (NEW — v3.2.0)
 
 ### Script
+
 **File**: `/home/infra/dcim_metrics_project/scripts/server_deep_sync.py`
 **Current Version**: V7 (Robust Pruning + Pagination Fix)
 
 ### What It Does
+
 Polls each server's Redfish API and syncs hardware components to Ralph CMDB:
 
-| Component | Redfish Source | Ralph Field |
-|-----------|---------------|-------------|
-| Hostname | `Chassis/1 → Location.PostalAddress.Name` | `hostname`, `management_hostname` |
-| Firmware | `Managers/1 → FirmwareVersion` | `firmware_version` |
-| BIOS | `Systems/1 → BiosVersion` | `bios_version` |
-| Management IP | Polling IP (`10.50.0.x`) | `ipaddresses` (is_management=True) |
-| CPU | `Systems/1/Processors` | `processors` |
-| RAM | `Systems/1/Memory` → `VendorID` | `memory` |
-| Disks | `Systems/1/Storage/.../Drives` → `Name` + `PhysicalLocation.PartLocation.LocationOrdinalValue` | `disks` (model, size, SN, slot, firmware) |
-| NICs | `Systems/1/EthernetInterfaces` | `ethernets` (label, MAC, speed) |
+| Component     | Redfish Source                                                                                 | Ralph Field                               |
+| ------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Hostname      | `Chassis/1 → Location.PostalAddress.Name`                                                      | `hostname`, `management_hostname`         |
+| Firmware      | `Managers/1 → FirmwareVersion`                                                                 | `firmware_version`                        |
+| BIOS          | `Systems/1 → BiosVersion`                                                                      | `bios_version`                            |
+| Management IP | Polling IP (`10.50.0.x`)                                                                       | `ipaddresses` (is_management=True)        |
+| CPU           | `Systems/1/Processors`                                                                         | `processors`                              |
+| RAM           | `Systems/1/Memory` → `VendorID`                                                                | `memory`                                  |
+| Disks         | `Systems/1/Storage/.../Drives` → `Name` + `PhysicalLocation.PartLocation.LocationOrdinalValue` | `disks` (model, size, SN, slot, firmware) |
+| NICs          | `Systems/1/EthernetInterfaces`                                                                 | `ethernets` (label, MAC, speed)           |
 
 ### Key Business Rules
+
 1. **Serial Number is Primary Key** — Never overwrite SN.
 2. **Management IP is NOT overwritten** from manual input — it is auto-set from polling IP.
 3. **Empty slots are skipped** — Only populated hardware is registered.
@@ -66,6 +69,7 @@ Polls each server's Redfish API and syncs hardware components to Ralph CMDB:
 5. **Custom fields `power_consumption` and `device_temperature` are cleared** on each sync (legacy fields no longer used for servers).
 
 ### Automation
+
 ```
 Crontab: */5 * * * * /usr/bin/python3 /home/infra/dcim_metrics_project/scripts/server_deep_sync.py
 Log: /home/infra/dcim_metrics_project/logs/server_deep_sync.log
@@ -73,15 +77,17 @@ Cron Log: /home/infra/dcim_metrics_project/logs/server_deep_sync_cron.log
 ```
 
 ### Servers Covered
-| IP | Hostname | Asset ID | SN |
-|----|----------|----------|----|
-| 10.50.0.2 | SERVER-HCI-01 | 138 | J901GKXY |
-| 10.50.0.3 | SERVER-HCI-02 | 139 | J901GKXX |
-| 10.50.0.4 | SERVER-HCI-03 | 140 | J901GKXZ |
-| 10.50.0.5 | SERVER-RENDER-01 | 141 | J901F8KE |
-| 10.50.0.6 | SERVER-RENDER-02 | 142 | J901F8KD |
+
+| IP        | Hostname         | Asset ID | SN       |
+| --------- | ---------------- | -------- | -------- |
+| 10.50.0.2 | SERVER-HCI-01    | 138      | J901GKXY |
+| 10.50.0.3 | SERVER-HCI-02    | 139      | J901GKXX |
+| 10.50.0.4 | SERVER-HCI-03    | 140      | J901GKXZ |
+| 10.50.0.5 | SERVER-RENDER-01 | 141      | J901F8KE |
+| 10.50.0.6 | SERVER-RENDER-02 | 142      | J901F8KD |
 
 ### Expected Disk Counts (Reference)
+
 - HCI servers (10.50.0.2–4): **12 disks** each (4x SSD + 8x HDD + varies)
 - Render servers (10.50.0.5–6): **4 disks** each (4x SSD)
 
@@ -89,13 +95,13 @@ Cron Log: /home/infra/dcim_metrics_project/logs/server_deep_sync_cron.log
 
 ## 5. Known Issues & Gotchas
 
-| Issue | Status | Notes |
-|-------|--------|-------|
-| Ralph API pagination default=10 | ✅ Fixed (V7) | `ralph_get_all()` handles all pages |
-| Duplicate disks from old model names (AL15SEB24EQ) | ✅ Cleaned | Manual DELETE + pruning active |
-| Management hostname mismatch | ✅ Fixed | Sourced from IPAddress object, not asset field |
-| Custom fields not clearing | ✅ Fixed | Pass `null` in `custom_fields` dict |
-| BMC lockout if polling < 120s | ⚠️ Active Risk | Do NOT change Telegraf interval |
+| Issue                                              | Status         | Notes                                          |
+| -------------------------------------------------- | -------------- | ---------------------------------------------- |
+| Ralph API pagination default=10                    | ✅ Fixed (V7)  | `ralph_get_all()` handles all pages            |
+| Duplicate disks from old model names (AL15SEB24EQ) | ✅ Cleaned     | Manual DELETE + pruning active                 |
+| Management hostname mismatch                       | ✅ Fixed       | Sourced from IPAddress object, not asset field |
+| Custom fields not clearing                         | ✅ Fixed       | Pass `null` in `custom_fields` dict            |
+| BMC lockout if polling < 120s                      | ⚠️ Active Risk | Do NOT change Telegraf interval                |
 
 ---
 
@@ -108,6 +114,7 @@ Cron Log: /home/infra/dcim_metrics_project/logs/server_deep_sync_cron.log
 5. **Crontab consolidation** — All device sync scripts into a single orchestrator
 
 ### Skills Required for Next Agent
+
 - Python 3 + `requests` library (REST/SNMP)
 - SNMP v2c/v3 querying (`pysnmp` or `easysnmp`)
 - Mikrotik RouterOS REST API (`/rest/` endpoint)

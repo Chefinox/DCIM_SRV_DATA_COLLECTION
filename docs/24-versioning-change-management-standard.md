@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > **Compliance**: Technical Requirements FIT041 Section 2.1.3
 > **Status**: Approved for Production
-> **Last Update**: 2026-05-04
+> **Last Update**: 2026-05-06
 
 ## 1. Definisi Standar (Ref: 2.1.3)
 Sistem DCIM wajib mengelola siklus hidup workflow dengan kontrol versi yang ketat untuk mencegah kegagalan pipeline akibat perubahan tidak terencana.
@@ -44,7 +44,8 @@ Setiap perubahan wajib melalui tahapan berikut:
 
 | Versi | Waktu (WIB) | Perubahan Utama | Status |
 | :--- | :--- | :--- | :--- |
-| **v3.2.0** | 2026-05-04 00:05 | Server Deep Sync V7: Pagination fix, Robust Pruning, Ethernet Speed mapping. Crontab aktif `*/5 * * * *`. | **Active** |
+| **v4.0.0** | 2026-05-06 22:55 | **Modular Agentic Architecture**: Restrukturisasi total ke 4-Layer (Tools, Schemas, Skills, Workflows). Decoupling SQL logic dari core processing. | **Active** |
+| **v3.2.0** | 2026-05-04 00:05 | Server Deep Sync V7: Pagination fix, Robust Pruning, Ethernet Speed mapping. Crontab aktif `*/5 * * * *`. | Superseded |
 | **v3.1.5** | 2026-05-03 23:40 | Server Deep Sync V6: Robust Pruning (delete duplikat via SN comparison). | Superseded |
 | **v3.1.4** | 2026-05-03 21:52 | Server Deep Sync V5: Pruning logic awal + Ethernet Speed mapping (SPEED_MAP). | Superseded |
 | **v3.1.3** | 2026-05-03 20:08 | Server Deep Sync V4: Disk model dari `Name`, slot dari `PhysicalLocation.PartLocation`, RAM dari `VendorID`. | Superseded |

@@ -1,0 +1,6 @@
+# Dashboard NDJSON Header (Simulated Structure for Manual Import)
+# File ini berisi metadata untuk Saved Objects Kibana
+
+{"type":"index-pattern","id":"dcim-metrics-pattern","attributes":{"title":"dcim-metrics-unified-*","timeFieldName":"@timestamp"}}
+{"type":"visualization","id":"ups-load-gauge","attributes":{"title":"UPS Load Status","visState":"{\"title\":\"UPS Load Status\",\"type\":\"gauge\",\"params\":{\"type\":\"gauge\",\"addTooltip\":true,\"addLegend\":true,\"gauge\":{\"extendRange\":true,\"percentageMode\":false,\"colorsRange\":[{\"from\":0,\"to\":70,\"color\":\"#629E51\"},{\"from\":70,\"to\":90,\"color\":\"#E5AC0E\"},{\"from\":90,\"to\":100,\"color\":\"#C15C17\"}],\"vertical\":false,\"style\":{\"fontSize\":28}}}}","uiStateJSON":"{}","description":"","savedSearchId":null,"version":1}}
+{"type":"dashboard","id":"dcim-unified-dashboard","attributes":{"title":"DCIM Unified Infrastructure Dashboard","hits":0,"description":"Comprehensive monitoring for Server, UPS, NAS, and Network.","panelsJSON":"[{\"gridData\":{\"x\":0,\"y\":0,\"w\":24,\"h\":15,\"i\":\"1\"},\"version\":\"7.10.0\",\"panelIndex\":\"1\",\"type\":\"visualization\",\"id\":\"ups-load-gauge\"}]","optionsJSON":"{\"hidePanelTitles\":false,\"useMargins\":true}","timeRestore":false,"version":1}}
