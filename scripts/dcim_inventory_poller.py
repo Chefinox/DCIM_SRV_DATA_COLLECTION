@@ -36,14 +36,14 @@ load_dotenv('/home/infra/dcim_metrics_project/configs/.env')
 
 # Redfish (Server Lenovo BMC/XCC)
 REDFISH_SERVERS = ["10.50.0.2", "10.50.0.3", "10.50.0.4", "10.50.0.5", "10.50.0.6"]
-REDFISH_USER = os.getenv("REDFISH_USER", "hndept")
-REDFISH_PASS = os.getenv("REDFISH_PASS", "F!tech@0918")
+REDFISH_USER = os.getenv("REDFISH_USER", "poller")
+REDFISH_PASS = os.getenv("REDFISH_PASS", "F!tech0918")
 
 # SNMP v3 (UPS APC)
 UPS_HOSTS = [{"ip": "192.168.100.140", "name": "UPS-APC-30K"}]
-UPS_SNMP_USER = os.getenv("UPS_SNMP_USER", "hndept")
-UPS_SNMP_AUTH_PASS = os.getenv("UPS_SNMP_AUTH_PASS", "F!tech@0918")
-UPS_SNMP_PRIV_PASS = os.getenv("UPS_SNMP_PRIV_PASS", "F!tech@0918")
+UPS_SNMP_USER = os.getenv("UPS_SNMP_USER", "poller")
+UPS_SNMP_AUTH_PASS = os.getenv("UPS_SNMP_AUTH_PASS", "F!tech0918")
+UPS_SNMP_PRIV_PASS = os.getenv("UPS_SNMP_PRIV_PASS", "F!tech0918")
 
 # Fallback Map from Excel (Used if Device Actual Name is empty)
 SERVER_FALLBACK_MAP = {
@@ -74,8 +74,8 @@ NAS_HOSTS = [
     {"hostname": "NAS-FIT",   "ip": "10.50.0.105", "method": "snmp"}
 ]
 NAS_USER = os.getenv("NAS_USER", "hndept")
-NAS_PASS_REST = os.getenv("NAS_PASS_REST", "F!tech@0918")
-NAS_PASS_SNMP = os.getenv("NAS_PASS_SNMP", "F!tech@0918")
+NAS_PASS_REST = os.getenv("NAS_PASS_REST", "F!tech0918")
+NAS_PASS_SNMP = os.getenv("NAS_PASS_SNMP", "F!tech0918")
 
 # SSL Context for legacy NAS
 SSL_CTX = ssl.create_default_context()

@@ -1,0 +1,40 @@
+No,Fields Name,Unit,Type,Deskripsi,Status
+1,host_name,String,Asset Info,,TRUE
+2,product_name,String,Asset Info,,TRUE
+3,serial_number,String,Asset Info,,TRUE
+4,bmc_ip,String,Asset Info,,TRUE
+1,Ambient Temp,degrees C,Hardware Sensor,System metric,FALSE
+2,Exhaust Temp,degrees C,Hardware Sensor,System metric,FALSE
+3,CPU 1 Temp,degrees C,Hardware Sensor,System metric,FALSE
+4,CPU 2 Temp,degrees C,Hardware Sensor,System metric,FALSE
+5,DIMM 1 Temp,degrees C,Hardware Sensor,System metric,FALSE
+6,DIMM 2 Temp,degrees C,Hardware Sensor,System metric,FALSE
+7,DIMM 3 Temp,degrees C,Hardware Sensor,System metric,FALSE
+8,DIMM 4 Temp,degrees C,Hardware Sensor,System metric,FALSE
+9,Fan 1 Front Tach,RPM,Hardware Sensor,System metric,FALSE
+10,Fan 1 Rear Tach,RPM,Hardware Sensor,System metric,FALSE
+11,Fan 2 Front Tach,RPM,Hardware Sensor,System metric,FALSE
+12,Fan 3 Front Tach,RPM,Hardware Sensor,System metric,FALSE
+13,Sys Power,Watts,Hardware Sensor,System metric,FALSE
+14,CPU Power,Watts,Hardware Sensor,System metric,FALSE
+15,Mem Power,Watts,Hardware Sensor,System metric,FALSE
+16,SysBrd 12V,Volts,Hardware Sensor,System metric,FALSE
+17,SysBrd 5V,Volts,Hardware Sensor,System metric,FALSE
+18,SysBrd 3.3V,Volts,Hardware Sensor,System metric,FALSE
+19,PSU 1 AC In Pwr,Watts,Hardware Sensor,System metric,FALSE
+20,PSU 1 DC Out Pwr,Watts,Hardware Sensor,System metric,FALSE
+21,PSU 2 AC In Pwr,Watts,Hardware Sensor,System metric,FALSE
+22,PSU 2 DC Out Pwr,Watts,Hardware Sensor,System metric,FALSE
+23,Drive 0,ok,Hardware Sensor,System metric,FALSE
+24,Drive 1,ok,Hardware Sensor,System metric,FALSE
+25,Drive 2,ok,Hardware Sensor,System metric,FALSE
+26,Drive 3,ok,Hardware Sensor,System metric,FALSE
+27,CMOS Battery,Volts,Hardware Sensor,System metric,FALSE
+28,CPU Utilization,percent,Hardware Sensor,System metric,FALSE
+29,PCIe 1 OverTemp,discrete,Hardware Sensor,System metric,FALSE
+30,PCIe 2 OverTemp,discrete,Hardware Sensor,System metric,FALSE
+31,Chassis Intrusion,discrete,Hardware Sensor,System metric,FALSE
+32,PSU 1 Presence,discrete,Hardware Sensor,System metric,FALSE
+33,PSU 2 Presence,discrete,Hardware Sensor,System metric,FALSE
+34,Management Subsys,discrete,Hardware Sensor,System metric,FALSE
+35,Memory Mismatch,discrete,Hardware Sensor,System metric,FALSE

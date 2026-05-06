@@ -117,3 +117,25 @@ Data inventaris Network Switch (MikroTik) ditarik oleh Telegraf dan disesuaikan 
 | **3. Network** | **Ethernets (Management):** | | | |
 | | - IP address | 🟢 YA | Disinkronisasikan sebagai IP Management | `ip` |
 | | - Hostname | 🟢 YA | Disinkronisasikan sebagai Hostname Management | `hostname` |
+
+---
+
+## Tabel Komparasi Auto-Update (CCTV & NVR)
+
+Data inventaris CCTV dan NVR (umumnya Hikvision) ditarik menggunakan poller kustom (ISAPI/HTTP) dan disimpan di PostgreSQL. CCTV/NVR dikategorikan sebagai perangkat *endpoint* ringan yang disinkronkan menggunakan logika yang serupa dengan NAS/Switch.
+
+| Kategori | Field (Manual List) | Status | Implementasi (PostgreSQL -> Ralph) | Sumber PostgreSQL (`dcim_events`) |
+| :--- | :--- | :---: | :--- | :--- |
+| **1. Basic Info** | Hostname | 🟢 YA | Update aktual | `hostname` |
+| | Firmware version | 🟢 YA | Update aktual | `raw_tags->>'firmware'` (Contoh: V5.5.114) |
+| | Management ip | 🟢 YA | Update via objek `IPAddress` tertaut | `ip` |
+| | Management hostname | 🟢 YA | Update via objek `IPAddress` tertaut | Sama dengan Hostname |
+| | Serial number | 🟢 YA | Dipakai sbg key pencarian | `serial_number` |
+| | Model name | 🟡 YA | Dicatat di Remarks jika tidak Unknown | `model` |
+| | Manufacturer | 🟡 YA | Dicatat di Remarks jika tidak Unknown | `manufacturer` |
+| **2. Components** | **Ethernets / Disks / RAM** | 🔴 N/A | Tidak ditarik komponen internalnya oleh ISAPI | (Tidak tersedia) |
+| **3. Network** | **Ethernets (Management):** | | | |
+| | - IP address | 🟢 YA | Disinkronisasikan sebagai IP Management | `ip` |
+| | - Hostname | 🟢 YA | Disinkronisasikan sebagai Hostname Management | `hostname` |
+
+---

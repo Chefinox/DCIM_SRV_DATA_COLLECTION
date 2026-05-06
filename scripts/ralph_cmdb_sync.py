@@ -413,21 +413,21 @@ def run():
             except Exception as e:
                 logging.error(f"  ERROR UPS {row['ip']}: {e}")
 
-        # === SYNC NAS & NETWORK SWITCH ===
-        logging.info("--- Syncing NAS & NETWORK SWITCH ---")
+        # === SYNC NAS, NETWORK SWITCH, CCTV & NVR ===
+        logging.info("--- Syncing NAS, NETWORK SWITCH, CCTV, & NVR ---")
         cur.execute("""
             SELECT DISTINCT ON (ip)
                 event_time, device_type, hostname, ip, serial_number,
                 model, manufacturer, raw_tags->>'firmware' as tag_fw
             FROM dcim_events
-            WHERE device_type IN ('nas', 'network_switch')
+            WHERE device_type IN ('nas', 'network_switch', 'cctv', 'nvr')
               AND ip IS NOT NULL
               AND serial_number IS NOT NULL
               AND serial_number != 'NO_SN'
             ORDER BY ip, event_time DESC
         """)
         net_list = cur.fetchall()
-        logging.info(f"  Ditemukan {len(net_list)} NAS/Network Switch unik di PostgreSQL")
+        logging.info(f"  Ditemukan {len(net_list)} NAS/Network/CCTV/NVR unik di PostgreSQL")
         for row in net_list:
             try:
                 sync_network_storage(row)
