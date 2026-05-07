@@ -44,7 +44,8 @@ Setiap perubahan wajib melalui tahapan berikut:
 
 | Versi | Waktu (WIB) | Perubahan Utama | Status |
 | :--- | :--- | :--- | :--- |
-| **v4.0.0** | 2026-05-06 22:55 | **Modular Agentic Architecture**: Restrukturisasi total ke 4-Layer (Tools, Schemas, Skills, Workflows). Decoupling SQL logic dari core processing. | **Active** |
+| **v3.5.0** | 2026-05-07 17:00 | **Hybrid Stabilization**: Rollback logika pemrosesan ke v3.4 (Proven Logic) namun tetap menggunakan struktur folder v4.0 (src/). | **Active** |
+| **v4.0.0** | 2026-05-06 22:55 | **Modular Agentic Architecture**: Restrukturisasi total ke 4-Layer (Tools, Schemas, Skills, Workflows). Decoupling SQL logic dari core processing. | Superseded |
 | **v3.2.0** | 2026-05-04 00:05 | Server Deep Sync V7: Pagination fix, Robust Pruning, Ethernet Speed mapping. Crontab aktif `*/5 * * * *`. | Superseded |
 | **v3.1.5** | 2026-05-03 23:40 | Server Deep Sync V6: Robust Pruning (delete duplikat via SN comparison). | Superseded |
 | **v3.1.4** | 2026-05-03 21:52 | Server Deep Sync V5: Pruning logic awal + Ethernet Speed mapping (SPEED_MAP). | Superseded |
