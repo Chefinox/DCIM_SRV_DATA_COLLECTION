@@ -26,7 +26,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- CONFIGURATION ---
 RALPH_API_BASE = "http://192.168.101.73:8088/api"
-RALPH_TOKEN    = "60bcedc875ec7b03b983082655e473e9519d40d5"
+RALPH_TOKEN    = "1cd05b8d36e258399a52c59f1a4016addb2346a3"
 
 DB_CONFIG = {
     "host":     "192.168.101.73",
@@ -67,13 +67,23 @@ def ralph_get_all(url):
 
 
 def find_ralph_asset_by_sn(sn):
-    """Cari aset Ralph berdasarkan serial number."""
+    """Cari aset Ralph berdasarkan serial number di DC dan Back Office."""
+    # Cari di Data Center
     results = ralph_get_all(f"{RALPH_API_BASE}/data-center-assets/?sn={sn}")
-    return results[0] if results else None
+    if results:
+        return results[0], "data-center-assets"
+    
+    # Cari di Back Office (CCTV, etc)
+    results = ralph_get_all(f"{RALPH_API_BASE}/back-office-assets/?sn={sn}")
+    if results:
+        return results[0], "back-office-assets"
+        
+    return None, None
 
 
-def update_management_ip(asset_id, ip, hostname):
+def update_management_ip(asset_id, ip, hostname, endpoint_type="data-center-assets"):
     """Update atau buat objek IPAddress is_management=True untuk aset."""
+    # Ralph menggunakan base_object ID yang unik lintas kategori (DC/BO)
     url = f"{RALPH_API_BASE}/ipaddresses/?ethernet__base_object={asset_id}&is_management=True"
     existing = ralph_get_all(url)
     if existing:
@@ -203,13 +213,13 @@ def sync_server(row):
     hostname = row["srv_system_name"] or row["hostname"]
     ip = str(row["ip"])
 
-    asset = find_ralph_asset_by_sn(sn)
+    asset, endpoint = find_ralph_asset_by_sn(sn)
     if not asset:
-        logging.warning(f"  [SERVER] Aset SN {sn} tidak ditemukan di Ralph, skip.")
+        logging.warning(f"  [SERVER] Aset SN {sn} tidak ditemukan di Ralph (DC/BO), skip.")
         return
 
     asset_id = asset["id"]
-    logging.info(f"  [SERVER] Sync {hostname} (SN:{sn}, ID:{asset_id})")
+    logging.info(f"  [SERVER] Sync {hostname} (SN:{sn}, ID:{asset_id}) via {endpoint}")
 
     # Basic Info
     last_sync_str = row.get("event_time").strftime("%Y-%m-%d %H:%M:%S") if row.get("event_time") else "Unknown"
@@ -220,12 +230,12 @@ def sync_server(row):
         "remarks": f"Last Sync: {last_sync_str}",
         "custom_fields": {"power_consumption": None, "device_temperature": None}
     }
-    r = requests.patch(f"{RALPH_API_BASE}/data-center-assets/{asset_id}/",
+    r = requests.patch(f"{RALPH_API_BASE}/{endpoint}/{asset_id}/",
                        headers=RALPH_HEADERS, json=basic_payload, verify=False)
     logging.info(f"  [BASIC] PATCH asset → HTTP {r.status_code}")
 
     # Management IP
-    update_management_ip(asset_id, ip, hostname)
+    update_management_ip(asset_id, ip, hostname, endpoint)
 
     # Components (dari Tabel Relasional)
     with psycopg2.connect(**DB_CONFIG) as subconn:
@@ -262,13 +272,13 @@ def sync_ups(row):
         logging.warning(f"  [UPS] Serial number kosong untuk IP {ip}, skip.")
         return
 
-    asset = find_ralph_asset_by_sn(sn)
+    asset, endpoint = find_ralph_asset_by_sn(sn)
     if not asset:
-        logging.warning(f"  [UPS] Aset SN {sn} tidak ditemukan di Ralph, skip.")
+        logging.warning(f"  [UPS] Aset SN {sn} tidak ditemukan di Ralph (DC/BO), skip.")
         return
 
     asset_id = asset["id"]
-    logging.info(f"  [UPS] Sync {hostname} (SN:{sn}, ID:{asset_id})")
+    logging.info(f"  [UPS] Sync {hostname} (SN:{sn}, ID:{asset_id}) via {endpoint}")
 
     # Basic Info
     last_sync_str = row.get("event_time").strftime("%Y-%m-%d %H:%M:%S") if row.get("event_time") else "Unknown"
@@ -277,16 +287,14 @@ def sync_ups(row):
         "firmware_version": firmware,
     }
     remarks = f"Last Sync: {last_sync_str}"
-    if model:
-        remarks = f"Model SNMP: {model} | " + remarks
     payload["remarks"] = remarks
 
-    r = requests.patch(f"{RALPH_API_BASE}/data-center-assets/{asset_id}/",
+    r = requests.patch(f"{RALPH_API_BASE}/{endpoint}/{asset_id}/",
                        headers=RALPH_HEADERS, json=payload, verify=False)
     logging.info(f"  [BASIC] PATCH asset → HTTP {r.status_code}")
 
     # Management IP
-    update_management_ip(asset_id, ip, hostname)
+    update_management_ip(asset_id, ip, hostname, endpoint)
 
 
 # --- NAS & NETWORK SWITCH SYNC ---
@@ -296,21 +304,24 @@ def sync_network_storage(row):
     sn = row.get("serial_number")
     hostname = row.get("hostname")
     ip = str(row["ip"])
-    firmware = row.get("tag_fw")
+    tags = row.get("raw_tags", {})
+    firmware = row.get("tag_fw") or tags.get("firmware")
     model = row.get("model")
+    if not model or model == "Unknown":
+        model = tags.get("model")
     device_type = row.get("device_type").upper()
 
     if not sn or sn == 'NO_SN':
         logging.warning(f"  [{device_type}] Serial number kosong/valid untuk IP {ip}, skip.")
         return
 
-    asset = find_ralph_asset_by_sn(sn)
+    asset, endpoint = find_ralph_asset_by_sn(sn)
     if not asset:
-        logging.warning(f"  [{device_type}] Aset SN {sn} tidak ditemukan di Ralph, skip.")
+        logging.warning(f"  [{device_type}] Aset SN {sn} tidak ditemukan di Ralph (DC/BO), skip.")
         return
 
     asset_id = asset["id"]
-    logging.info(f"  [{device_type}] Sync {hostname} (SN:{sn}, ID:{asset_id})")
+    logging.info(f"  [{device_type}] Sync {hostname} (SN:{sn}, ID:{asset_id}) via {endpoint}")
 
     # Basic Info
     last_sync_str = row.get("event_time").strftime("%Y-%m-%d %H:%M:%S") if row.get("event_time") else "Unknown"
@@ -322,16 +333,14 @@ def sync_network_storage(row):
 
     # Update remarks dengan detail model asli
     remarks = f"Last Sync: {last_sync_str}"
-    if model:
-        remarks = f"Model SNMP: {model} | " + remarks
     payload["remarks"] = remarks
 
-    r = requests.patch(f"{RALPH_API_BASE}/data-center-assets/{asset_id}/",
+    r = requests.patch(f"{RALPH_API_BASE}/{endpoint}/{asset_id}/",
                        headers=RALPH_HEADERS, json=payload, verify=False)
     logging.info(f"  [BASIC] PATCH asset → HTTP {r.status_code}")
 
     # Management IP
-    update_management_ip(asset_id, ip, hostname)
+    update_management_ip(asset_id, ip, hostname, endpoint)
 
 
 # --- PRUNE STALE ASSETS ---

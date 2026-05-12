@@ -9,12 +9,11 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)s: %(message)s'
 )
 
-DB_CONFIG = {
-    "host": "192.168.101.73",
-    "database": "dcim_sot",
-    "user": "sot_admin",
-    "password": "Inovasi@0918"
-}
+import sys
+sys.path.append("/home/infra/dcim_metrics_project")
+from src.configs.database import get_db_config
+
+DB_CONFIG = get_db_config()
 
 RETENTION_DAYS = 7
 

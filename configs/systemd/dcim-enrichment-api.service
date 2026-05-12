@@ -1,0 +1,14 @@
+[Unit]
+Description=DCIM FastAPI Enrichment Service
+After=network.target dcim-redis.service
+
+[Service]
+Type=simple
+User=infra
+WorkingDirectory=/home/infra/dcim_metrics_project/phase2
+ExecStart=/home/infra/.local/bin/uvicorn enrichment_api:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

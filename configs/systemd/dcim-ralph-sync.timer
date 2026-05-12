@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer for DCIM Ralph CMDB Sync Agent
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+Unit=dcim-ralph-sync.service
+
+[Install]
+WantedBy=timers.target

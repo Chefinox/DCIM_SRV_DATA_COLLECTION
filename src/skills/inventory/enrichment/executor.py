@@ -33,7 +33,8 @@ def lookup_sql_fallback(serial_number: str):
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
         query = """
-            SELECT hostname, serial_number, site, raw_payload 
+            SELECT hostname, serial_number, site, manufacturer, model, 
+                   rack_name, rack_position, asset_status, business_unit, environment
             FROM unified_assets 
             WHERE LOWER(serial_number) = %s OR LOWER(hostname) = %s
             LIMIT 1

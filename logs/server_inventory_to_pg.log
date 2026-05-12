@@ -1,0 +1,115 @@
+2026-05-12 10:16:28,295 INFO: === SERVER INVENTORY TO POSTGRESQL: START ===
+2026-05-12 10:16:28,295 INFO: Processing SERVER-HCI-01 (10.50.0.2)...
+2026-05-12 10:16:29,711 INFO:   10.50.0.2: SN=J901GKXY, BIOS=ESE124B
+2026-05-12 10:16:30,996 INFO:   10.50.0.2: Firmware=ESX322I 3.92 2024-01-29
+2026-05-12 10:16:35,924 INFO:   10.50.0.2: Found 2 processors
+2026-05-12 10:17:22,035 INFO:   10.50.0.2: Found 8 memory modules
+2026-05-12 10:17:41,129 INFO:   10.50.0.2: Found 12 disks
+2026-05-12 10:17:46,034 INFO:   10.50.0.2: Found 4 NICs
+2026-05-12 10:17:46,729 ERROR:   10.50.0.2: PostgreSQL write failed — column "srv_nic_components" of relation "dcim_events" does not exist
+LINE 5: ...ents, srv_memory_components, srv_disk_components, srv_nic_co...
+                                                             ^
+
+2026-05-12 10:17:46,729 INFO: Processing SERVER-HCI-02 (10.50.0.3)...
+2026-05-12 10:17:48,073 INFO:   10.50.0.3: SN=J901GKXX, BIOS=ESE124B
+2026-05-12 10:17:49,048 INFO:   10.50.0.3: Firmware=ESX322I 3.92 2024-01-29
+2026-05-12 10:17:51,464 INFO:   10.50.0.3: Found 2 processors
+2026-05-12 10:19:22,957 INFO: === SERVER INVENTORY TO POSTGRESQL: START ===
+2026-05-12 10:19:22,957 INFO: Processing SERVER-HCI-01 (10.50.0.2)...
+2026-05-12 10:19:26,065 INFO:   10.50.0.2: SN=J901GKXY, BIOS=ESE124B
+2026-05-12 10:19:27,237 INFO:   10.50.0.2: Firmware=ESX322I 3.92 2024-01-29
+2026-05-12 10:19:29,602 INFO:   10.50.0.2: Found 2 processors
+2026-05-12 10:20:20,299 INFO:   10.50.0.2: Found 8 memory modules
+2026-05-12 10:20:24,614 INFO: === SERVER INVENTORY TO POSTGRESQL: START ===
+2026-05-12 10:20:24,614 INFO: Processing SERVER-HCI-01 (10.50.0.2)...
+2026-05-12 10:20:27,883 INFO:   10.50.0.2: SN=J901GKXY, BIOS=ESE124B
+2026-05-12 10:20:29,474 INFO:   10.50.0.2: Firmware=ESX322I 3.92 2024-01-29
+2026-05-12 10:20:35,932 INFO:   10.50.0.2: Found 2 processors
+2026-05-12 10:20:51,018 INFO:   10.50.0.2: Found 12 disks
+2026-05-12 10:21:00,767 INFO:   10.50.0.2: Found 4 NICs
+2026-05-12 10:21:00,933 ERROR:   10.50.0.2: PostgreSQL write failed — column "srv_nic_components" of relation "dcim_events" does not exist
+LINE 5: ...ents, srv_memory_components, srv_disk_components, srv_nic_co...
+                                                             ^
+
+2026-05-12 10:21:00,933 INFO: Processing SERVER-HCI-02 (10.50.0.3)...
+2026-05-12 10:21:01,831 INFO:   10.50.0.3: SN=J901GKXX, BIOS=ESE124B
+2026-05-12 10:21:04,394 INFO:   10.50.0.3: Firmware=ESX322I 3.92 2024-01-29
+2026-05-12 10:21:11,351 INFO:   10.50.0.3: Found 2 processors
+2026-05-12 10:21:27,423 INFO:   10.50.0.2: Found 8 memory modules
+2026-05-12 10:21:44,507 INFO:   10.50.0.2: Found 12 disks
+2026-05-12 10:21:46,755 INFO:   10.50.0.3: Found 8 memory modules
+2026-05-12 10:21:49,114 INFO:   10.50.0.2: Found 4 NICs
+2026-05-12 10:21:49,434 INFO:   10.50.0.2: Written to PostgreSQL (event_id=30ccc32e-10b8-4e77-ba10-86828f470b9f)
+2026-05-12 10:21:49,434 INFO: Processing SERVER-HCI-02 (10.50.0.3)...
+2026-05-12 10:21:51,214 INFO:   10.50.0.3: SN=J901GKXX, BIOS=ESE124B
+2026-05-12 10:21:52,957 INFO:   10.50.0.3: Firmware=ESX322I 3.92 2024-01-29
+2026-05-12 10:22:00,666 INFO:   10.50.0.3: Found 2 processors
+2026-05-12 10:22:20,252 INFO:   10.50.0.3: Found 12 disks
+2026-05-12 10:22:33,240 INFO:   10.50.0.3: Found 4 NICs
+2026-05-12 10:22:33,276 ERROR:   10.50.0.3: PostgreSQL write failed — column "srv_nic_components" of relation "dcim_events" does not exist
+LINE 5: ...ents, srv_memory_components, srv_disk_components, srv_nic_co...
+                                                             ^
+
+2026-05-12 10:22:33,276 INFO: Processing SERVER-HCI-03 (10.50.0.4)...
+2026-05-12 10:22:35,251 INFO:   10.50.0.4: SN=J901GKXZ, BIOS=ESE124B
+2026-05-12 10:22:37,102 INFO:   10.50.0.4: Firmware=ESX322I 3.92 2024-01-29
+2026-05-12 10:22:40,048 INFO:   10.50.0.4: Found 2 processors
+2026-05-12 10:22:54,817 INFO:   10.50.0.3: Found 8 memory modules
+2026-05-12 10:23:12,414 INFO:   10.50.0.4: Found 8 memory modules
+2026-05-12 10:23:20,197 INFO:   10.50.0.3: Found 12 disks
+2026-05-12 10:23:29,915 INFO:   10.50.0.4: Found 12 disks
+2026-05-12 10:23:30,620 INFO:   10.50.0.3: Found 4 NICs
+2026-05-12 10:23:30,703 INFO:   10.50.0.3: Written to PostgreSQL (event_id=c44771c0-49b4-4818-9517-f2df23eb3711)
+2026-05-12 10:23:30,703 INFO: Processing SERVER-HCI-03 (10.50.0.4)...
+2026-05-12 10:23:34,662 INFO:   10.50.0.4: SN=J901GKXZ, BIOS=ESE124B
+2026-05-12 10:23:38,078 INFO:   10.50.0.4: Firmware=ESX322I 3.92 2024-01-29
+2026-05-12 10:23:50,439 INFO:   10.50.0.4: Found 2 processors
+2026-05-12 10:23:50,722 INFO:   10.50.0.4: Found 4 NICs
+2026-05-12 10:23:50,737 ERROR:   10.50.0.4: PostgreSQL write failed — column "srv_nic_components" of relation "dcim_events" does not exist
+LINE 5: ...ents, srv_memory_components, srv_disk_components, srv_nic_co...
+                                                             ^
+
+2026-05-12 10:23:50,737 INFO: Processing SERVER-RENDER-01 (10.50.0.5)...
+2026-05-12 10:23:51,733 INFO:   10.50.0.5: SN=J901F8KE, BIOS=KAE116K
+2026-05-12 10:23:52,702 INFO:   10.50.0.5: Firmware=KAX322Z 2.31 2024-01-19
+2026-05-12 10:23:55,910 INFO:   10.50.0.5: Found 4 processors
+2026-05-12 10:24:18,420 INFO:   10.50.0.5: Found 8 memory modules
+2026-05-12 10:24:23,335 INFO:   10.50.0.5: Found 4 disks
+2026-05-12 10:24:26,777 INFO:   10.50.0.5: Found 4 NICs
+2026-05-12 10:24:26,793 ERROR:   10.50.0.5: PostgreSQL write failed — column "srv_nic_components" of relation "dcim_events" does not exist
+LINE 5: ...ents, srv_memory_components, srv_disk_components, srv_nic_co...
+                                                             ^
+
+2026-05-12 10:24:26,793 INFO: Processing SERVER-RENDER-02 (10.50.0.6)...
+2026-05-12 10:24:27,815 INFO:   10.50.0.6: SN=J901F8KD, BIOS=KAE116K
+2026-05-12 10:24:28,754 INFO:   10.50.0.6: Firmware=KAX322Z 2.31 2024-01-19
+2026-05-12 10:24:32,824 INFO:   10.50.0.6: Found 4 processors
+2026-05-12 10:24:34,950 INFO:   10.50.0.4: Found 8 memory modules
+2026-05-12 10:24:49,355 INFO:   10.50.0.4: Found 12 disks
+2026-05-12 10:24:51,935 INFO:   10.50.0.6: Found 8 memory modules
+2026-05-12 10:24:55,258 INFO:   10.50.0.4: Found 4 NICs
+2026-05-12 10:24:55,332 INFO:   10.50.0.4: Written to PostgreSQL (event_id=489669cf-aa84-421c-a3b8-c48962ee4581)
+2026-05-12 10:24:55,332 INFO: Processing SERVER-RENDER-01 (10.50.0.5)...
+2026-05-12 10:24:55,929 INFO:   10.50.0.6: Found 4 disks
+2026-05-12 10:24:56,418 INFO:   10.50.0.5: SN=J901F8KE, BIOS=KAE116K
+2026-05-12 10:24:57,562 INFO:   10.50.0.5: Firmware=KAX322Z 2.31 2024-01-19
+2026-05-12 10:24:59,283 INFO:   10.50.0.6: Found 4 NICs
+2026-05-12 10:24:59,303 ERROR:   10.50.0.6: PostgreSQL write failed — column "srv_nic_components" of relation "dcim_events" does not exist
+LINE 5: ...ents, srv_memory_components, srv_disk_components, srv_nic_co...
+                                                             ^
+
+2026-05-12 10:24:59,303 INFO: === SERVER INVENTORY TO POSTGRESQL: DONE (Success: 0, Failed: 5) ===
+2026-05-12 10:25:01,233 INFO:   10.50.0.5: Found 4 processors
+2026-05-12 10:25:18,764 INFO:   10.50.0.5: Found 8 memory modules
+2026-05-12 10:25:23,748 INFO:   10.50.0.5: Found 4 disks
+2026-05-12 10:25:27,043 INFO:   10.50.0.5: Found 4 NICs
+2026-05-12 10:25:27,133 INFO:   10.50.0.5: Written to PostgreSQL (event_id=62361161-f788-4d24-905a-fa94943e3de2)
+2026-05-12 10:25:27,133 INFO: Processing SERVER-RENDER-02 (10.50.0.6)...
+2026-05-12 10:25:28,145 INFO:   10.50.0.6: SN=J901F8KD, BIOS=KAE116K
+2026-05-12 10:25:28,984 INFO:   10.50.0.6: Firmware=KAX322Z 2.31 2024-01-19
+2026-05-12 10:25:32,887 INFO:   10.50.0.6: Found 4 processors
+2026-05-12 10:25:51,670 INFO:   10.50.0.6: Found 8 memory modules
+2026-05-12 10:25:55,632 INFO:   10.50.0.6: Found 4 disks
+2026-05-12 10:26:02,473 INFO:   10.50.0.6: Found 4 NICs
+2026-05-12 10:26:02,534 INFO:   10.50.0.6: Written to PostgreSQL (event_id=94db918f-facd-434a-9ea2-a59b03f0e920)
+2026-05-12 10:26:02,534 INFO: === SERVER INVENTORY TO POSTGRESQL: DONE (Success: 5, Failed: 0) ===

@@ -1,0 +1,14 @@
+[Unit]
+Description=DCIM Unified Enrichment Service
+After=network.target kafka.service
+
+[Service]
+Type=simple
+User=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+ExecStart=/usr/bin/python3 /home/infra/dcim_metrics_project/scripts/dcim_enrichment_service.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

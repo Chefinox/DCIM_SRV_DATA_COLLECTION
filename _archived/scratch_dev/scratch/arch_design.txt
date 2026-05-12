@@ -1,0 +1,117 @@
+DCIM
+System Architecture Design
+Data Ingestion dan Integration
+Data Sources
+
+Network Device
+
+Data Ingestion & Integration
+
+REST API
+Polling/Webhook
+
+Message Broker Backbone
+Apache Kafka
+Ingestion Framework
+Data Mapping
+Apache NiFi
+
+File System
+
+SFTP/FTPS
+File-based ingestion
+
+JDBC/ODBC
+
+Legacy System
+
+Database Polling
+
+Processing and Transformation
+
+Database Polling
+Kafka connect
+Metric Collection / SNMP Polling
+
+Lookup Enrichment
+NiFi/Redis/PostgreSQL
+Topology & Relationship
+NiFi / Python
+
+Data Validation
+NiFi (Validate Record) / Python
+
+Contextual Enrichment
+
+Transformation & Normalization
+
+Enrichment Strategy &
+Error Handling
+
+Data Cleansing
+
+SNMP / Telegraf
+Integration Targets
+Stream Processing Engine
+Flink
+
+Syslog Collection
+Filebeat/Logstash
+SNMP
+
+Metric
+
+Data Enrichment
+
+CMDB
+Monitoring System
+
+Polling Device
+
+SSH Commands / Config
+Collection
+
+Data Router & Flow Manager
+NiFi RouteOnAttribute
+
+Centralized Logging
+Reporting & Dashboard
+
+Log Collector
+
+Syslog
+Real-time push
+
+SSH
+
+Remote Access
+
+Indexing & Alerting
+
+ARCHITECTURE LEGEND
+
+Remote Command
+
+Data Analytics
+
+Alert Engine
+
+Data Storage
+
+Querry Language
+Data Collection (Polling)
+Kafka Producer Flow
+
+Visualization &
+Reporting
+
+Processor Flow
+Integration Delivery
+
+Visualization
+
+Reports Engine
+
+Asset Mapping
+
+
