@@ -1,0 +1,11 @@
+[Unit]
+Description=DCIM Ralph CMDB Sync Agent
+After=network.target
+
+[Service]
+Type=oneshot
+User=infra
+Group=infra
+WorkingDirectory=/home/infra/dcim_metrics_project/scripts
+ExecStart=/usr/bin/python3 /home/infra/dcim_metrics_project/scripts/ralph_sync_agent.py
+EnvironmentFile=/home/infra/dcim_metrics_project/configs/.env

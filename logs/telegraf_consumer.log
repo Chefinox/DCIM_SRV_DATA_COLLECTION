@@ -1,0 +1,90 @@
+2026-04-21T06:07:33Z I! Starting Telegraf 1.21.4+ds1-0ubuntu2
+2026-04-21T06:07:33Z W! DeprecationWarning: Option "url" of plugin "inputs.amqp_consumer" deprecated since version 1.7.0 and will be removed in 2.0.0: use brokers
+2026-04-21T06:07:33Z I! Loaded inputs: amqp_consumer
+2026-04-21T06:07:33Z I! Loaded aggregators: 
+2026-04-21T06:07:33Z I! Loaded processors: 
+2026-04-21T06:07:33Z I! Loaded outputs: elasticsearch (2x)
+2026-04-21T06:07:33Z I! Tags enabled: 
+2026-04-21T06:07:33Z W! Deprecated inputs: 0 and 1 options
+2026-04-21T06:07:33Z I! [agent] Config: Interval:5s, Quiet:false, Hostname:"dcim-consumer", Flush Interval:10s
+2026-04-21T06:07:33Z D! [agent] Initializing plugins
+2026-04-21T06:07:33Z D! [agent] Connecting outputs
+2026-04-21T06:07:33Z D! [agent] Attempting connection to [outputs.elasticsearch]
+2026-04-21T06:07:33Z I! [outputs.elasticsearch] Elasticsearch version: "9.3.1"
+2026-04-21T06:07:33Z D! [agent] Successfully connected to outputs.elasticsearch
+2026-04-21T06:07:33Z D! [agent] Attempting connection to [outputs.elasticsearch]
+2026-04-21T06:07:33Z I! [outputs.elasticsearch] Elasticsearch version: "9.3.1"
+2026-04-21T06:07:33Z D! [agent] Successfully connected to outputs.elasticsearch
+2026-04-21T06:07:33Z D! [agent] Starting service inputs
+2026-04-21T06:07:33Z D! [inputs.amqp_consumer] Connecting to "amqp://127.0.0.1:5672"
+2026-04-21T06:07:33Z D! [inputs.amqp_consumer] Connected to "amqp://127.0.0.1:5672"
+2026-04-21T06:07:38Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:07:43Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:07:43Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:07:48Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:07:53Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:07:53Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:07:58Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:08:03Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:08:03Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:08:08Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:08:13Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:08:13Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:08:18Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:08:23Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:08:23Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:08:28Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:08:33Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:08:33Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:08:38Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:08:43Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:08:43Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:08:48Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:08:53Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:08:53Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:08:58Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:09:03Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:09:03Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:09:08Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:09:13Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:09:13Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:09:18Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:09:23Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:09:23Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:09:28Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:09:33Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:09:33Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:09:38Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:09:43Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:09:43Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:09:48Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:09:53Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:09:53Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:09:58Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:10:03Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:10:03Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:10:08Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:10:13Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:10:13Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:10:18Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:10:23Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:10:23Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:10:28Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:10:33Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:10:33Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:10:38Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:10:43Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:10:43Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:10:48Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:10:53Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:10:53Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:10:58Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:11:03Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:11:03Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:11:08Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:11:13Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:11:13Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:11:18Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value
+2026-04-21T06:11:23Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:11:23Z D! [outputs.elasticsearch] Buffer fullness: 0 / 10000 metrics
+2026-04-21T06:11:28Z E! [inputs.amqp_consumer] Error in plugin: invalid character '{' after top-level value

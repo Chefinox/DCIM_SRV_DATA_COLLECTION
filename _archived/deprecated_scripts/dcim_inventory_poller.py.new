@@ -1,0 +1,429 @@
+#!/usr/bin/env python3
+"""
+DCIM Unified Inventory Poller
+Mengumpulkan Serial Number, Model, dan Firmware dari semua perangkat infrastruktur:
+  - Server Lenovo (via Redfish HTTP)
+  - UPS APC (via SNMP v3)
+  - MikroTik Switch (via SNMP v2c)
+  - Hikvision NVR & CCTV Camera (via ISAPI HTTP)
+
+Output: JSON Array dengan skema seragam, siap dikonsumsi oleh Telegraf inputs.exec
+"""
+
+import json
+import sys
+import requests
+import urllib3
+import concurrent.futures
+import subprocess
+import re
+import ssl
+from datetime import datetime, timezone
+import urllib.parse
+import urllib.request
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+from dotenv import load_dotenv
+import os
+
+load_dotenv('/home/infra/dcim_metrics_project/configs/.env')
+
+# ============================================================
+# CREDENTIAL & DEVICE CONFIGURATION
+# ============================================================
+
+# Redfish (Server Lenovo BMC/XCC)
+REDFISH_SERVERS = ["10.50.0.2", "10.50.0.3", "10.50.0.4", "10.50.0.5", "10.50.0.6"]
+REDFISH_USER = os.getenv("REDFISH_USER", "hndept")
+REDFISH_PASS = os.getenv("REDFISH_PASS", "")
+
+# SNMP v3 (UPS APC)
+UPS_HOSTS = [{"ip": "192.168.100.140", "name": "UPS-APC-30K"}]
+UPS_SNMP_USER = os.getenv("UPS_SNMP_USER", "hndept")
+UPS_SNMP_AUTH_PASS = os.getenv("UPS_SNMP_AUTH_PASS", "")
+UPS_SNMP_PRIV_PASS = os.getenv("UPS_SNMP_PRIV_PASS", "")
+
+# SNMP v2c (MikroTik)
+MIKROTIK_HOSTS = [
+    {"ip": "172.16.35.1", "name": "FIT-Core-SW"},
+    {"ip": "172.16.35.2", "name": "FIT-DIST-SW"},
+    {"ip": "172.16.35.5", "name": "FIT-DIST-SW-SERVER1"},
+]
+MIKROTIK_COMMUNITY = "public"
+
+# Synology NAS
+NAS_HOSTS = [
+    {"hostname": "NAS-INFRA", "ip": "10.50.0.106", "method": "snmp"},
+    {"hostname": "NAS-FAT",   "ip": "10.50.0.107", "method": "snmp"},
+    {"hostname": "NAS-SD01",  "ip": "10.50.0.108", "method": "snmp"},
+    {"hostname": "NAS-CD01",  "ip": "10.50.0.109", "method": "snmp"},
+    {"hostname": "NAS-CD02",  "ip": "10.50.0.110", "method": "snmp"},
+    {"hostname": "NAS-FIT",   "ip": "10.50.0.105", "method": "snmp"}
+]
+NAS_USER = os.getenv("NAS_USER", "hndept")
+NAS_PASS_REST = os.getenv("NAS_PASS_REST", "")
+NAS_PASS_SNMP = os.getenv("NAS_PASS_SNMP", "")
+
+# SSL Context for legacy NAS
+SSL_CTX = ssl.create_default_context()
+SSL_CTX.check_hostname = False
+SSL_CTX.verify_mode    = ssl.CERT_NONE
+HIKVISION_NVR = {"ip": "192.168.1.254", "user": os.getenv("HIKVISION_NVR_USER", "admin"), "password": os.getenv("HIKVISION_NVR_PASS", "")}
+HIKVISION_CAMERAS = [
+    {"ip": f"192.168.1.{i}"} for i in list(range(2, 32)) + [33]
+]
+HIKVISION_CAM_USER = os.getenv("HIKVISION_CAM_USER", "admin")
+HIKVISION_CAM_PASS = os.getenv("HIKVISION_CAM_PASS", "")
+
+# ============================================================
+# UTILITY FUNCTIONS
+# ============================================================
+
+def run_snmpget(ip, version, oids, community=None, user=None, auth_pass=None, priv_pass=None):
+    results = {}
+    for name, oid in oids.items():
+        if version == "2c":
+            cmd = ["snmpget", "-v2c", "-c", community, ip, oid]
+        elif version == "3":
+            cmd = [
+                "snmpget", "-v3", "-u", user, "-l", "authPriv",
+                "-a", "SHA", "-A", auth_pass, "-x", "AES", "-X", priv_pass,
+                ip, oid
+            ]
+        
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if res.returncode == 0:
+                # Extract value between quotes or after colon
+                match = re.search(r'STRING: "?([^"]+)"?|INTEGER: (\d+)', res.stdout)
+                if match:
+                    val = (match.group(1) or match.group(2) or "").strip()
+                    results[name] = val
+        except:
+            pass
+    return results
+
+# ============================================================
+# POLLER FUNCTIONS
+# ============================================================
+
+def poll_server(ip):
+    rec = {
+        "serial_number": "", "device_type": "server", "category": "infrastructure",
+        "ip_address": ip, "model": "", "product_name": "", "manufacturer": "Lenovo",
+        "processor_count": 0, "processor_logical_count": 0,
+        "firmware_version": "", "hostname": "", "status": "OK", "power_state": "On",
+        "source": "redfish"
+    }
+    kw = dict(auth=(REDFISH_USER, REDFISH_PASS), verify=False, timeout=10)
+    
+    try:
+        r = requests.get(f"https://{ip}/redfish/v1/Systems/1", **kw)
+        if r.ok:
+            d = r.json()
+            rec["serial_number"] = d.get("SerialNumber", "")
+            rec["hostname"] = d.get("HostName", "")
+            rec["power_state"] = d.get("PowerState", "")
+            rec["status"] = d.get("Status", {}).get("Health", "")
+            rec["processor_count"] = d.get("ProcessorSummary", {}).get("Count", 0)
+            rec["processor_logical_count"] = d.get("ProcessorSummary", {}).get("LogicalProcessorCount", 0)
+    except: pass
+    
+    try:
+        r = requests.get(f"https://{ip}/redfish/v1/Chassis/1", **kw)
+        if r.ok:
+            d = r.json()
+            rec["model"] = d.get("Model", "")
+            rec["manufacturer"] = d.get("Manufacturer", "Lenovo")
+            rec["product_name"] = d.get("Oem", {}).get("Lenovo", {}).get("ProductName", "")
+    except: pass
+    
+    try:
+        r = requests.get(f"https://{ip}/redfish/v1/Managers/1", **kw)
+        if r.ok:
+            rec["firmware_version"] = r.json().get("FirmwareVersion", "")
+    except: pass
+
+    # Get Power Metrics
+    try:
+        r = requests.get(f"https://{ip}/redfish/v1/Chassis/1/Power", **kw)
+        if r.ok:
+            data = r.json()
+            pwr = data.get("PowerControl", [{}])[0].get("PowerConsumedWatts", 0)
+            rec["metrics"] = {"Power": f"{pwr} W"}
+    except: pass
+
+    return rec
+
+def poll_ups(host_info):
+    rec = {
+        "serial_number": "", "device_type": "ups", "category": "infrastructure",
+        "ip_address": host_info["ip"], "model": "", "product_name": "", "manufacturer": "APC",
+        "processor_count": 0, "processor_logical_count": 0,
+        "firmware_version": "", "hostname": host_info["name"], "status": "OK", "power_state": "On",
+        "source": "snmp"
+    }
+    oids = {
+        "serial_number":          ".1.3.6.1.2.1.33.1.1.1.0",
+        "model":                  ".1.3.6.1.4.1.935.1.1.1.1.1.1.0",
+        "firmware_version":       ".1.3.6.1.2.1.33.1.1.3.0",
+        "ups_load":               ".1.3.6.1.4.1.318.1.1.1.4.3.3.0",  # Output Load %
+        "ups_battery":            ".1.3.6.1.4.1.318.1.1.1.2.2.1.0",  # Battery Capacity %
+        "battery_runtime_remain": ".1.3.6.1.4.1.318.1.1.1.2.2.3.0",  # Runtime remaining (seconds)
+        "input_voltage":          ".1.3.6.1.4.1.318.1.1.1.3.2.1.0",  # Input Voltage (VAC)
+    }
+    data = run_snmpget(host_info["ip"], "3", oids, user=UPS_SNMP_USER,
+                       auth_pass=UPS_SNMP_AUTH_PASS, priv_pass=UPS_SNMP_PRIV_PASS)
+    rec.update(data)
+    rec["product_name"] = rec.get("model", "").strip()
+    rec["model"]        = rec.get("model", "").strip()
+    rec["hostname"]     = host_info["name"].strip()
+    # Snapshot Metrics
+    rec["metrics"] = {
+        "Load":                   f"{data.get('ups_load', '0')}%",
+        "Battery":                f"{data.get('ups_battery', '0')}%",
+        "BatteryRuntime":         f"{data.get('battery_runtime_remain', '0')} s",
+        "InputVoltage":           f"{data.get('input_voltage', '0')} VAC"
+    }
+    return rec
+
+def poll_mikrotik(host_info):
+    rec = {
+        "serial_number": "", "device_type": "mikrotik", "category": "infrastructure",
+        "ip_address": host_info["ip"], "model": "", "product_name": "", "manufacturer": "MikroTik",
+        "processor_count": 0, "processor_logical_count": 0,
+        "firmware_version": "", "hostname": host_info["name"].strip(), "status": "OK", "power_state": "On",
+        "source": "snmp"
+    }
+    oids = {
+        "serial_number": ".1.3.6.1.4.1.14988.1.1.7.3.0",
+        "firmware_version": ".1.3.6.1.4.1.14988.1.1.7.4.0",
+        "model_raw": ".1.3.6.1.2.1.1.1.0",
+        "cpu_load": ".1.3.6.1.2.1.25.3.3.1.2.1", # Mikrotik CPU Load
+        "temp": ".1.3.6.1.4.1.14988.1.1.3.10.0" # Mikrotik Temp
+    }
+    data = run_snmpget(host_info["ip"], "2c", oids, community=MIKROTIK_COMMUNITY)
+    if "model_raw" in data:
+        # Extract model from "RouterOS CRS326..."
+        match = re.search(r'RouterOS (\S+)', data["model_raw"])
+        data["model"] = match.group(1) if match else data["model_raw"]
+        data["product_name"] = data["model"]
+        del data["model_raw"]
+    rec.update(data)
+    
+    # Snapshot Metrics
+    rec["metrics"] = {
+        "CPU Load": f"{data.get('cpu_load', '0')}%",
+        "Temp": f"{float(data.get('temp', 0))/10 if data.get('temp') else '0'} C"
+    }
+    return rec
+
+def poll_nas(host):
+    ip = host["ip"]
+    hostname = host["hostname"]
+    rec = {
+        "serial_number": "", "device_type": "nas", "category": "storage",
+        "ip_address": ip, "model": "", "product_name": "", "manufacturer": "Synology",
+        "processor_count": 0, "processor_logical_count": 0,
+        "firmware_version": "", "hostname": hostname.strip(), "status": "Online", "power_state": "On",
+        "source": "snmp"
+    }
+
+    if host.get("method") == "snmp":
+        oids = {
+            "model": ".1.3.6.1.4.1.6574.1.5.1.0",
+            "serial_number": ".1.3.6.1.4.1.6574.1.5.2.0",
+            "firmware_version": ".1.3.6.1.4.1.6574.1.5.3.0"
+        }
+        res = run_snmpget(ip, "3", oids, user=NAS_USER, auth_pass=NAS_PASS_SNMP, priv_pass=NAS_PASS_SNMP)
+        rec.update(res)
+    else:
+        # API REST Flow
+        try:
+            # 1. Login
+            params = {"api": "SYNO.API.Auth", "version": "3", "method": "login", "account": NAS_USER, "passwd": NAS_PASS_REST, "format": "sid"}
+            qs = urllib.parse.urlencode(params)
+            url = f"https://{ip}:5001/webapi/auth.cgi?{qs}"
+            with urllib.request.urlopen(url, context=SSL_CTX, timeout=5) as r:
+                auth = json.loads(r.read())
+                sid = auth.get("data", {}).get("sid")
+            
+            if sid:
+                # 2. Get Info (Coba beberapa API version jika perlu)
+                url = f"https://{ip}:5001/webapi/entry.cgi?api=SYNO.Core.System&version=1&method=info&_sid={sid}"
+                try:
+                    with urllib.request.urlopen(url, context=SSL_CTX, timeout=5) as r:
+                        resp = json.loads(r.read())
+                        data = resp.get("data", {})
+                        rec["serial_number"] = data.get("serial", "")
+                        rec["model"] = data.get("model", "")
+                        # Normalisasi Firmware: Prioritaskan field firmware, fallback ke version
+                        rec["firmware_version"] = data.get("firmware") or data.get("version", "")
+                except:
+                    pass
+                
+                # 3. Get Utilization Snapshot
+                url = f"https://{ip}:5001/webapi/entry.cgi?api=SYNO.Core.System.Utilization&version=1&method=get&_sid={sid}"
+                try:
+                    with urllib.request.urlopen(url, context=SSL_CTX, timeout=5) as r:
+                        util = json.loads(r.read()).get("data", {})
+                        rec["metrics"] = {
+                            "CPU": f"{util.get('cpu', {}).get('system_load', 0)}%",
+                            "RAM": f"{util.get('memory', {}).get('real_usage', 0)}%"
+                        }
+                except:
+                    pass
+        except:
+            rec["status"] = "Offline"
+    
+    return rec
+
+def poll_hikvision(ip, user, password, device_type):
+    rec = {
+        "serial_number": "", "device_type": device_type, "category": "security",
+        "ip_address": ip, "model": "", "product_name": "", "manufacturer": "Hikvision",
+        "processor_count": 0, "processor_logical_count": 0,
+        "firmware_version": "", "hostname": "", "status": "Online", "power_state": "On",
+        "source": "isapi"
+    }
+    try:
+        from requests.auth import HTTPDigestAuth
+        for auth_method in [HTTPDigestAuth(user, password), (user, password)]:
+            r = requests.get(f"http://{ip}/ISAPI/System/deviceInfo", auth=auth_method, timeout=3)
+            if r.ok:
+                xml = r.text
+                rec["serial_number"] = re.search(r'<serialNumber>(.*?)</serialNumber>', xml).group(1)
+                rec["model"] = re.search(r'<model>(.*?)</model>', xml).group(1)
+                rec["firmware_version"] = re.search(r'<firmwareVersion>(.*?)</firmwareVersion>', xml).group(1)
+                rec["hostname"] = re.search(r'<deviceName>(.*?)</deviceName>', xml).group(1) or ip
+                rec["product_name"] = rec["model"]
+                break
+        else:
+            rec["status"] = "Offline"
+    except:
+        rec["status"] = "Offline"
+    return rec
+
+# ============================================================
+# MAIN
+# ============================================================
+
+import psycopg2
+
+def build_location_map():
+    # Base: Static Map khusus
+    location_map = {
+        # SYNOLOGY NAS - Fixed Posisi U1-U2 Rack Server 2
+        "10.50.0.105": {"site": "FIT-Head-Office", "rack": "Rack Server 2 (U1-U2 Bawah)", "category": "Storage"},
+        "192.168.100.140": {"site": "FIT-Head-Office", "rack": "Rack Server 1", "category": "Infrastructure"},
+        "10.50.0.106": {"site": "FIT-Head-Office", "rack": "Rack Server 2 (U1-U2 Bawah)", "category": "Storage"},
+        "10.50.0.107": {"site": "FIT-Head-Office", "rack": "Rack Server 2 (U1-U2 Bawah)", "category": "Storage"},
+        "10.50.0.108": {"site": "FIT-Head-Office", "rack": "Rack Server 2 (U1-U2 Bawah)", "category": "Storage"},
+        "10.50.0.109": {"site": "FIT-Head-Office", "rack": "Rack Server 2 (U1-U2 Bawah)", "category": "Storage"},
+        "10.50.0.110": {"site": "FIT-Head-Office", "rack": "Rack Server 2 (U1-U2 Bawah)", "category": "Storage"},
+        
+        # CAMERA CCTV - Fixed Posisi Per Ruang
+        "192.168.1.2": {"site": "FIT-Head-Office", "rack": "R. Content 2", "category": "Security"},
+        "192.168.1.254": {"site": "FIT-Head-Office", "rack": "Rack Server 1", "category": "Security"},
+    }
+    
+    # Isi sisa kamera dengan "Wall Mount CCTV Room"
+    cam_ips = [f"192.168.1.{i}" for i in list(range(3, 32)) + [33]]
+    for ip in cam_ips:
+        if ip not in location_map:
+            location_map[ip] = {"site": "FIT-Head-Office", "rack": "Wall Mount CCTV Room", "category": "Security"}
+
+    # Override dgn SoT PostgreSQL (Dynamic Mapping)
+    try:
+        conn = psycopg2.connect(
+            host=os.getenv("SOT_DB_HOST", "192.168.101.73"),
+            port=os.getenv("SOT_DB_PORT", "5432"),
+            dbname=os.getenv("SOT_DB_NAME", "dcim_sot"),
+            user=os.getenv("SOT_DB_USER", "sot_admin"),
+            password=os.getenv("SOT_DB_PASS", "")
+        )
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT hostname, site, raw_payload->'rack'->>'name' 
+            FROM unified_assets WHERE source_system='NetBox'
+        """)
+        for host, site, rack in cur.fetchall():
+            if host and (site or rack):
+                # Matching menggunakan 'name / hostname'
+                location_map[host] = {
+                    "site": site or "FIT-Head-Office",
+                    "rack": rack or "Unknown"
+                }
+
+        # Get by IP as well for fallback matching
+        cur.execute("""
+            SELECT raw_payload->'primary_ip'->>'address', site, raw_payload->'rack'->>'name' 
+            FROM unified_assets WHERE source_system='NetBox' AND raw_payload->'primary_ip' IS NOT NULL
+        """)
+        for ip_raw, site, rack in cur.fetchall():
+            if ip_raw and (site or rack):
+                # Strip subnet from IP
+                ip = ip_raw.split('/')[0]
+                if ip not in location_map:
+                    location_map[ip] = {
+                        "site": site or "FIT-Head-Office",
+                        "rack": rack or "Unknown"
+                    }
+                    
+        conn.close()
+    except Exception as e:
+        # DB Gagal/Unreachable -> Bypass and use Static Map
+        pass
+    
+    return location_map
+
+
+results = []
+with concurrent.futures.ThreadPoolExecutor(max_workers=30) as ex:
+    futures = []
+    for ip in REDFISH_SERVERS: futures.append(ex.submit(poll_server, ip))
+    for h in UPS_HOSTS: futures.append(ex.submit(poll_ups, h))
+    for h in MIKROTIK_HOSTS: futures.append(ex.submit(poll_mikrotik, h))
+    for h in NAS_HOSTS: futures.append(ex.submit(poll_nas, h))
+    futures.append(ex.submit(poll_hikvision, HIKVISION_NVR["ip"], HIKVISION_NVR["user"], HIKVISION_NVR["password"], "nvr"))
+    for h in HIKVISION_CAMERAS: futures.append(ex.submit(poll_hikvision, h["ip"], HIKVISION_CAM_USER, HIKVISION_CAM_PASS, "cctv"))
+
+    for f in concurrent.futures.as_completed(futures):
+        res = f.result()
+        if res.get("serial_number"):
+            # --- Data Quality: Strip semua whitespace/newline dari string fields ---
+            for key in ["hostname", "model", "product_name", "manufacturer",
+                        "firmware_version", "serial_number", "status", "power_state"]:
+                if isinstance(res.get(key), str):
+                    res[key] = res[key].strip()
+
+            # --- Standarisasi field names (Universal Tags) ---
+            res["ci_id"]      = res.get("serial_number", "")   # FIT041: ci_id wajib ada
+            res["firmware"]   = res.get("firmware_version", "")
+            res["ip"]         = res.get("ip_address", "")
+            results.append(res)
+
+loc_map = build_location_map()
+
+for res in results:
+    host_id = res.get("hostname", "")
+    ip_addr = res.get("ip_address", "")
+
+    # 1. Cari berdasarkan hostname CMDB
+    loc_info = loc_map.get(host_id)
+    # 2. Fallback: cari berdasarkan IP
+    if not loc_info:
+        loc_info = loc_map.get(ip_addr)
+
+    if loc_info:
+        res["site"]              = loc_info.get("site", "FIT-Head-Office").strip()
+        res["rack_name"]         = loc_info.get("rack", "Unknown").strip()
+        res["enrichment_status"] = "FULL"
+    else:
+        # FIT041 Req 2.2.3: Enrichment gagal → field diberi status, data tidak di-drop
+        res["site"]              = "FIT-Head-Office"
+        res["rack_name"]         = "Unknown"
+        res["enrichment_status"] = "PARTIAL"
+
+print(json.dumps(results))

@@ -1,0 +1,33 @@
+# measurement_name → primary metric field mapping
+dcim_nas:
+  metric_name: disk_temperature
+  metric_field: diskTemp
+  metric_unit: celsius
+  severity_field: diskStatus
+  severity_map:
+    1: info
+    2: warning  
+    3: critical
+
+ups_apc:
+  metric_name: battery_capacity
+  metric_field: upsBatteryCapacity
+  metric_unit: percent
+  secondary_metrics:
+    - field: upsBatteryTemp
+      name: battery_temperature
+      unit: celsius
+    - field: upsOutputVoltage
+      name: output_voltage
+      unit: volt
+
+interface:
+  metric_name: interface_status
+  metric_field: ifOperStatus
+  metric_unit: status_code
+
+# Default for unmapped measurements
+default:
+  metric_name: general_metric
+  metric_field: null
+  metric_unit: null

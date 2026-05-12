@@ -38,19 +38,11 @@ def sync_cache():
         
         cur.execute("""
             SELECT hostname, 
-                   raw_payload->'primary_ip'->>'address' as ip,
+                   ip::text as ip,
                    serial_number, site, 
-                   COALESCE(raw_payload->'rack'->>'name', 'Unknown') as rack,
-                   COALESCE(
-                       raw_payload->'device_type'->'manufacturer'->>'name',
-                       raw_payload->'model'->'manufacturer'->>'name',
-                       'Unknown'
-                   ) as manufacturer,
-                   COALESCE(
-                       raw_payload->'device_type'->>'model',
-                       raw_payload->'model'->>'name',
-                       'Unknown'
-                   ) as model
+                   rack_name as rack,
+                   manufacturer,
+                   model
             FROM unified_assets
         """)
         
