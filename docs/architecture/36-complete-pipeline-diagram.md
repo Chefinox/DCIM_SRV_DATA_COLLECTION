@@ -16,7 +16,7 @@ flowchart TB
         UPS["⚡ UPS (1 unit)<br/>APC Smart-UPS 30K<br/>192.168.100.140<br/><b>Protocol: SNMP v3</b><br/>Port: 161"]
         NAS["💾 NAS (6 units)<br/>Synology DS Series<br/>10.50.0.105-110<br/><b>Protocol: SNMP v3</b><br/>Port: 161"]
         NET["🔀 Network (5 units)<br/>MikroTik CCR/CRS<br/>172.16.35.x<br/><b>Protocol: SNMP v2c</b><br/>Port: 161"]
-        CAM["📷 CCTV (20 units)<br/>Hikvision Camera<br/>192.168.1.x<br/><b>Protocol: ISAPI HTTP</b><br/>Port: 80"]
+        CAM["📷 CCTV (31 units)<br/>Hikvision Camera<br/>192.168.1.2-33 (skip .32)<br/><b>Protocol: ISAPI HTTP</b><br/>Port: 80"]
         NVR["📹 NVR (1 unit)<br/>Hikvision DS-7732<br/>192.168.1.254<br/><b>Protocol: ISAPI HTTP</b><br/>Port: 80"]
     end
 
@@ -106,7 +106,7 @@ flowchart TB
         
         SRV_INV["<b>server_inventory_to_pg.py</b><br/>Schedule: Daily 01:00 WIB<br/>Protocol: Redfish HTTPS<br/>Target: 10.50.0.2-6<br/>Components:<br/>- Firmware/BIOS<br/>- Processors (model, cores)<br/>- Memory (size, speed)<br/>- Disks (SN, size, slot)<br/>- NICs (MAC, speed)<br/>Output: PostgreSQL dcim_events"]
         
-        UNIFIED["<b>ralph_cmdb_sync.py</b><br/>Schedule: Daily 02:00 WIB<br/>Source: PostgreSQL dcim_events<br/>Device Types:<br/>- Server (5 units)<br/>- NAS (5 units)<br/>- Network (5 units)<br/>- CCTV (20 units)<br/>- NVR (1 unit)"]
+        UNIFIED["<b>ralph_cmdb_sync.py</b><br/>Schedule: Daily 02:00 WIB<br/>Source: PostgreSQL dcim_events<br/>Device Types:<br/>- Server (5 units)<br/>- NAS (5 units)<br/>- Network (5 units)<br/>- CCTV (31 units)<br/>- NVR (1 unit)"]
         
         RALPH[("<b>Ralph CMDB</b><br/>Host: 192.168.101.73:8088<br/>API Token: 1cd05b8d...<br/>Endpoints:<br/>- /api/data-center-assets/<br/>- /api/back-office-assets/<br/>- /api/processors/<br/>- /api/memory/<br/>- /api/disks/<br/>- /api/ethernets/")]
     end
@@ -117,34 +117,84 @@ flowchart TB
         DLQ3["dcim.dlq.delivery-failure"]
     end
 
-    %% Connections
+    %% ========================================
+    %% LAYER 1: Device to Telegraf Collection
+    %% ========================================
     SRV --> T1
     UPS --> T2
     NAS --> T3
     NET --> T4
-    CAM & NVR --> T5
+    CAM --> T5
+    NVR --> T5
     
-    TOUT --> K1 & K2 & K3 & K4 & K5
-    K1 & K2 & K3 & K4 & K5 --> NORM
+    %% ========================================
+    %% LAYER 1B: Telegraf to Kafka Raw Topics
+    %% ========================================
+    T1 --> TOUT
+    T2 --> TOUT
+    T3 --> TOUT
+    T4 --> TOUT
+    T5 --> TOUT
+    
+    TOUT --> K1
+    TOUT --> K2
+    TOUT --> K3
+    TOUT --> K4
+    TOUT --> K5
+    
+    %% ========================================
+    %% LAYER 2: Normalization Pipeline
+    %% ========================================
+    K1 --> NORM
+    K2 --> NORM
+    K3 --> NORM
+    K4 --> NORM
+    K5 --> NORM
+    
     NORM --> KN
+    
+    %% ========================================
+    %% LAYER 3: Enrichment Pipeline
+    %% ========================================
     KN --> NF1
+    NF1 --> NF2
+    NF2 --> NF3
     NF3 --> KE
-    KE --> ES & SQL
+    
+    %% Enrichment API & Cache
+    NF2 <--> FAPI
+    FAPI <--> REDIS
+    PG --> SYNC
+    SYNC --> REDIS
+    
+    %% ========================================
+    %% LAYER 4: Persistence Layer
+    %% ========================================
+    KE --> ES
+    KE --> SQL
     
     ES --> ES_DB
     SQL --> PG
     ES_DB --> KIBANA
     
-    PG --> SYNC
-    PG --> SRV_INV
+    %% ========================================
+    %% CMDB Sync Layer (Unified Pipeline)
+    %% ========================================
+    SRV -.->|Daily 01:00| SRV_INV
     SRV_INV --> PG
     PG --> UNIFIED
     UNIFIED --> RALPH
     
-    NORM -.->|on error| DLQ1
-    NF2 -.->|on error| DLQ2
-    SQL -.->|on error| DLQ3
-    DLQ1 & DLQ2 & DLQ3 --> DLQ
+    %% ========================================
+    %% Error Handling (Dead Letter Queue)
+    %% ========================================
+    NORM -.->|parse error| DLQ1
+    NF2 -.->|enrich error| DLQ2
+    SQL -.->|delivery error| DLQ3
+    
+    DLQ1 --> DLQ
+    DLQ2 --> DLQ
+    DLQ3 --> DLQ
 
     style DEVICES fill:#e1f5ff
     style COLLECTION fill:#fff4e6
@@ -190,7 +240,7 @@ flowchart TB
 | Script | Schedule | Protocol | Source | Target | Device Types |
 |--------|----------|----------|--------|--------|--------------|
 | server_inventory_to_pg.py | Daily 01:00 | Redfish HTTPS | 10.50.0.2-6 | PostgreSQL dcim_events | Server (5) |
-| ralph_cmdb_sync.py | Daily 02:00 | HTTP REST | PostgreSQL | Ralph CMDB | All devices (38 total) |
+| ralph_cmdb_sync.py | Daily 02:00 | HTTP REST | PostgreSQL | Ralph CMDB | All devices (49 total) |
 
 ### 4. Kafka Topics
 
@@ -258,9 +308,9 @@ Enrichment API ← NiFi Lookup → Enriched Events
 
 ## Performance Metrics
 
-- **Total Devices**: 38 (5 servers, 1 UPS, 6 NAS, 5 network, 21 CCTV/NVR)
+- **Total Devices**: 49 (5 servers, 1 UPS, 6 NAS, 5 network, 32 CCTV/NVR)
 - **Polling Interval**: 120 seconds (2 minutes)
-- **Events per Day**: ~27,360 (38 devices × 720 polls/day)
+- **Events per Day**: ~35,280 (49 devices × 720 polls/day)
 - **Kafka Throughput**: ~190 msg/min
 - **Enrichment Rate**: >99% (Redis cache hit)
 - **End-to-End Latency**: <5 seconds (device → Elasticsearch)
@@ -293,7 +343,7 @@ Enrichment API ← NiFi Lookup → Enriched Events
 ### Keuntungan
 - ✅ PostgreSQL kembali menjadi Single Source of Truth untuk semua devices
 - ✅ Konsisten dengan arsitektur NAS/Network/CCTV/UPS
-- ✅ `ralph_cmdb_sync.py` sekarang handle **semua 38 devices** (termasuk 5 servers)
+- ✅ `ralph_cmdb_sync.py` sekarang handle **semua 49 devices** (termasuk 5 servers)
 - ✅ Audit trail lengkap di PostgreSQL `dcim_events`
 
 ### Script yang Deprecated
