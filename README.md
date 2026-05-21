@@ -1,8 +1,8 @@
 # DCIM Metrics Project
 
-**Version**: v3.4.1 (Unified Pipeline)  
+**Version**: v3.5.5 (Unified Pipeline + Auto-Commissioning/Stale Alerting)  
 **Status**: ✅ Production Active  
-**Last Updated**: 2026-05-12
+**Last Updated**: 2026-05-21
 
 ## Project Overview
 
@@ -12,7 +12,7 @@ Unified DCIM telemetry and inventory management system using 4-layer decoupled a
 
 ```
 Device → Telegraf/Script → Kafka Raw → Normalizer → Kafka Normalized → 
-NiFi Enrichment → Kafka Enriched → PostgreSQL/Elasticsearch → Ralph CMDB
+NiFi Enrichment → Kafka Enriched → PostgreSQL/Elasticsearch → Ralph CMDB/Alerts
 ```
 
 ### Monitored Infrastructure
@@ -93,6 +93,8 @@ dcim_metrics_project/
 - `dcim-sql-consumer.service` - PostgreSQL sink
 - `dcim-dlq-consumer.service` - Dead letter queue handler
 - `dcim-kafka-es-sync.service` - Kafka to ES bridge
+- `dcim-cctv-poller.service` - Hikvision ISAPI CCTV/NVR collector
+- `dcim-threshold-alerter.service` - Threshold + stale-device alerting (120s interval)
 
 ### Docker Containers
 - `kafka-broker` - Message broker (port 9092)
@@ -102,7 +104,7 @@ dcim_metrics_project/
 
 ### Cron Jobs
 - `01:00 WIB` - `server_inventory_to_pg.py` (collect server inventory)
-- `02:00 WIB` - `ralph_cmdb_sync.py` (sync all devices to Ralph CMDB)
+- `02:00 WIB` - `ralph_cmdb_sync.py` (sync all devices to Ralph CMDB; auto-register missing DC assets)
 
 ## Data Flow
 
@@ -118,6 +120,13 @@ Server Redfish → server_inventory_to_pg.py → PostgreSQL dcim_events
 Device (NAS/Network/CCTV) → Telegraf → Kafka → ... → PostgreSQL dcim_events
 PostgreSQL dcim_events → ralph_cmdb_sync.py → Ralph CMDB
 ```
+
+### Commissioning / Decommissioning Automation (v3.5.5)
+- New DC assets (`server`, `ups`, `nas`, `network_switch`, `nvr`) auto-register in Ralph when serial number appears in PostgreSQL but asset is missing in Ralph.
+- CCTV remains a Back Office Asset flow; registration uses `scripts/register_cctv_to_ralph.py`.
+- Stale-device detection runs in `dcim-threshold-alerter.service`; alert triggers when known device has no event for 30 minutes.
+- Alerts are indexed to Elasticsearch index `dcim-alerts`.
+- Kafka 3-second sampling warnings can be false positives because collectors run at 120s interval; prefer topic offsets + PostgreSQL/Elasticsearch counts.
 
 ## Key Technologies
 

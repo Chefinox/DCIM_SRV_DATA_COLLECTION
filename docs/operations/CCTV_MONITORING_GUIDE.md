@@ -1,14 +1,30 @@
 # CCTV Monitoring via NVR - Quick Reference
 
-**Date**: 2026-05-12  
-**NVR**: Hikvision DS-7732 (192.168.1.254)  
-**Total CCTV**: 31 units
+> **Last Updated**: 2026-05-21  
+> **NVR**: Hikvision DS-7732 (192.168.1.254)  
+> **Total CCTV**: 31 units  
+> **Ralph CMDB**: 20 CCTV terdaftar di Back Office Assets (re-registered 2026-05-19)
 
 ---
 
 ## ✅ Status Saat Ini
 
 **Semua 31 CCTV Online** (verified via NVR ISAPI)
+
+### CMDB Integration (v3.5.1+)
+- **20 CCTV** terdaftar di Ralph Back Office Assets (id=70-89)
+- **Remarks** berisi: `IP: 192.168.1.x | Model: DS-2CDxxx | Location: xxx`
+- **Auto-sync**: `ralph_cmdb_sync.py` (cron 02:00 WIB) update hostname, IP, firmware
+- **Registration script**: `scripts/register_cctv_to_ralph.py`
+- **Auto-register exception (v3.5.5)**: CCTV tidak ikut auto-register DC Asset; tetap Back Office Asset via registration script.
+
+### Monitoring Pipeline
+- **Poller**: `dcim-cctv-poller.service` (Hikvision ISAPI, interval 120s)
+- **Kafka Topic**: `dcim.raw.device.isapi`
+- **Elasticsearch**: `dcim-metrics-unified-*` (device_type=cctv/nvr)
+- **Dashboard**: Kibana `dcim-monitoring` → CCTV/NVR section
+- **Threshold Alert**: NVR Memory >90% (`dcim-threshold-alerter.service`)
+- **Stale Detection**: NVR masuk stale-device check 30 menit; CCTV detail tetap dicek via NVR/poller.
 
 ---
 
@@ -116,6 +132,9 @@ Normalizer → Enrichment → PostgreSQL
 Ralph CMDB (Daily 02:00 WIB)
 ```
 
+> [!NOTE]
+> `ralph_cmdb_sync.py` v3.5.5 auto-register hanya untuk DC assets (`server`, `ups`, `nas`, `network_switch`, `nvr`). CCTV tetap Back Office Asset dan dikelola via `scripts/register_cctv_to_ralph.py`.
+
 ---
 
 ## ⚠️ Troubleshooting
@@ -165,4 +184,4 @@ Ralph CMDB (Daily 02:00 WIB)
 
 ---
 
-**Last Updated**: 2026-05-12 11:53 WIB
+**Last Updated**: 2026-05-21 00:30 WIB
