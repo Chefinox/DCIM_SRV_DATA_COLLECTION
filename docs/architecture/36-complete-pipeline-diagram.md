@@ -1,6 +1,6 @@
-# 36. Complete End-to-End Pipeline Diagram (v3.4)
+# 36. Complete End-to-End Pipeline Diagram (v3.5.5)
 
-**Tanggal**: 12 Mei 2026  
+**Tanggal**: 21 Mei 2026  
 **Status**: ✅ Verified & Operational  
 **Scope**: Unified DCIM Telemetry & Inventory Pipeline
 
@@ -84,7 +84,7 @@ flowchart TB
     subgraph PERSIST["🗄️ LAYER 4: Persistence"]
         direction LR
         
-        ES["<b>telegraf-consumer.service</b><br/>Script: Telegraf<br/>Input: dcim.enriched.events<br/>Output: Elasticsearch<br/>Index: dcim-metrics-*"]
+        ES["<b>telegraf-consumer.service</b><br/>Script: Telegraf<br/>Input: dcim.enriched.events<br/>Output: Elasticsearch<br/>Index: dcim-metrics-unified-*"]
         
         SQL["<b>dcim-sql-consumer.service</b><br/>Script: dcim_sql_consumer.py<br/>Input: dcim.enriched.events<br/>Output: PostgreSQL<br/>Table: dcim_events (partitioned)"]
         
@@ -94,11 +94,11 @@ flowchart TB
     subgraph STORAGE["💾 Data Storage"]
         direction TB
         
-        PG[("<b>PostgreSQL 14</b><br/>Host: 192.168.101.73:5432<br/>Database: dcim_sot<br/>Tables:<br/>- dcim_events (partitioned)<br/>- dcim_server_disks<br/>- dcim_server_ram<br/>- dcim_server_processors<br/>- unified_assets")]
+        PG[("<b>PostgreSQL 14</b><br/>Host: 192.168.100.115:5432<br/>Database: dcim_sot<br/>Tables:<br/>- dcim_events (partitioned)<br/>- dcim_server_disks<br/>- dcim_server_ram<br/>- dcim_server_processors<br/>- unified_assets")]
         
-        ES_DB[("<b>Elasticsearch 7.x</b><br/>Host: localhost:9200<br/>Index: dcim-metrics-*<br/>Retention: 90 days")]
+        ES_DB[("<b>Elasticsearch 7.x</b><br/>Host: 10.70.0.56:9200<br/>Index: dcim-metrics-unified-*<br/>Alert Index: dcim-alerts<br/>Retention: 90 days")]
         
-        KIBANA["<b>Kibana Dashboard</b><br/>Port: 5601<br/>Dashboards:<br/>- Server Health<br/>- UPS Monitoring<br/>- Network Performance<br/>- CCTV Status"]
+        KIBANA["<b>Kibana Dashboard</b><br/>Host: 10.70.0.56:5601<br/>Dashboards:<br/>- DCIM Monitoring<br/>- Threshold Alerts<br/>- Stale Device Alerts"]
     end
 
     subgraph CMDB["📘 CMDB Sync Layer"]
@@ -106,15 +106,20 @@ flowchart TB
         
         SRV_INV["<b>server_inventory_to_pg.py</b><br/>Schedule: Daily 01:00 WIB<br/>Protocol: Redfish HTTPS<br/>Target: 10.50.0.2-6<br/>Components:<br/>- Firmware/BIOS<br/>- Processors (model, cores)<br/>- Memory (size, speed)<br/>- Disks (SN, size, slot)<br/>- NICs (MAC, speed)<br/>Output: PostgreSQL dcim_events"]
         
-        UNIFIED["<b>ralph_cmdb_sync.py</b><br/>Schedule: Daily 02:00 WIB<br/>Source: PostgreSQL dcim_events<br/>Device Types:<br/>- Server (5 units)<br/>- NAS (5 units)<br/>- Network (5 units)<br/>- CCTV (31 units)<br/>- NVR (1 unit)"]
+        UNIFIED["<b>ralph_cmdb_sync.py</b><br/>Schedule: Daily 02:00 WIB<br/>Source: PostgreSQL dcim_events<br/>Auto-register DC Assets:<br/>server, ups, nas,<br/>network_switch, nvr<br/>CCTV: Back Office flow"]
         
-        RALPH[("<b>Ralph CMDB</b><br/>Host: 192.168.101.73:8088<br/>API Token: 1cd05b8d...<br/>Endpoints:<br/>- /api/data-center-assets/<br/>- /api/back-office-assets/<br/>- /api/processors/<br/>- /api/memory/<br/>- /api/disks/<br/>- /api/ethernets/")]
+        RALPH[("<b>Ralph CMDB</b><br/>Host: 192.168.100.115:8088<br/>API Token: 1cd05b8d...<br/>Endpoints:<br/>- /api/data-center-assets/<br/>- /api/back-office-assets/<br/>- /api/processors/<br/>- /api/memory/<br/>- /api/disks/<br/>- /api/ethernets/")]
     end
 
     subgraph DLQ_TOPICS["⚠️ Dead Letter Queue Topics"]
         DLQ1["dcim.dlq.parse-failure"]
         DLQ2["dcim.dlq.enrichment-failure"]
         DLQ3["dcim.dlq.delivery-failure"]
+    end
+
+    subgraph ALERTS["🚨 Alerting & Stale Detection"]
+        ALERTER["<b>dcim-threshold-alerter.service</b><br/>Script: dcim_threshold_alerter.py<br/>Interval: 120s<br/>Checks: 6 thresholds + stale devices<br/>Stale threshold: 30m"]
+        ALERT_IDX[("<b>dcim-alerts</b><br/>Threshold alerts<br/>Device Not Reporting alerts")]
     end
 
     %% ========================================
@@ -176,6 +181,9 @@ flowchart TB
     ES --> ES_DB
     SQL --> PG
     ES_DB --> KIBANA
+    ES_DB --> ALERTER
+    ALERTER --> ALERT_IDX
+    ALERT_IDX --> KIBANA
     
     %% ========================================
     %% CMDB Sync Layer (Unified Pipeline)
@@ -207,6 +215,7 @@ flowchart TB
     style STORAGE fill:#fce4ec
     style CMDB fill:#f1f8e9
     style DLQ_TOPICS fill:#ffebee
+    style ALERTS fill:#fff9c4
 ```
 
 ---
@@ -234,13 +243,14 @@ flowchart TB
 | telegraf-consumer.service | Telegraf | dcim.enriched.events | Elasticsearch | Time-series storage |
 | dcim-sql-consumer.service | dcim_sql_consumer.py | dcim.enriched.events | PostgreSQL dcim_events | Historical storage |
 | dcim-dlq-consumer.service | dcim_dlq_consumer.py | dcim.dlq.* | Logs + Retry | Error handling |
+| dcim-threshold-alerter.service | dcim_threshold_alerter.py | Elasticsearch `dcim-metrics-unified-*` | Elasticsearch `dcim-alerts` | Threshold + stale-device alerting |
 
 ### 3. CMDB Sync Layer
 
 | Script | Schedule | Protocol | Source | Target | Device Types |
 |--------|----------|----------|--------|--------|--------------|
 | server_inventory_to_pg.py | Daily 01:00 | Redfish HTTPS | 10.50.0.2-6 | PostgreSQL dcim_events | Server (5) |
-| ralph_cmdb_sync.py | Daily 02:00 | HTTP REST | PostgreSQL | Ralph CMDB | All devices (49 total) |
+| ralph_cmdb_sync.py | Daily 02:00 | HTTP REST | PostgreSQL | Ralph CMDB | All devices; auto-register DC assets except CCTV |
 
 ### 4. Kafka Topics
 
@@ -261,10 +271,10 @@ flowchart TB
 
 | System | Host | Port | Database/Index | Purpose | Retention |
 |--------|------|------|----------------|---------|-----------|
-| PostgreSQL | 192.168.101.73 | 5432 | dcim_sot | Historical events, CMDB cache | Partitioned (daily) |
-| Elasticsearch | localhost | 9200 | dcim-metrics-* | Time-series metrics | 90 days |
+| PostgreSQL | 192.168.100.115 | 5432 | dcim_sot | Historical events, CMDB cache | Partitioned (daily) |
+| Elasticsearch | 10.70.0.56 | 9200 | dcim-metrics-unified-* / dcim-alerts | Time-series metrics + alerts | 90 days |
 | Redis | localhost | 6379 | DB 0 | Enrichment cache | TTL 3600s |
-| Ralph CMDB | 192.168.101.73 | 8088 | N/A | Asset inventory | Permanent |
+| Ralph CMDB | 192.168.100.115 | 8088 | N/A | Asset inventory | Permanent |
 | Kafka | localhost | 9092 | N/A | Message broker | 7-30 days |
 
 ---
@@ -283,6 +293,23 @@ Server Redfish → server_inventory_to_pg.py → PostgreSQL dcim_events
 Device (NAS/Network/CCTV) → Telegraf → Kafka → ... → PostgreSQL dcim_events
 PostgreSQL dcim_events → ralph_cmdb_sync.py → Ralph CMDB
 ```
+
+### Commissioning / Decommissioning Automation (v3.5.5)
+```
+New DC device → PostgreSQL dcim_events → ralph_cmdb_sync.py
+    → if SN missing in Ralph: auto-register DC asset
+    → update metadata/components/IP
+
+Known device stops reporting → dcim-threshold-alerter.py
+    → no event for 30 minutes → dcim-alerts → Kibana
+```
+
+**Auto-register includes**: `server`, `ups`, `nas`, `network_switch`, `nvr`.  
+**Excluded**: `cctv` because CCTV uses Ralph Back Office Asset registration via `scripts/register_cctv_to_ralph.py`.
+
+### Kafka Health Check Note
+
+Collector interval is 120 seconds. Kafka sampling windows shorter than collector interval (example: 3 seconds) can produce false warnings. For health checks, prefer topic offsets plus PostgreSQL/Elasticsearch event counts.
 
 ### Enrichment Flow
 ```
@@ -308,17 +335,18 @@ Enrichment API ← NiFi Lookup → Enriched Events
 
 ## Performance Metrics
 
-- **Total Devices**: 49 (5 servers, 1 UPS, 6 NAS, 5 network, 32 CCTV/NVR)
+- **Total Devices**: 38 monitored inventory devices (5 servers, 1 UPS, 6 NAS, 5 network, 21 CCTV/NVR registered/monitored scope; CCTV channel inventory can include 31 camera channels)
 - **Polling Interval**: 120 seconds (2 minutes)
 - **Events per Day**: ~35,280 (49 devices × 720 polls/day)
 - **Kafka Throughput**: ~190 msg/min
 - **Enrichment Rate**: >99% (Redis cache hit)
 - **End-to-End Latency**: <5 seconds (device → Elasticsearch)
-- **CMDB Sync**: Daily 02:00 WIB (automated)
+- **CMDB Sync**: Daily 02:00 WIB (automated; auto-register missing DC assets)
+- **Stale Alert Threshold**: 30 minutes without event
 
 ---
 
-**Dokumentasi ini mencerminkan arsitektur aktual yang terverifikasi pada 12 Mei 2026.**
+**Dokumentasi ini mencerminkan arsitektur aktual yang terverifikasi pada 21 Mei 2026.**
 
 ---
 

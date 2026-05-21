@@ -1,5 +1,8 @@
 # Documentation Directory
 
+> **Last Updated**: 2026-05-21  
+> **Current Version**: v3.5.5
+
 Comprehensive documentation for DCIM Metrics Project.
 
 ## Structure
@@ -10,13 +13,14 @@ System architecture and design documentation:
 - **24-versioning-change-management-standard.md** - FIT041 compliance, version history
 - **32-final-architecture-v3.4.md** - Final v3.4 architecture with diagrams
 - **35-pipeline-version-comparison.md** - v3.4 vs v4.0 comparison
-- **36-complete-pipeline-diagram.md** - Latest end-to-end diagram (v3.4.1)
+- **36-complete-pipeline-diagram.md** - Latest end-to-end diagram (v3.5.5)
 
 ### operations/
 Operational reports and incident documentation:
 - **23-mt014-recovery-report.md** - MT014 recovery incident
 - **26-dcim-maintenance-sync-report.md** - Maintenance sync report
 - **28-bmc-lockout-incident.md** - BMC lockout incident analysis
+- **COMMISSIONING_DECOMMISSIONING_GUIDE.md** - Auto-register DC assets, stale-device alerting, Kafka health interpretation
 
 ### development/
 Development guides, metrics documentation, and technical references:

@@ -1,9 +1,26 @@
 # Kapabilitas Auto-Update CMDB Ralph (Unified Pipeline)
 
-Dokumen ini memetakan daftar _field_ manual yang diinginkan oleh USER terhadap kemampuan pengumpulan data aktual dari perangkat fisik (Server dan UPS). 
+> **Last Updated**: 2026-05-21  
+> **Version**: v3.5.5  
+> **Script**: `scripts/ralph_cmdb_sync.py` (cron 02:00 WIB)
 
-**Pembaruan Arsitektur (v3.3.0):**
-Sinkronisasi CMDB tidak lagi menggunakan metode *direct polling* dari skrip ke perangkat (seperti `server_deep_sync.py` V7). Saat ini, arsitektur menggunakan **PostgreSQL (`dcim_events`) sebagai jembatan tunggal (Single Source of Truth)**. Seluruh data di-*polling* oleh agen (`server_redfish_to_pg.py` dan Telegraf), disimpan ke PostgreSQL, lalu disinkronkan ke Ralph melalui skrip terpadu `ralph_cmdb_sync.py`.
+Dokumen ini memetakan daftar _field_ manual yang diinginkan oleh USER terhadap kemampuan pengumpulan data aktual dari perangkat fisik (Server, UPS, NAS, Network Switch, NVR, CCTV). 
+
+**Pembaruan Arsitektur (v3.5.0 — 2026-05-18):**
+Sinkronisasi CMDB menggunakan **PostgreSQL (`dcim_events`) sebagai Single Source of Truth**. Data di-*polling* oleh Telegraf/Redfish, disimpan ke PostgreSQL (kolom JSONB), lalu disinkronkan ke Ralph melalui skrip terpadu `ralph_cmdb_sync.py`.
+
+**Fix terbaru (v3.5.0):**
+- Bug A: Last Sync sekarang pakai `datetime.now()` (bukan `event_time`)
+- Bug B: Server components dibaca dari JSONB columns (`srv_cpu_components`, `srv_memory_components`, `srv_disk_components`, `raw_tags->'nics'`) — bukan dari tabel relational yang kosong
+- Bug C: Ethernet "Management" dilindungi dari prune di `sync_server_ethernets()`
+- Remarks format include IP untuk semua device types
+
+**Update terbaru (v3.5.5 — 2026-05-21):**
+- Auto-register DC assets baru jika serial number sudah muncul di PostgreSQL tetapi belum ada di Ralph.
+- Device type yang didukung auto-register: `server`, `ups`, `nas`, `network_switch`, `nvr`.
+- CCTV sengaja tidak auto-register lewat flow ini karena memakai Back Office Asset dan script terpisah `scripts/register_cctv_to_ralph.py`.
+- Default rack auto-register: `DEFAULT_RACK = 3`.
+- Function utama: `auto_register_dc_asset(sn, hostname, device_type, model_name=None, ip=None)`.
 
 ---
 
@@ -58,6 +75,32 @@ Untuk AI Agent berikutnya atau pengembang skrip:
 
 ## Aturan Bisnis Khusus
 - **Update Conditional Jaringan:** IP Management selalu diprioritaskan, namun untuk data NIC, IP dan Hostname sengaja dilewati karena arsitektur OS yang mengatur IP (bukan perangkat fisik secara langsung). Skrip telah dirancang untuk mencatat status Management Network ke dalam objek khusus `IPAddress(is_management=True)` di struktur Ralph.
+
+---
+
+## Auto-Register DC Assets (v3.5.5)
+
+Jika asset tidak ditemukan berdasarkan serial number, `ralph_cmdb_sync.py` akan mencoba membuat DC asset baru sebelum melanjutkan update metadata.
+
+| Device Type | Ralph Model ID | Asset Type | Default Rack | Status |
+| :--- | ---: | :--- | ---: | :---: |
+| `server` | 26 | Data Center Asset | 3 | ✅ Active |
+| `ups` | 34 | Data Center Asset | 3 | ✅ Active |
+| `nas` | 16 | Data Center Asset | 3 | ✅ Active |
+| `network_switch` | 6 | Data Center Asset | 3 | ✅ Active |
+| `nvr` | 18 | Data Center Asset | 3 | ✅ Active |
+| `cctv` | N/A | Back Office Asset | N/A | ⚠️ Separate flow |
+
+Minimal payload auto-register:
+
+- `sn`
+- `hostname`
+- `model`
+- `rack`
+- `remarks` with IP/source/timestamp
+
+> [!CAUTION]
+> Jangan test auto-register dengan serial dummy di production Ralph tanpa approval. Tunggu device nyata atau gunakan staging.
 
 ---
 
@@ -139,3 +182,31 @@ Data inventaris CCTV dan NVR (umumnya Hikvision) ditarik menggunakan poller kust
 | | - Hostname | 🟢 YA | Disinkronisasikan sebagai Hostname Management | `hostname` |
 
 ---
+
+## CCTV Back Office Registration (v3.5.1 — 2026-05-19)
+
+20 CCTV yang hilang dari Ralph (akibat migrasi gagal) telah di-register ulang menggunakan `scripts/register_cctv_to_ralph.py`:
+- **Asset Type**: Back Office (bukan Data Center)
+- **Category**: CCTV (id=22, dibuat otomatis)
+- **Models**: DS-2CD1021-I, DS-2CD1043G0E-I, DS-2CD1121-I, DS-2CD1143G0E-I, DS-2CD3121G0-I
+- **Property Of**: Facility Management Department
+- **Region/Warehouse**: Headquarters / FIT-Head-Office
+- **Important (v3.5.5)**: CCTV tidak ikut auto-register DC asset karena bukan rack-mounted Data Center Asset.
+
+## Format Remarks per Device Type (v3.5.0+)
+
+| Device Type | Asset Type | Format Remarks |
+| :--- | :--- | :--- |
+| Server | DC Asset | `Last Sync: 2026-05-20 02:00:05` |
+| UPS | DC Asset | `Model: 30KH \| Last Sync: 2026-05-20 02:00:05` |
+| NAS | DC Asset | `IP: 10.50.0.106 \| Manufacturer: Synology \| Model: RS2423RP \| Last Sync: 2026-05-20 02:00:05` |
+| Network Switch | DC Asset | `IP: 172.16.35.1 \| Manufacturer: MikroTik \| Model: CCR2004 \| Last Sync: 2026-05-20 02:00:05` |
+| NVR | DC Asset | `IP: 192.168.1.254 \| Manufacturer: Hikvision \| Model: DS-7732NXI-K4 \| Last Sync: 2026-05-20 02:00:05` |
+| CCTV | Back Office | `IP: 192.168.1.x \| Model: DS-2CD1143G0E-I \| Location: Meeting_Lt.1` |
+
+## Cron Schedule
+
+| Schedule | Script | Fungsi |
+| :--- | :--- | :--- |
+| `0 1 * * *` | `scripts/server_inventory_to_pg.py` | Collect server inventory via Redfish → PostgreSQL |
+| `0 2 * * *` | `scripts/ralph_cmdb_sync.py` | Sync PostgreSQL → Ralph CMDB; auto-register missing DC assets |
