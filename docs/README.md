@@ -28,6 +28,7 @@ Development guides, metrics documentation, and technical references:
 - Data collection methods
 - Telegraf configuration guides
 - PostgreSQL query references
+- Agent database query baseline (`34-database-query-baseline-for-agents.md`)
 - Ralph integration guides
 - Dashboard templates (*.ndjson)
 - MIB guides (*.pdf)
@@ -48,8 +49,9 @@ Raw device data samples for reference:
 
 ### For Developers
 1. `development/` contains technical guides and metrics documentation
-2. `raw_data/` has sample data for testing and validation
-3. Architecture docs explain design decisions
+2. `development/34-database-query-baseline-for-agents.md` contains baseline PostgreSQL queries for agent device lookup
+3. `raw_data/` has sample data for testing and validation
+4. Architecture docs explain design decisions
 
 ### For Operations
 1. `operations/` has incident reports and maintenance procedures
