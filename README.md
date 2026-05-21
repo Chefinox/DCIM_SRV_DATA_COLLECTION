@@ -143,8 +143,14 @@ PostgreSQL dcim_events → ralph_cmdb_sync.py → Ralph CMDB
 
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
-| v3.4.1 | 2026-05-12 | Unified pipeline restored, server_inventory_to_pg.py | **CURRENT** |
-| v3.5.0 | 2026-05-07 | Hybrid: v3.4 logic + v4.0 structure | Active |
+| v3.5.5 | 2026-05-21 | Auto-register missing DC assets, stale-device alerting, Kafka health-check guidance, logging baseline fixes | **CURRENT** |
+| v3.5.4 | 2026-05-20 | Threshold alerter service with 6 rules, alerts indexed to `dcim-alerts` | Active |
+| v3.5.3 | 2026-05-20 | Kibana dashboard field mapping fixes for NVR/UPS/NAS and device type cardinality | Active |
+| v3.5.2 | 2026-05-20 | Elasticsearch disk recovery and NAS volume collection fix | Active |
+| v3.5.1 | 2026-05-19 | Re-register 20 CCTV as Ralph Back Office assets | Active |
+| v3.5.0 | 2026-05-18 | Ralph CMDB sync fixes: Last Sync timestamp, JSONB components, Management ethernet protection | Active |
+| v3.4.2 | 2026-05-18 | UPS sync fallback to JSONB raw fields and management IP orphan handling | Merged to v3.5.0 |
+| v3.4.1 | 2026-05-12 | Unified pipeline restored, server_inventory_to_pg.py | Superseded |
 | v4.0.0 | 2026-05-06 | Modular agentic architecture | Superseded |
 | v3.4.0 | 2026-05-04 | NAS & Network auto-update | Superseded |
 | v3.3.0 | 2026-05-03 | Unified CMDB sync pipeline | Superseded |
