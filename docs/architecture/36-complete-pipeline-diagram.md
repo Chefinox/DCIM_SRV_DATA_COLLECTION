@@ -1,6 +1,6 @@
 # 36. Complete End-to-End Pipeline Diagram (v3.5.5)
 
-**Tanggal**: 21 Mei 2026  
+**Tanggal**: 22 Mei 2026  
 **Status**: ✅ Verified & Operational  
 **Scope**: Unified DCIM Telemetry & Inventory Pipeline
 
@@ -9,213 +9,160 @@
 ## Diagram Arsitektur Lengkap
 
 ```mermaid
-flowchart TB
-    subgraph DEVICES["🏭 LAYER 1: Physical Infrastructure"]
-        direction LR
-        SRV["🖥️ Server (5 units)<br/>Lenovo ThinkSystem<br/>10.50.0.2-6<br/><b>Protocol: Redfish HTTPS</b><br/>Port: 443"]
-        UPS["⚡ UPS (1 unit)<br/>APC Smart-UPS 30K<br/>192.168.100.140<br/><b>Protocol: SNMP v3</b><br/>Port: 161"]
-        NAS["💾 NAS (6 units)<br/>Synology DS Series<br/>10.50.0.105-110<br/><b>Protocol: SNMP v3</b><br/>Port: 161"]
-        NET["🔀 Network (5 units)<br/>MikroTik CCR/CRS<br/>172.16.35.x<br/><b>Protocol: SNMP v2c</b><br/>Port: 161"]
-        CAM["📷 CCTV (31 units)<br/>Hikvision Camera<br/>192.168.1.2-33 (skip .32)<br/><b>Protocol: ISAPI HTTP</b><br/>Port: 80"]
-        NVR["📹 NVR (1 unit)<br/>Hikvision DS-7732<br/>192.168.1.254<br/><b>Protocol: ISAPI HTTP</b><br/>Port: 80"]
-    end
+flowchart LR
+    %% Clean left-to-right layout to reduce crossing lines.
 
-    subgraph COLLECTION["📡 LAYER 1B: Data Collection"]
+    subgraph L1["🏭 1. Physical Infrastructure"]
         direction TB
-        
-        subgraph TELEGRAF["Telegraf Producer<br/>(telegraf.service)"]
-            T1["<b>inputs.redfish</b><br/>servers-redfish.conf<br/>Interval: 120s<br/>User: hndept"]
-            T2["<b>inputs.snmp</b><br/>ups-apc.conf<br/>Interval: 120s<br/>Auth: SHA/AES"]
-            T3["<b>inputs.snmp</b><br/>nas-snmp.conf<br/>Interval: 120s<br/>Community: public"]
-            T4["<b>inputs.snmp</b><br/>mikrotik-snmp.conf<br/>Interval: 120s<br/>Community: public"]
-            T5["<b>inputs.exec</b><br/>hikvision_poller.py<br/>Interval: 120s<br/>Auth: Basic"]
-        end
-        
-        TOUT["<b>outputs.kafka</b><br/>localhost:9092<br/>Format: JSON"]
-        
-        T1 & T2 & T3 & T4 & T5 --> TOUT
+        SRV["🖥️ Server<br/>5 Lenovo ThinkSystem<br/>10.50.0.2-6<br/>Redfish HTTPS :443"]
+        UPS["⚡ UPS<br/>1 APC Smart-UPS 30K<br/>192.168.100.140<br/>SNMP v3 :161"]
+        NAS["💾 NAS<br/>6 Synology DS Series<br/>10.50.0.105-110<br/>SNMP v3 :161"]
+        NET["🔀 Network<br/>5 MikroTik CCR/CRS<br/>172.16.35.x<br/>SNMP v2c :161"]
+        CAM["📷 CCTV<br/>31 Hikvision camera channels<br/>192.168.1.2-33 skip .32<br/>ISAPI HTTP :80"]
+        NVR["📹 NVR<br/>1 Hikvision DS-7732<br/>192.168.1.254<br/>ISAPI HTTP :80"]
     end
 
-    subgraph KAFKA_RAW["🗂️ Kafka Raw Topics<br/>(kafka-broker:9092)"]
-        K1["dcim.raw.hardware.server"]
-        K2["dcim.raw.power.ups"]
-        K3["dcim.raw.storage.nas"]
-        K4["dcim.raw.network.snmp<br/>dcim.raw.network.interfaces"]
-        K5["dcim.raw.device.isapi"]
-    end
-
-    subgraph NORMALIZE["⚙️ LAYER 2: Normalization"]
-        NORM["<b>dcim-normalizer.service</b><br/>Script: dcim_normalizer.py<br/>Config: metric_mapping.json<br/>Input: All raw topics<br/>Output: Flat CDM Schema"]
-    end
-
-    subgraph KAFKA_NORM["🗂️ Kafka Normalized Topic"]
-        KN["dcim.normalized.events<br/><i>Unified Schema:</i><br/>- event_id (UUID)<br/>- device_type<br/>- hostname<br/>- serial_number<br/>- metric_name/value<br/>- raw_tags/fields (JSONB)"]
-    end
-
-    subgraph ENRICH["🔶 LAYER 3: Enrichment"]
+    subgraph L2["📡 2. Collection - Telegraf"]
         direction TB
-        
-        subgraph NIFI["Apache NiFi 1.24<br/>(dcim-nifi:8443)"]
-            NF1["ConsumeKafkaRecord_2_6<br/>Topic: dcim.normalized.events<br/>Format: JSON"]
-            NF2["LookupRecord<br/>RestLookupService<br/>GET /enrich/{sn}"]
-            NF3["PublishKafkaRecord_2_6<br/>Topic: dcim.enriched.events"]
-            
-            NF1 --> NF2 --> NF3
-        end
-        
-        subgraph API["Enrichment API<br/>(dcim-enrichment-api.service)"]
-            FAPI["<b>FastAPI :8000</b><br/>Script: enrichment_api.py<br/>Endpoint: /enrich/{sn}<br/>Response: CMDB metadata"]
-        end
-        
-        subgraph CACHE["Cache Layer"]
-            REDIS[("<b>Redis :6379</b><br/>(dcim-redis-cache)<br/>Pattern: asset:sn:{sn}<br/>TTL: 3600s")]
-            SYNC["<b>dcim-redis-sync.service</b><br/>Script: cmdb_to_cache_sync.py<br/>Interval: 60s<br/>Source: PostgreSQL SOT"]
-        end
-        
-        NF2 <--> FAPI
-        FAPI <--> REDIS
-        SYNC --> REDIS
+        C_SRV["inputs.redfish<br/>servers-redfish.conf<br/>120s"]
+        C_UPS["inputs.snmp<br/>ups-apc.conf<br/>120s"]
+        C_NAS["inputs.snmp<br/>nas-snmp.conf<br/>120s"]
+        C_NET["inputs.snmp<br/>mikrotik-snmp.conf<br/>120s"]
+        C_ISAPI["inputs.exec<br/>hikvision_poller.py<br/>120s"]
+        KOUT["outputs.kafka<br/>localhost:9092<br/>JSON"]
     end
 
-    subgraph KAFKA_ENR["🗂️ Kafka Enriched Topic"]
-        KE["dcim.enriched.events<br/><i>Added Fields:</i><br/>- site<br/>- rack_name<br/>- rack_position<br/>- manufacturer<br/>- model<br/>- asset_status<br/>- enrichment_status"]
-    end
-
-    subgraph PERSIST["🗄️ LAYER 4: Persistence"]
-        direction LR
-        
-        ES["<b>telegraf-consumer.service</b><br/>Script: Telegraf<br/>Input: dcim.enriched.events<br/>Output: Elasticsearch<br/>Index: dcim-metrics-unified-*"]
-        
-        SQL["<b>dcim-sql-consumer.service</b><br/>Script: dcim_sql_consumer.py<br/>Input: dcim.enriched.events<br/>Output: PostgreSQL<br/>Table: dcim_events (partitioned)"]
-        
-        DLQ["<b>dcim-dlq-consumer.service</b><br/>Script: dcim_dlq_consumer.py<br/>Input: dcim.dlq.*<br/>Output: Logs + Retry"]
-    end
-
-    subgraph STORAGE["💾 Data Storage"]
+    subgraph L3["🗂️ 3. Kafka Raw Topics"]
         direction TB
-        
-        PG[("<b>PostgreSQL 14</b><br/>Host: 192.168.100.115:5432<br/>Database: dcim_sot<br/>Tables:<br/>- dcim_events (partitioned)<br/>- dcim_server_disks<br/>- dcim_server_ram<br/>- dcim_server_processors<br/>- unified_assets")]
-        
-        ES_DB[("<b>Elasticsearch 7.x</b><br/>Host: 10.70.0.56:9200<br/>Index: dcim-metrics-unified-*<br/>Alert Index: dcim-alerts<br/>Retention: 90 days")]
-        
-        KIBANA["<b>Kibana Dashboard</b><br/>Host: 10.70.0.56:5601<br/>Dashboards:<br/>- DCIM Monitoring<br/>- Threshold Alerts<br/>- Stale Device Alerts"]
+        KR_SRV["dcim.raw.hardware.server"]
+        KR_UPS["dcim.raw.power.ups"]
+        KR_NAS["dcim.raw.storage.nas"]
+        KR_NET["dcim.raw.network.snmp<br/>dcim.raw.network.interfaces"]
+        KR_ISAPI["dcim.raw.device.isapi"]
     end
 
-    subgraph CMDB["📘 CMDB Sync Layer"]
+    subgraph L4["⚙️ 4. Normalize"]
         direction TB
-        
-        SRV_INV["<b>server_inventory_to_pg.py</b><br/>Schedule: Daily 01:00 WIB<br/>Protocol: Redfish HTTPS<br/>Target: 10.50.0.2-6<br/>Components:<br/>- Firmware/BIOS<br/>- Processors (model, cores)<br/>- Memory (size, speed)<br/>- Disks (SN, size, slot)<br/>- NICs (MAC, speed)<br/>Output: PostgreSQL dcim_events"]
-        
-        UNIFIED["<b>ralph_cmdb_sync.py</b><br/>Schedule: Daily 02:00 WIB<br/>Source: PostgreSQL dcim_events<br/>Auto-register DC Assets:<br/>server, ups, nas,<br/>network_switch, nvr<br/>CCTV: Back Office flow"]
-        
-        RALPH[("<b>Ralph CMDB</b><br/>Host: 192.168.100.115:8088<br/>API Token: 1cd05b8d...<br/>Endpoints:<br/>- /api/data-center-assets/<br/>- /api/back-office-assets/<br/>- /api/processors/<br/>- /api/memory/<br/>- /api/disks/<br/>- /api/ethernets/")]
+        NORM["dcim-normalizer.service<br/>dcim_normalizer.py<br/>metric_mapping.json"]
+        KN["dcim.normalized.events<br/>Flat CDM schema"]
     end
 
-    subgraph DLQ_TOPICS["⚠️ Dead Letter Queue Topics"]
+    subgraph L5["🔶 5. Enrich"]
+        direction TB
+        NF1["NiFi ConsumeKafkaRecord<br/>dcim.normalized.events"]
+        NF2["NiFi LookupRecord<br/>GET /enrich/{sn}"]
+        NF3["NiFi PublishKafkaRecord<br/>dcim.enriched.events"]
+        API["dcim-enrichment-api.service<br/>FastAPI :8000"]
+        REDIS[("Redis cache :6379<br/>asset:sn:{sn}<br/>TTL 3600s")]
+        RSYNC["dcim-redis-sync.service<br/>cmdb_to_cache_sync.py<br/>60s"]
+        KE["dcim.enriched.events<br/>CDM + CMDB metadata"]
+    end
+
+    subgraph L6["🗄️ 6. Persist"]
+        direction TB
+        ES_CONS["telegraf-consumer.service<br/>Kafka enriched → Elasticsearch"]
+        SQL_CONS["dcim-sql-consumer.service<br/>dcim_sql_consumer.py<br/>Kafka enriched → PostgreSQL"]
+    end
+
+    subgraph L7["💾 7. Storage & Dashboard"]
+        direction TB
+        PG[("PostgreSQL 14<br/>192.168.100.115:5432<br/>dcim_sot<br/>dcim_events + unified_assets<br/>server component tables")]
+        ES[("Elasticsearch 7.x<br/>10.70.0.56:9200<br/>dcim-metrics-unified-*<br/>dcim-alerts")]
+        KIBANA["Kibana Dashboard<br/>10.70.0.56:5601<br/>DCIM + alerts"]
+    end
+
+    subgraph L8["📘 CMDB Automation"]
+        direction TB
+        INV["server_inventory_to_pg.py<br/>Daily 01:00 WIB<br/>Redfish inventory → PostgreSQL"]
+        RALPH_SYNC["ralph_cmdb_sync.py<br/>Daily 02:00 WIB<br/>auto-register DC assets<br/>CCTV uses Back Office flow"]
+        RALPH[("Ralph CMDB<br/>192.168.100.115:8088<br/>data-center-assets<br/>back-office-assets<br/>components")]
+    end
+
+    subgraph L9["🚨 Alerting"]
+        direction TB
+        ALERT["dcim-threshold-alerter.service<br/>120s<br/>6 thresholds + stale devices<br/>stale threshold 30m"]
+        ALERT_IDX[("dcim-alerts<br/>Threshold alerts<br/>Device Not Reporting alerts")]
+    end
+
+    subgraph L10["⚠️ DLQ"]
+        direction TB
         DLQ1["dcim.dlq.parse-failure"]
         DLQ2["dcim.dlq.enrichment-failure"]
         DLQ3["dcim.dlq.delivery-failure"]
+        DLQ_CONS["dcim-dlq-consumer.service<br/>logs + retry"]
     end
 
-    subgraph ALERTS["🚨 Alerting & Stale Detection"]
-        ALERTER["<b>dcim-threshold-alerter.service</b><br/>Script: dcim_threshold_alerter.py<br/>Interval: 120s<br/>Checks: 6 thresholds + stale devices<br/>Stale threshold: 30m"]
-        ALERT_IDX[("<b>dcim-alerts</b><br/>Threshold alerts<br/>Device Not Reporting alerts")]
+    subgraph L11["🤖 AI / Agent Readiness"]
+        direction TB
+        QUERY_DOC["docs/development/34-database-query-baseline-for-agents.md<br/>baseline SQL patterns"]
+        QUERY_SKILL[".github/skills/dcim-database-query-baseline/SKILL.md<br/>agent on-demand skill"]
     end
 
-    %% ========================================
-    %% LAYER 1: Device to Telegraf Collection
-    %% ========================================
-    SRV --> T1
-    UPS --> T2
-    NAS --> T3
-    NET --> T4
-    CAM --> T5
-    NVR --> T5
-    
-    %% ========================================
-    %% LAYER 1B: Telegraf to Kafka Raw Topics
-    %% ========================================
-    T1 --> TOUT
-    T2 --> TOUT
-    T3 --> TOUT
-    T4 --> TOUT
-    T5 --> TOUT
-    
-    TOUT --> K1
-    TOUT --> K2
-    TOUT --> K3
-    TOUT --> K4
-    TOUT --> K5
-    
-    %% ========================================
-    %% LAYER 2: Normalization Pipeline
-    %% ========================================
-    K1 --> NORM
-    K2 --> NORM
-    K3 --> NORM
-    K4 --> NORM
-    K5 --> NORM
-    
-    NORM --> KN
-    
-    %% ========================================
-    %% LAYER 3: Enrichment Pipeline
-    %% ========================================
-    KN --> NF1
-    NF1 --> NF2
-    NF2 --> NF3
-    NF3 --> KE
-    
-    %% Enrichment API & Cache
-    NF2 <--> FAPI
-    FAPI <--> REDIS
-    PG --> SYNC
-    SYNC --> REDIS
-    
-    %% ========================================
-    %% LAYER 4: Persistence Layer
-    %% ========================================
-    KE --> ES
-    KE --> SQL
-    
-    ES --> ES_DB
-    SQL --> PG
-    ES_DB --> KIBANA
-    ES_DB --> ALERTER
-    ALERTER --> ALERT_IDX
-    ALERT_IDX --> KIBANA
-    
-    %% ========================================
-    %% CMDB Sync Layer (Unified Pipeline)
-    %% ========================================
-    SRV -.->|Daily 01:00| SRV_INV
-    SRV_INV --> PG
-    PG --> UNIFIED
-    UNIFIED --> RALPH
-    
-    %% ========================================
-    %% Error Handling (Dead Letter Queue)
-    %% ========================================
-    NORM -.->|parse error| DLQ1
-    NF2 -.->|enrich error| DLQ2
-    SQL -.->|delivery error| DLQ3
-    
-    DLQ1 --> DLQ
-    DLQ2 --> DLQ
-    DLQ3 --> DLQ
+    %% Main telemetry flow: mostly straight left-to-right.
+    SRV --> C_SRV --> KOUT --> KR_SRV
+    UPS --> C_UPS --> KOUT --> KR_UPS
+    NAS --> C_NAS --> KOUT --> KR_NAS
+    NET --> C_NET --> KOUT --> KR_NET
+    CAM --> C_ISAPI --> KOUT --> KR_ISAPI
+    NVR --> C_ISAPI
 
-    style DEVICES fill:#e1f5ff
-    style COLLECTION fill:#fff4e6
-    style KAFKA_RAW fill:#f3e5f5
-    style NORMALIZE fill:#e8f5e9
-    style KAFKA_NORM fill:#f3e5f5
-    style ENRICH fill:#fff3e0
-    style KAFKA_ENR fill:#f3e5f5
-    style PERSIST fill:#e0f2f1
-    style STORAGE fill:#fce4ec
-    style CMDB fill:#f1f8e9
-    style DLQ_TOPICS fill:#ffebee
-    style ALERTS fill:#fff9c4
+    KR_SRV --> NORM
+    KR_UPS --> NORM
+    KR_NAS --> NORM
+    KR_NET --> NORM
+    KR_ISAPI --> NORM
+    NORM --> KN --> NF1 --> NF2 --> NF3 --> KE
+
+    %% Enrichment side loop kept inside enrichment layer.
+    NF2 <--> API
+    API <--> REDIS
+    RSYNC --> REDIS
+    PG -. CMDB cache source .-> RSYNC
+
+    %% Persistence and dashboard.
+    KE --> ES_CONS --> ES --> KIBANA
+    KE --> SQL_CONS --> PG
+
+    %% CMDB automation kept below storage, using dotted operational links.
+    SRV -. Daily 01:00 .-> INV
+    INV -. writes inventory .-> PG
+    PG -. Daily 02:00 source .-> RALPH_SYNC
+    RALPH_SYNC -. sync/register .-> RALPH
+
+    %% Alerting kept on Elasticsearch side.
+    ES --> ALERT --> ALERT_IDX --> KIBANA
+
+    %% DLQ paths kept as dashed exception links.
+    NORM -. parse error .-> DLQ1
+    NF2 -. enrichment error .-> DLQ2
+    SQL_CONS -. delivery error .-> DLQ3
+    DLQ1 --> DLQ_CONS
+    DLQ2 --> DLQ_CONS
+    DLQ3 --> DLQ_CONS
+
+    %% Agent knowledge uses docs and database, not runtime pipeline.
+    QUERY_SKILL -. loads .-> QUERY_DOC
+    QUERY_DOC -. query reference .-> PG
+
+    style L1 fill:#e1f5ff
+    style L2 fill:#fff4e6
+    style L3 fill:#f3e5f5
+    style L4 fill:#e8f5e9
+    style L5 fill:#fff3e0
+    style L6 fill:#e0f2f1
+    style L7 fill:#fce4ec
+    style L8 fill:#f1f8e9
+    style L9 fill:#fff9c4
+    style L10 fill:#ffebee
+    style L11 fill:#e8eaf6
+
+    classDef mainFlow stroke:#1565c0,stroke-width:2px
+    classDef exceptionFlow stroke:#c62828,stroke-width:1.5px,stroke-dasharray: 5 5
+    classDef opsFlow stroke:#6a1b9a,stroke-width:1.5px,stroke-dasharray: 4 4
+
+    class SRV,UPS,NAS,NET,CAM,NVR,C_SRV,C_UPS,C_NAS,C_NET,C_ISAPI,KOUT,KR_SRV,KR_UPS,KR_NAS,KR_NET,KR_ISAPI,NORM,KN,NF1,NF2,NF3,KE,ES_CONS,SQL_CONS,PG,ES,KIBANA mainFlow
+    class DLQ1,DLQ2,DLQ3,DLQ_CONS exceptionFlow
+    class INV,RALPH_SYNC,RALPH,ALERT,ALERT_IDX,QUERY_DOC,QUERY_SKILL opsFlow
 ```
 
 ---
