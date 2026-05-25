@@ -1,8 +1,8 @@
 # DCIM Metrics Project
 
-**Version**: v3.5.5 (Unified Pipeline + Auto-Commissioning/Stale Alerting)  
+**Version**: v3.5.6 (Unified Pipeline + CCTV CMDB Cleanup & Real SN Extraction)  
 **Status**: ✅ Production Active  
-**Last Updated**: 2026-05-21
+**Last Updated**: 2026-05-26
 
 ## Project Overview
 
@@ -143,7 +143,8 @@ PostgreSQL dcim_events → ralph_cmdb_sync.py → Ralph CMDB
 
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
-| v3.5.5 | 2026-05-21 | Auto-register missing DC assets, stale-device alerting, Kafka health-check guidance, logging baseline fixes | **CURRENT** |
+| v3.5.6 | 2026-05-26 | CCTV Influx JSON format, NVR real SN fallback, CMDB placeholder cleanup, check_cctv_status.py regex fix | **CURRENT** |
+| v3.5.5 | 2026-05-21 | Auto-register missing DC assets, stale-device alerting, Kafka health-check guidance, logging baseline fixes | Active |
 | v3.5.4 | 2026-05-20 | Threshold alerter service with 6 rules, alerts indexed to `dcim-alerts` | Active |
 | v3.5.3 | 2026-05-20 | Kibana dashboard field mapping fixes for NVR/UPS/NAS and device type cardinality | Active |
 | v3.5.2 | 2026-05-20 | Elasticsearch disk recovery and NAS volume collection fix | Active |
