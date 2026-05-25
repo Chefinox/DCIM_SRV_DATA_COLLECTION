@@ -143,23 +143,73 @@ ORDER BY event_time DESC;
 
 ### 4.2 Ambil ringkasan semua perangkat aktif
 
+Query ini memakai fallback ke `unified_assets` supaya metadata CMDB tetap muncul ketika normalized event belum lengkap. Contoh kasus tervalidasi: CCTV punya `manufacturer/model` di sebagian event/CMDB, UPS event tidak membawa `ip` di `dcim_events` sehingga perlu fallback ke `unified_assets.ip`.
+
 ```sql
+WITH latest_events AS (
+  SELECT DISTINCT ON (device_type, COALESCE(serial_number, hostname, ip::text))
+    device_type,
+    COALESCE(serial_number, hostname, ip::text) AS device_key,
+    hostname,
+    ip,
+    serial_number,
+    manufacturer,
+    model,
+    site,
+    rack_name,
+    asset_status,
+    event_time
+  FROM dcim_events
+  WHERE event_time > NOW() - INTERVAL '24 hours'
+  ORDER BY device_type, COALESCE(serial_number, hostname, ip::text), event_time DESC
+), event_counts AS (
+  SELECT
+    device_type,
+    COALESCE(serial_number, hostname, ip::text) AS device_key,
+    COUNT(*) AS events_24h
+  FROM dcim_events
+  WHERE event_time > NOW() - INTERVAL '24 hours'
+  GROUP BY device_type, COALESCE(serial_number, hostname, ip::text)
+), enriched AS (
+  SELECT
+    le.*,
+    ec.events_24h,
+    ua.hostname AS cmdb_hostname,
+    ua.ip AS cmdb_ip,
+    ua.manufacturer AS cmdb_manufacturer,
+    ua.model AS cmdb_model,
+    ua.site AS cmdb_site,
+    ua.rack_name AS cmdb_rack_name,
+    ua.asset_status AS cmdb_asset_status,
+    ua.ralph_id,
+    ua.ralph_endpoint,
+    ua.last_synced_at
+  FROM latest_events le
+  JOIN event_counts ec
+    ON ec.device_type = le.device_type
+   AND ec.device_key = le.device_key
+  LEFT JOIN unified_assets ua
+    ON ua.serial_number = le.serial_number
+    OR ua.ip = le.ip
+    OR ua.hostname = le.hostname
+)
 SELECT
   device_type,
-  COALESCE(serial_number, hostname, ip::text) AS device_key,
-  MAX(hostname) AS hostname,
-  MAX(ip::text) AS ip,
-  MAX(serial_number) AS serial_number,
-  MAX(manufacturer) AS manufacturer,
-  MAX(model) AS model,
-  MAX(site) AS site,
-  MAX(rack_name) AS rack_name,
-  MAX(asset_status) AS asset_status,
-  MAX(event_time) AS last_event,
-  COUNT(*) AS events_24h
-FROM dcim_events
-WHERE event_time > NOW() - INTERVAL '24 hours'
-GROUP BY device_type, COALESCE(serial_number, hostname, ip::text)
+  device_key,
+  COALESCE(hostname, cmdb_hostname) AS hostname,
+  COALESCE(ip::text, cmdb_ip::text) AS ip,
+  serial_number,
+  COALESCE(manufacturer, cmdb_manufacturer) AS manufacturer,
+  COALESCE(model, cmdb_model) AS model,
+  COALESCE(site, cmdb_site) AS site,
+  COALESCE(rack_name, cmdb_rack_name) AS rack_name,
+  COALESCE(asset_status, cmdb_asset_status) AS asset_status,
+  ralph_id,
+  ralph_endpoint,
+  last_synced_at,
+  event_time AS last_event,
+  events_24h
+FROM enriched
 ORDER BY device_type, hostname;
 ```
 
