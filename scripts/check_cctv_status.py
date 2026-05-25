@@ -74,7 +74,7 @@ def get_channel_status():
         
         # Parse status
         status_map = {}
-        status_blocks = re.findall(r'<InputProxyChannelStatus>(.*?)</InputProxyChannelStatus>', xml_data, re.DOTALL)
+        status_blocks = re.findall(r'<InputProxyChannelStatus.*?>(.*?)</InputProxyChannelStatus>', xml_data, re.DOTALL)
         
         for block in status_blocks:
             ch_id = re.search(r'<id>(\d+)</id>', block)

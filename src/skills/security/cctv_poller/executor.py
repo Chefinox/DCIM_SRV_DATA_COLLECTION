@@ -34,7 +34,7 @@ class CCTVPollerExecutor:
     def discover_nvr_channels(self, nvr_ip, user, password):
         """
         Capability: NVR Proxy Discovery.
-        Returns a mapping of {camera_ip: serial_number}.
+        Returns a mapping of {camera_ip: {serial_number, model, firmware, hostname}}.
         """
         client = HikvisionClient(nvr_ip, user, password)
         xml_data = client.get_isapi("/ContentMgmt/InputProxy/channels")
@@ -47,10 +47,19 @@ class CCTVPollerExecutor:
         if isinstance(channels, dict): channels = [channels] # Handle single item
         
         for ch in channels:
-            ip = ch.get("ipAddress")
-            sn = ch.get("serialNumber")
+            desc = ch.get("sourceInputPortDescriptor") or {}
+            ip = desc.get("ipAddress")
+            sn = desc.get("serialNumber")
+            model = desc.get("model")
+            fw = desc.get("firmwareVersion")
+            name = ch.get("name")
             if ip and sn:
-                mapping[ip] = sn
+                mapping[ip] = {
+                    "serial_number": sn,
+                    "model": model,
+                    "firmware": fw,
+                    "hostname": name
+                }
         return mapping
 
     def _offline_state(self, ip, category):
@@ -58,6 +67,9 @@ class CCTVPollerExecutor:
             "ip": ip,
             "status": "Offline",
             "device_category": category,
-            "hostname": "unknown",
-            "serial_number": "NO_SN"
+            "hostname": f"CCTV-{str(ip).replace('.', '-')}",
+            "serial_number": f"CCTV-IP-{str(ip).replace('.', '-')}",
+            "manufacturer": "Hikvision",
+            "model": "DS-2CD",
+            "device_type": "cctv"
         }

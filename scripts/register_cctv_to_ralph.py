@@ -262,9 +262,8 @@ def build_full_cctv_inventory():
     telemetry = get_latest_cctv_by_ip()
     records = []
     for ip, location in sorted(CCTV_TARGETS.items(), key=lambda item: ipaddress.ip_address(item[0])):
-        data = telemetry.get(ip, {})
         sn = data.get("serial_number")
-        has_real_sn = bool(sn and sn not in {"NO_SN", "NO_IDENTIFIER", "unknown"})
+        has_real_sn = bool(sn and sn not in {"NO_SN", "NO_IDENTIFIER", "unknown"} and not sn.startswith("CCTV-IP-"))
         sn = sn if has_real_sn else placeholder_sn(ip)
         model = data.get("model") if data.get("model") and data.get("model") != "unknown" else CCTV_DEFAULT_MODEL
         records.append({
