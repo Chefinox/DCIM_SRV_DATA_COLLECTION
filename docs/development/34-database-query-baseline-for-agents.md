@@ -107,13 +107,18 @@ Measurements 24h:
 
 ## 4. Agent Query Pattern
 
+> **Placeholder note**: syntax `:identifier`, `:hostname`, `:serial_number`, dan sejenisnya adalah placeholder untuk aplikasi/agent. Jika menjalankan langsung di `psql`, gunakan CTE `params` seperti contoh di bawah, atau ganti nilai placeholder dengan literal SQL yang aman.
+
 ### 4.1 Cari perangkat by identifier fleksibel
 
 Gunakan query ini jika input agent bisa berupa hostname, IP, atau serial number.
 
 ```sql
-WITH q AS (
-  SELECT :identifier::text AS ident
+WITH params AS (
+  SELECT 'SRV-HCI-01'::text AS identifier  -- ganti dengan hostname/IP/serial number
+), q AS (
+  SELECT identifier AS ident
+  FROM params
 ), matched_events AS (
   SELECT *
   FROM dcim_events e, q
