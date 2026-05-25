@@ -143,33 +143,57 @@ ORDER BY event_time DESC;
 
 ### 4.2 Ambil ringkasan semua perangkat aktif
 
-Query ini memakai fallback ke `unified_assets` supaya metadata CMDB tetap muncul ketika normalized event belum lengkap. Contoh kasus tervalidasi: CCTV punya `manufacturer/model` di sebagian event/CMDB, UPS event tidak membawa `ip` di `dcim_events` sehingga perlu fallback ke `unified_assets.ip`.
+Query ini memakai fallback ke `unified_assets` dan `raw_tags` supaya metadata tetap muncul ketika normalized event belum lengkap. Contoh kasus tervalidasi: UPS event tidak membawa `ip` di `dcim_events` sehingga perlu fallback ke `unified_assets.ip`; CCTV model bisa ada di `raw_tags.model`; CCTV vendor Hikvision bisa diinfer dari model `DS-*`.
 
 ```sql
 WITH latest_events AS (
-  SELECT DISTINCT ON (device_type, COALESCE(serial_number, hostname, ip::text))
+  SELECT DISTINCT ON (
     device_type,
-    COALESCE(serial_number, hostname, ip::text) AS device_key,
+    CASE
+      WHEN device_type IN ('cctv', 'nvr') THEN ip::text
+      ELSE COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text)
+    END
+  )
+    device_type,
+    CASE
+      WHEN device_type IN ('cctv', 'nvr') THEN ip::text
+      ELSE COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text)
+    END AS device_key,
     hostname,
     ip,
     serial_number,
     manufacturer,
     model,
+    raw_tags,
     site,
     rack_name,
     asset_status,
     event_time
   FROM dcim_events
   WHERE event_time > NOW() - INTERVAL '24 hours'
-  ORDER BY device_type, COALESCE(serial_number, hostname, ip::text), event_time DESC
+  ORDER BY
+    device_type,
+    CASE
+      WHEN device_type IN ('cctv', 'nvr') THEN ip::text
+      ELSE COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text)
+    END,
+    event_time DESC
 ), event_counts AS (
   SELECT
     device_type,
-    COALESCE(serial_number, hostname, ip::text) AS device_key,
+    CASE
+      WHEN device_type IN ('cctv', 'nvr') THEN ip::text
+      ELSE COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text)
+    END AS device_key,
     COUNT(*) AS events_24h
   FROM dcim_events
   WHERE event_time > NOW() - INTERVAL '24 hours'
-  GROUP BY device_type, COALESCE(serial_number, hostname, ip::text)
+  GROUP BY
+    device_type,
+    CASE
+      WHEN device_type IN ('cctv', 'nvr') THEN ip::text
+      ELSE COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text)
+    END
 ), enriched AS (
   SELECT
     le.*,
@@ -199,8 +223,20 @@ SELECT
   COALESCE(hostname, cmdb_hostname) AS hostname,
   COALESCE(ip::text, cmdb_ip::text) AS ip,
   serial_number,
-  COALESCE(manufacturer, cmdb_manufacturer) AS manufacturer,
-  COALESCE(model, cmdb_model) AS model,
+  COALESCE(
+    NULLIF(NULLIF(manufacturer, 'Unknown'), 'unknown'),
+    NULLIF(NULLIF(cmdb_manufacturer, 'Unknown'), 'unknown'),
+    CASE
+      WHEN device_type IN ('cctv', 'nvr')
+       AND COALESCE(NULLIF(raw_tags->>'model', 'unknown'), cmdb_model, model) ILIKE 'DS-%'
+      THEN 'Hikvision'
+    END
+  ) AS manufacturer,
+  COALESCE(
+    NULLIF(NULLIF(model, 'Unknown'), 'unknown'),
+    NULLIF(NULLIF(cmdb_model, 'Unknown'), 'unknown'),
+    NULLIF(NULLIF(raw_tags->>'model', 'Unknown'), 'unknown')
+  ) AS model,
   COALESCE(site, cmdb_site) AS site,
   COALESCE(rack_name, cmdb_rack_name) AS rack_name,
   COALESCE(asset_status, cmdb_asset_status) AS asset_status,

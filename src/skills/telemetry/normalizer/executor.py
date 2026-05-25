@@ -47,24 +47,109 @@ def resolve_metric(raw_message):
 def process_message(raw_message, source_topic):
     tags = raw_message.get("tags", {})
     fields = raw_message.get("fields", {})
-    hostname = tags.get("hostname")
+    hostname_raw = (
+        tags.get("hostname") or 
+        fields.get("system_name") or 
+        fields.get("sysName") or 
+        "Unknown_Host"
+    )
+    hostname = str(hostname_raw).strip()
     serial_number = (
         tags.get("serial_number") or
+        fields.get("serial_number") or
         fields.get("upsSerial") or
         fields.get("sysSerial") or
         "NO_IDENTIFIER"
     )
     metric_name, metric_value, metric_unit, severity = resolve_metric(raw_message)
     device_type = resolve_device_type(raw_message, source_topic)
+
+    if device_type in ("cctv", "nvr"):
+        tag_model = tags.get("model")
+        if tag_model and str(tag_model).strip().lower() not in ("", "unknown", "null", "none"):
+            fields.setdefault("model", tag_model)
+        tag_firmware = tags.get("firmware") or tags.get("firmwareVersion")
+        if tag_firmware and str(tag_firmware).strip().lower() not in ("", "unknown", "null", "none"):
+            fields.setdefault("firmware", tag_firmware)
+        if tag_model and str(tag_model).strip().upper().startswith("DS-"):
+            fields.setdefault("manufacturer", "Hikvision")
+    
+    if device_type == "ups":
+        try:
+            curr_load = int(fields.get("output_load") or 0)
+            if curr_load == 0:
+                l1 = int(fields.get("output_load_L1") or 0)
+                l2 = int(fields.get("output_load_L2") or 0)
+                l3 = int(fields.get("output_load_L3") or 0)
+                max_load = max(l1, l2, l3)
+                if max_load > 0:
+                    fields["output_load"] = max_load
+                    if metric_name == "output_load":
+                        metric_value = max_load
+        except Exception:
+            pass
+            
+    # Calculate Memory Usage Percentage for CCTV/NVR
+    if "memoryUsage" in fields and "memoryAvailable" in fields:
+        try:
+            used = float(fields["memoryUsage"])
+            avail = float(fields["memoryAvailable"])
+            total = used + avail
+            if total > 0:
+                fields["memoryUsagePct"] = round((used / total) * 100, 2)
+                fields["memoryTotal"] = round(total, 2)
+                fields["memoryUsage"] = round(used, 2)
+                fields["memoryAvailable"] = round(avail, 2)
+        except Exception:
+            pass
+            
+    # Calculate Volume Usage Percentage for NAS
+    vol_used = fields.get("volumeUsedBytes") or fields.get("volumes_used_bytes") or fields.get("used_bytes")
+    vol_total = fields.get("volumeTotalBytes") or fields.get("volumes_total_bytes") or fields.get("total_bytes")
+    vol_status = fields.get("volumeStatus") or fields.get("status_val") or fields.get("status")
+
+    if vol_used is not None and vol_total is not None:
+        try:
+            used_bytes = float(vol_used)
+            total_bytes = float(vol_total)
+            if total_bytes > 0:
+                fields["volumeUsagePct"] = round((used_bytes / total_bytes) * 100, 2)
+                fields["volumeUsedGB"] = round(used_bytes / (1024 ** 3), 2)
+                fields["volumeTotalTB"] = round(total_bytes / (1024 ** 4), 2)
+                
+            # Unify standard fields for Bar Chart
+            fields["volumeTotalBytes"] = total_bytes
+            fields["volumeUsedBytes"] = used_bytes
+        except Exception:
+            pass
+            
+    # Unify Status if missing
+    if "volumeStatus" not in fields and vol_status is not None:
+        try:
+            status_str = str(vol_status).lower()
+            if status_str in ["online", "normal", "1", "ok"]:
+                fields["volumeStatus"] = 1
+            else:
+                fields["volumeStatus"] = int(vol_status)
+        except Exception:
+            pass
+            
     ts = raw_message.get("timestamp")
-    event_time = datetime.fromtimestamp(ts, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%S+00:00') if ts else None
+    event_time = None
+    if ts:
+        try:
+            ts_float = float(ts)
+            parsed_ts = ts_float / 1e9 if ts_float > 1e16 else (ts_float / 1e3 if ts_float > 1e11 else ts_float)
+            event_time = datetime.fromtimestamp(parsed_ts, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%S+00:00')
+        except Exception:
+            pass
     clean_tags = dict(tags)
     if "host" in clean_tags:
         del clean_tags["host"]
     normalized_event = {
         "event_id": str(uuid.uuid4()),
         "event_time": event_time,
-        "timestamp": ts,
+        "timestamp": int(parsed_ts) if 'parsed_ts' in locals() else ts,
         "source_topic": source_topic,
         "measurement": raw_message.get("name"),
         "device_type": device_type,
@@ -75,6 +160,9 @@ def process_message(raw_message, source_topic):
         "metric_value": metric_value,
         "metric_unit": metric_unit,
         "severity": severity,
+        "manufacturer": fields.get("manufacturer") or tags.get("manufacturer"),
+        "model": fields.get("model") or tags.get("model"),
+        "firmware": fields.get("firmware") or fields.get("firmwareVersion") or tags.get("firmware") or tags.get("firmwareVersion"),
         "raw_fields": fields,
         "raw_tags": clean_tags
     }
