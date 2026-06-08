@@ -62,11 +62,12 @@ flowchart LR
         direction TB
         ES_CONS["telegraf-consumer.service<br/>Kafka enriched → Elasticsearch"]
         SQL_CONS["dcim-sql-consumer.service<br/>dcim_sql_consumer.py<br/>Kafka enriched → PostgreSQL"]
+        ITOP_CONS["dcim-itop-consumer.service<br/>dcim_itop_consumer.py<br/>Kafka enriched → iTop CI"]
     end
 
     subgraph L7["💾 7. Storage & Dashboard"]
         direction TB
-        PG[("PostgreSQL 14<br/>192.168.100.115:5432<br/>dcim_sot<br/>dcim_events + unified_assets<br/>server component tables")]
+        PG[("PostgreSQL 14<br/>localhost:5432 (Docker)<br/>dcim_sot<br/>dcim_events + unified_assets<br/>server component tables")]
         ES[("Elasticsearch 7.x<br/>10.70.0.56:9200<br/>dcim-metrics-unified-*<br/>dcim-alerts")]
         KIBANA["Kibana Dashboard<br/>10.70.0.56:5601<br/>DCIM + alerts"]
     end
@@ -74,8 +75,10 @@ flowchart LR
     subgraph L8["📘 CMDB Automation"]
         direction TB
         INV["server_inventory_to_pg.py<br/>Daily 01:00 WIB<br/>Redfish inventory → PostgreSQL"]
-        RALPH_SYNC["ralph_cmdb_sync.py<br/>Daily 02:00 WIB<br/>auto-register DC assets<br/>CCTV uses Back Office flow"]
-        RALPH[("Ralph CMDB<br/>192.168.100.115:8088<br/>data-center-assets<br/>back-office-assets<br/>components")]
+        RALPH_SYNC["ralph_cmdb_sync.py<br/>Daily 02:00 WIB<br/>auto-register DC assets"]
+        RALPH[("Ralph Asset Repository<br/>localhost:8082 (Docker)")]
+        ITOP_SYNC["dcim_itop_inventory_sync.py<br/>Every 5 mins<br/>PostgreSQL hardware → iTop"]
+        ITOP[("iTop CMDB<br/>localhost:8080")]
     end
 
     subgraph L9["🚨 Alerting"]
@@ -122,12 +125,15 @@ flowchart LR
     %% Persistence and dashboard.
     KE --> ES_CONS --> ES --> KIBANA
     KE --> SQL_CONS --> PG
+    KE --> ITOP_CONS --> ITOP
 
     %% CMDB automation kept below storage, using dotted operational links.
     SRV -. Daily 01:00 .-> INV
     INV -. writes inventory .-> PG
     PG -. Daily 02:00 source .-> RALPH_SYNC
     RALPH_SYNC -. sync/register .-> RALPH
+    PG -. Every 5 mins .-> ITOP_SYNC
+    ITOP_SYNC -. sync hardware .-> ITOP
 
     %% Alerting kept on Elasticsearch side.
     ES --> ALERT --> ALERT_IDX --> KIBANA
@@ -189,6 +195,7 @@ flowchart LR
 | dcim-redis-sync.service | cmdb_to_cache_sync.py | PostgreSQL SOT | Redis cache | Cache refresh (60s) |
 | telegraf-consumer.service | Telegraf | dcim.enriched.events | Elasticsearch | Time-series storage |
 | dcim-sql-consumer.service | dcim_sql_consumer.py | dcim.enriched.events | PostgreSQL dcim_events | Historical storage |
+| dcim-itop-consumer.service | dcim_itop_consumer.py | dcim.enriched.events | iTop CMDB | Auto-create CIs |
 | dcim-dlq-consumer.service | dcim_dlq_consumer.py | dcim.dlq.* | Logs + Retry | Error handling |
 | dcim-threshold-alerter.service | dcim_threshold_alerter.py | Elasticsearch `dcim-metrics-unified-*` | Elasticsearch `dcim-alerts` | Threshold + stale-device alerting |
 
@@ -197,7 +204,8 @@ flowchart LR
 | Script | Schedule | Protocol | Source | Target | Device Types |
 |--------|----------|----------|--------|--------|--------------|
 | server_inventory_to_pg.py | Daily 01:00 | Redfish HTTPS | 10.50.0.2-6 | PostgreSQL dcim_events | Server (5) |
-| ralph_cmdb_sync.py | Daily 02:00 | HTTP REST | PostgreSQL | Ralph CMDB | All devices; auto-register DC assets except CCTV |
+| ralph_cmdb_sync.py | Daily 02:00 | HTTP REST | PostgreSQL | Ralph Asset Repository | All devices; auto-register DC assets except CCTV |
+| dcim_itop_inventory_sync.py | Every 5 mins | HTTP REST | PostgreSQL | iTop CMDB | Server (5) hardware spec |
 
 ### 4. Kafka Topics
 
@@ -218,10 +226,11 @@ flowchart LR
 
 | System | Host | Port | Database/Index | Purpose | Retention |
 |--------|------|------|----------------|---------|-----------|
-| PostgreSQL | 192.168.100.115 | 5432 | dcim_sot | Historical events, CMDB cache | Partitioned (daily) |
+| PostgreSQL | localhost (Docker) | 5432 | dcim_sot | Historical events, CMDB cache | Partitioned (daily) |
 | Elasticsearch | 10.70.0.56 | 9200 | dcim-metrics-unified-* / dcim-alerts | Time-series metrics + alerts | 90 days |
 | Redis | localhost | 6379 | DB 0 | Enrichment cache | TTL 3600s |
-| Ralph CMDB | 192.168.100.115 | 8088 | N/A | Asset inventory | Permanent |
+| Ralph Asset Repository | localhost (Docker) | 8082 | N/A | Physical Asset Management | Permanent |
+| iTop CMDB | localhost | 8080 | N/A | IT Service Management & Asset Inventory | Permanent |
 | Kafka | localhost | 9092 | N/A | Message broker | 7-30 days |
 
 ---
@@ -238,7 +247,7 @@ NiFi Enrichment → Kafka Enriched → Elasticsearch/PostgreSQL → Kibana
 ```
 Server Redfish → server_inventory_to_pg.py → PostgreSQL dcim_events
 Device (NAS/Network/CCTV) → Telegraf → Kafka → ... → PostgreSQL dcim_events
-PostgreSQL dcim_events → ralph_cmdb_sync.py → Ralph CMDB
+PostgreSQL dcim_events → ralph_cmdb_sync.py → Ralph Asset Repository
 ```
 
 ### Commissioning / Decommissioning Automation (v3.5.5)
@@ -282,7 +291,7 @@ Enrichment API ← NiFi Lookup → Enriched Events
 
 ## Performance Metrics
 
-- **Total Devices**: 38 monitored inventory devices (5 servers, 1 UPS, 6 NAS, 5 network, 21 CCTV/NVR registered/monitored scope; CCTV channel inventory can include 31 camera channels)
+- **Total Devices**: 48 monitored inventory devices (5 servers, 1 UPS, 6 NAS, 5 network, 31 CCTV/NVR registered/monitored scope; CCTV channel inventory can include 31 camera channels)
 - **Polling Interval**: 120 seconds (2 minutes)
 - **Events per Day**: ~35,280 (49 devices × 720 polls/day)
 - **Kafka Throughput**: ~190 msg/min
@@ -303,7 +312,7 @@ Enrichment API ← NiFi Lookup → Enriched Events
 **Perubahan**: Kembalikan server inventory ke unified pipeline (PostgreSQL sebagai Single Source of Truth)
 
 ### Masalah Sebelumnya (v3.4)
-- Server inventory menggunakan **dual architecture**: `server_deep_sync.py` langsung ke Ralph CMDB (bypass PostgreSQL)
+- Server inventory menggunakan **dual architecture**: `server_deep_sync.py` langsung ke Ralph Asset Repository (bypass PostgreSQL)
 - Melanggar prinsip **Single Source of Truth** (PostgreSQL)
 - Script `server_redfish_to_pg.py` broken (deprecated skill-based architecture)
 - Server inventory fields di PostgreSQL tetap NULL
