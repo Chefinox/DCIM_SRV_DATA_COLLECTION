@@ -7,5 +7,5 @@ Type=oneshot
 User=infra
 Group=infra
 WorkingDirectory=/home/infra/dcim_metrics_project/scripts
-ExecStart=/usr/bin/python3 /home/infra/dcim_metrics_project/scripts/ralph_sync_agent.py
+ExecStart=/usr/bin/python3 /home/infra/dcim_metrics_project/scripts/ralph_cmdb_sync.py
 EnvironmentFile=/home/infra/dcim_metrics_project/configs/.env

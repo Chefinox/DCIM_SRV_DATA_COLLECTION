@@ -1,0 +1,6 @@
+logs/*.log*
+logs/*.gz
+logs/*.1
+.venv*/
+tmp_*
+scripts/tmp_*

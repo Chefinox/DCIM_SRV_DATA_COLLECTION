@@ -6,7 +6,7 @@ After=network.target dcim-redis.service
 Type=simple
 User=infra
 WorkingDirectory=/home/infra/dcim_metrics_project/phase2
-ExecStart=/usr/bin/python3 /home/infra/dcim_metrics_project/phase2/cmdb_to_cache_sync.py
+ExecStart=/usr/bin/python3 /home/infra/dcim_metrics_project/scripts/cmdb_to_cache_sync.py
 Restart=always
 RestartSec=5
 

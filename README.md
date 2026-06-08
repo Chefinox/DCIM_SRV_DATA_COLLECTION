@@ -12,7 +12,7 @@ Unified DCIM telemetry and inventory management system using 4-layer decoupled a
 
 ```
 Device → Telegraf/Script → Kafka Raw → Normalizer → Kafka Normalized → 
-NiFi Enrichment → Kafka Enriched → PostgreSQL/Elasticsearch → Ralph CMDB/Alerts
+NiFi Enrichment → Kafka Enriched → PostgreSQL/Elasticsearch → iTop CMDB (Primary) / Ralph (Asset Repo)
 ```
 
 ### Monitored Infrastructure
@@ -114,11 +114,15 @@ Device → Telegraf → Kafka Raw → Normalizer → Kafka Normalized →
 NiFi Enrichment → Kafka Enriched → Elasticsearch/PostgreSQL → Kibana
 ```
 
-### Inventory Pipeline (Daily)
+### Inventory Pipeline (Hybrid)
 ```
+1. Real-time CMDB:
+Kafka (dcim.normalized.events) → dcim_itop_unified_consumer.py → iTop CMDB (Auto-create CI)
+
+2. Batch Asset Sync (Daily):
 Server Redfish → server_inventory_to_pg.py → PostgreSQL dcim_events
 Device (NAS/Network/CCTV) → Telegraf → Kafka → ... → PostgreSQL dcim_events
-PostgreSQL dcim_events → ralph_cmdb_sync.py → Ralph CMDB
+PostgreSQL dcim_events → ralph_cmdb_sync.py → Ralph Asset Repository
 ```
 
 ### Commissioning / Decommissioning Automation (v3.5.5)
@@ -135,7 +139,8 @@ PostgreSQL dcim_events → ralph_cmdb_sync.py → Ralph CMDB
 - **Cache**: Redis 6.x
 - **Time-series DB**: Elasticsearch 7.x
 - **Relational DB**: PostgreSQL 14
-- **CMDB**: Ralph (192.168.101.73:8088)
+- **CMDB (Primary)**: iTop (10.70.0.56:8080)
+- **Asset Repository**: Ralph (10.70.0.56:8082)
 - **Visualization**: Kibana 7.x
 - **Data Collection**: Telegraf, Python
 
