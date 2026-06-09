@@ -1,0 +1,706 @@
+#!/usr/bin/env python3
+"""
+Netbox → iTop Connector v1
+Syncs interfaces and cable connections from Netbox to iTop CMDB.
+
+Strategy:
+  - Only ADDS interfaces/cables that don't exist yet (idempotent, non-destructive)
+  - Does NOT overwrite data created by the Kafka pipeline (dcim-itop-unified)
+  - Stores cable info in PhysicalInterface.comment field
+  - Stores raw cable data in PostgreSQL netbox_cables table
+
+Usage:
+  python3 netbox_to_itop_connector.py              # One-shot sync
+  python3 netbox_to_itop_connector.py --daemon      # Run as daemon (every 3600s)
+  python3 netbox_to_itop_connector.py --dry-run     # Preview changes without writing
+"""
+
+import json
+import logging
+import os
+import signal
+import sys
+import time
+from datetime import datetime, timezone
+
+import psycopg2
+import requests
+
+# ─── Configuration ────────────────────────────────────────────────────────────
+ITOP_URL      = "http://localhost:8080/webservices/rest.php?version=1.3"
+ITOP_USER     = "admin"
+ITOP_PASS     = "Inovasi@0918"
+
+NETBOX_URL    = "http://10.70.0.20:9008"
+NETBOX_TOKEN  = "w6ik0rigeZ9q0OfKL0dgiUvTUXhl4bR8We7dHgLS"
+
+DB_HOST       = "localhost"
+DB_NAME       = "dcim_sot"
+DB_USER       = "sot_admin"
+DB_PASS       = "Inovasi@0918"
+
+ORG_ID        = "1"
+SYNC_INTERVAL = 3600  # seconds between syncs in daemon mode
+
+# ─── Logging ──────────────────────────────────────────────────────────────────
+logging.basicConfig(
+    format="%(asctime)s %(levelname)-8s [netbox-connector] %(message)s",
+    level=logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("netbox_connector")
+
+# ─── Signal handling ──────────────────────────────────────────────────────────
+_STOP = False
+
+def _handle_signal(signum, frame):
+    global _STOP
+    logger.info("Received signal %s, shutting down...", signum)
+    _STOP = True
+
+signal.signal(signal.SIGTERM, _handle_signal)
+signal.signal(signal.SIGINT, _handle_signal)
+
+# ─── Name Mapping: Netbox → iTop ─────────────────────────────────────────────
+# Netbox uses "FALAH01-" prefix; iTop uses shorter names.
+# Most devices follow pattern: strip prefix + fix case.
+# NAS and some special devices need explicit mapping.
+
+# Explicit overrides for devices that don't follow the simple pattern
+NAME_MAP = {
+    "FALAH01-NAS-01": "NAS-INFRA",
+    "FALAH01-NAS-02": "NAS-FAT",
+    "FALAH01-NAS-03": "NAS-SD01",
+    "FALAH01-NAS-04": "NAS-CD01",
+    "FALAH01-NAS-05": "NAS-CD02",
+    "FALAH01-NAS-06": "NAS-FIT",
+    "FALAH01-UPS-3PHASE-30kVA": "UPS-FIT",
+    "FALAH01-NVR-HIKVISION": "NVR-FIT",
+    "FALAH01-PC-RENDER-01": "PC-Render-01",
+    "FALAH01-PC-RENDER-02": "PC-Render-02",
+    "FALAH01-PC-RENDER-03": "PC-Render-03",
+    "FALAH01-PC-RENDER-04": "PC-Render-04",
+}
+
+
+def nb_to_itop_name(nb_name: str) -> str:
+    """Convert Netbox device name to iTop device name."""
+    if nb_name in NAME_MAP:
+        return NAME_MAP[nb_name]
+    # Generic pattern: strip FALAH01- prefix
+    if nb_name.startswith("FALAH01-"):
+        return nb_name[len("FALAH01-"):]
+    return nb_name
+
+
+# ─── Interface Name Mapping: Netbox → iTop ───────────────────────────────────
+# Netbox uses "Ethernet 1", "Ethernet 2", etc.
+# Kafka pipeline (Redfish) uses "NIC1", "NIC2", etc.
+# This mapping is for Lenovo servers where Redfish reports NICs differently.
+IFACE_NAME_MAP = {
+    "Ethernet 1": "NIC1",
+    "Ethernet 2": "NIC2",
+    "Ethernet 3": "NIC3",
+    "Ethernet 4": "NIC4",
+    "XCC": "XCC",
+}
+
+def nb_to_itop_iface_name(nb_iface_name: str) -> str:
+    """Convert Netbox interface name to iTop interface name."""
+    return IFACE_NAME_MAP.get(nb_iface_name, nb_iface_name)
+
+
+# ─── Netbox Client ────────────────────────────────────────────────────────────
+class NetboxClient:
+    def __init__(self):
+        self.base = NETBOX_URL.rstrip("/")
+        self.session = requests.Session()
+        self.session.headers.update({
+            "Authorization": f"Token {NETBOX_TOKEN}",
+            "Accept": "application/json",
+        })
+
+    def _get_page(self, url: str, params: dict = None) -> dict:
+        resp = self.session.get(url, params=params, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+
+    def list_all(self, path: str) -> list:
+        """Fetch all pages from a Netbox API endpoint."""
+        url = f"{self.base}{path}" if not path.startswith("http") else path
+        results = []
+        data = self._get_page(url, {"limit": 200})
+        results.extend(data.get("results", []))
+        while data.get("next"):
+            data = self._get_page(data["next"])
+            results.extend(data.get("results", []))
+        return results
+
+    def get_devices(self) -> list:
+        return self.list_all("/api/dcim/devices/")
+
+    def get_interfaces(self, device_id: int = None) -> list:
+        path = "/api/dcim/interfaces/"
+        if device_id:
+            return self.list_all(f"{path}?device_id={device_id}")
+        return self.list_all(path)
+
+    def get_cables(self) -> list:
+        return self.list_all("/api/dcim/cables/")
+
+
+# ─── iTop Client ──────────────────────────────────────────────────────────────
+class ITopClient:
+    def __init__(self, dry_run: bool = False):
+        self.dry_run = dry_run
+        self.session = requests.Session()
+
+    def _post(self, payload: dict) -> dict:
+        resp = self.session.post(
+            ITOP_URL,
+            data={
+                "auth_user": ITOP_USER,
+                "auth_pwd":  ITOP_PASS,
+                "json_data": json.dumps(payload),
+            },
+            timeout=60,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        if body.get("code") not in (0, None):
+            raise RuntimeError(f"iTop API error: {body}")
+        return body
+
+    def find(self, class_name: str, oql: str) -> tuple:
+        """Returns (object_id_str, fields_dict) or (None, None)."""
+        body = self._post({
+            "operation": "core/get",
+            "class": class_name,
+            "key": oql,
+            "output_fields": "*",
+        })
+        objs = body.get("objects") or {}
+        if not objs:
+            return None, None
+        first_key = next(iter(objs.keys()))
+        first_id = first_key.split("::")[-1]
+        return first_id, objs[first_key]["fields"]
+
+    def find_all(self, class_name: str, oql: str) -> dict:
+        """Returns {object_id_str: fields_dict} for all matches."""
+        body = self._post({
+            "operation": "core/get",
+            "class": class_name,
+            "key": oql,
+            "output_fields": "*",
+        })
+        objs = body.get("objects") or {}
+        result = {}
+        for k, v in objs.items():
+            oid = k.split("::")[-1]
+            result[oid] = v.get("fields", {})
+        return result
+
+    def create(self, class_name: str, fields: dict, comment: str = "netbox-connector") -> str:
+        if self.dry_run:
+            logger.info("  [DRY-RUN] CREATE %s fields=%s", class_name, {k: v for k, v in fields.items() if v})
+            return "dry-run"
+        body = self._post({
+            "operation": "core/create",
+            "class": class_name,
+            "fields": {k: v for k, v in fields.items() if v not in (None, "")},
+            "comment": comment,
+        })
+        objs = body.get("objects") or {}
+        if objs:
+            new_id = next(iter(objs.keys())).split("::")[-1]
+            return new_id
+        return None
+
+    def update(self, class_name: str, obj_id: str, fields: dict, comment: str = "netbox-connector") -> bool:
+        clean = {k: v for k, v in fields.items() if v not in (None, "")}
+        if not clean:
+            return True
+        if self.dry_run:
+            logger.info("  [DRY-RUN] UPDATE %s id=%s fields=%s", class_name, obj_id, clean)
+            return True
+        body = self._post({
+            "operation": "core/update",
+            "class": class_name,
+            "key": obj_id,
+            "fields": clean,
+            "comment": comment,
+        })
+        return body.get("code") == 0
+
+    def get_devices_by_class(self, class_name: str) -> dict:
+        """Get all devices of a given class. Returns {name: (id, fields)}."""
+        result = self.find_all(class_name, f"SELECT {class_name}")
+        return {v.get("name", ""): (k, v) for k, v in result.items()}
+
+    def get_interfaces_for_device(self, device_id: str) -> dict:
+        """Get all PhysicalInterface objects for a device. Returns {name: (id, fields)}."""
+        result = self.find_all(
+            "PhysicalInterface",
+            f"SELECT PhysicalInterface WHERE connectableci_id = {device_id}",
+        )
+        return {v.get("name", ""): (k, v) for k, v in result.items()}
+
+
+# ─── PostgreSQL ───────────────────────────────────────────────────────────────
+def get_db_conn():
+    return psycopg2.connect(
+        host=DB_HOST, dbname=DB_NAME, user=DB_USER, password=DB_PASS
+    )
+
+
+def upsert_cable(conn, cable: dict, a_dev: str, a_iface: str, b_dev: str, b_iface: str):
+    """Insert or update cable record in netbox_cables table."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO netbox_cables (nb_cable_id, cable_type, cable_status, label,
+                                       a_device, a_interface, b_device, b_interface, last_synced)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (nb_cable_id) DO UPDATE SET
+                cable_type = EXCLUDED.cable_type,
+                cable_status = EXCLUDED.cable_status,
+                label = EXCLUDED.label,
+                a_device = EXCLUDED.a_device,
+                a_interface = EXCLUDED.a_interface,
+                b_device = EXCLUDED.b_device,
+                b_interface = EXCLUDED.b_interface,
+                last_synced = NOW()
+        """, (
+            cable.get("id"),
+            (cable.get("type") or {}).get("value") if isinstance(cable.get("type"), dict) else cable.get("type"),
+            (cable.get("status") or {}).get("value") if isinstance(cable.get("status"), dict) else cable.get("status"),
+            cable.get("label") or cable.get("display") or "",
+            a_dev, a_iface, b_dev, b_iface,
+        ))
+
+
+# ─── Main Sync Logic ─────────────────────────────────────────────────────────
+class NetboxConnector:
+    def __init__(self, dry_run: bool = False):
+        self.dry_run = dry_run
+        self.nb = NetboxClient()
+        self.itop = ITopClient(dry_run)
+        self.stats = {
+            "interfaces_created": 0,
+            "interfaces_skipped": 0,
+            "interfaces_updated": 0,
+            "cables_synced": 0,
+            "devices_matched": 0,
+            "devices_not_found": 0,
+            "links_created": 0,
+        }
+
+    def run(self):
+        logger.info("=" * 60)
+        logger.info("Netbox → iTop Connector sync started (dry_run=%s)", self.dry_run)
+
+        # 1. Build device mapping: Netbox name → iTop name → iTop device info
+        logger.info("Step 1: Building device mapping...")
+        nb_devices = self.nb.get_devices()
+        logger.info("  Found %d devices in Netbox", len(nb_devices))
+
+        # Gather all iTop devices across classes that support PhysicalInterface
+        # Only ConnectableCI subclasses can have interfaces (Server, NAS, NetworkDevice)
+        CONNECTABLE_CLASSES = ["Server", "NAS", "NetworkDevice"]
+        itop_devices = {}  # itop_name → (itop_class, itop_id, itop_fields)
+        for cls in CONNECTABLE_CLASSES:
+            for name, (oid, fields) in self.itop.get_devices_by_class(cls).items():
+                itop_devices[name] = (cls, oid, fields)
+        logger.info("  Found %d devices in iTop", len(itop_devices))
+
+        # Build Netbox→iTop mapping
+        device_map = {}  # nb_device_id → {itop_name, itop_class, itop_id, nb_name}
+        for nb_dev in nb_devices:
+            nb_name = nb_dev["name"]
+            itop_name = nb_to_itop_name(nb_name)
+            if itop_name in itop_devices:
+                cls, oid, _ = itop_devices[itop_name]
+                device_map[nb_dev["id"]] = {
+                    "itop_name": itop_name,
+                    "itop_class": cls,
+                    "itop_id": oid,
+                    "nb_name": nb_name,
+                }
+                self.stats["devices_matched"] += 1
+            else:
+                self.stats["devices_not_found"] += 1
+                logger.debug("  Netbox device '%s' (→ '%s') not found in iTop", nb_name, itop_name)
+
+        logger.info("  Matched %d devices, %d not found in iTop",
+                     self.stats["devices_matched"], self.stats["devices_not_found"])
+
+        # 2. Sync Cables → PostgreSQL (raw data)
+        logger.info("Step 2: Syncing cables to PostgreSQL...")
+        self._sync_cables_to_db()
+
+        # 3. Sync Interfaces → iTop PhysicalInterface
+        logger.info("Step 3: Syncing interfaces to iTop...")
+        self._sync_interfaces(device_map)
+
+        # 4. Enrich interfaces with cable connection info
+        logger.info("Step 4: Enriching interfaces with cable connection info...")
+        self._enrich_interfaces_with_cables(device_map)
+
+        # 5. Create device-to-device links (Server/NAS → NetworkDevice)
+        logger.info("Step 5: Creating device-to-device links...")
+        self._sync_device_links(device_map)
+
+        logger.info("Sync complete. Stats: %s", self.stats)
+        return self.stats
+
+    def _sync_cables_to_db(self):
+        """Fetch all cables from Netbox and store in PostgreSQL."""
+        cables = self.nb.get_cables()
+        logger.info("  Found %d cables in Netbox", len(cables))
+
+        conn = get_db_conn()
+        try:
+            for cable in cables:
+                a_terminations = cable.get("a_terminations") or []
+                b_terminations = cable.get("b_terminations") or []
+
+                a_dev = ""
+                a_iface = ""
+                b_dev = ""
+                b_iface = ""
+
+                if a_terminations:
+                    a_term = a_terminations[0]
+                    a_obj = a_term.get("object") or {}
+                    a_dev = (a_obj.get("device") or {}).get("name", "")
+                    a_iface = a_obj.get("name", "")
+
+                if b_terminations:
+                    b_term = b_terminations[0]
+                    b_obj = b_term.get("object") or {}
+                    b_dev = (b_obj.get("device") or {}).get("name", "")
+                    b_iface = b_obj.get("name", "")
+
+                upsert_cable(conn, cable, a_dev, a_iface, b_dev, b_iface)
+                self.stats["cables_synced"] += 1
+
+            conn.commit()
+            logger.info("  Synced %d cables to netbox_cables table", self.stats["cables_synced"])
+        except Exception as e:
+            conn.rollback()
+            logger.error("  Error syncing cables to DB: %s", e)
+            raise
+        finally:
+            conn.close()
+
+    def _sync_interfaces(self, device_map: dict):
+        """Sync Netbox interfaces to iTop PhysicalInterface (only add missing)."""
+        # Build cable lookup: (device_name, interface_name) → cable info
+        cable_lookup = self._build_cable_lookup()
+
+        for nb_dev_id, mapping in device_map.items():
+            itop_name = mapping["itop_name"]
+            itop_id = mapping["itop_id"]
+            nb_name = mapping["nb_name"]
+
+            # Get interfaces from Netbox for this device
+            try:
+                nb_interfaces = self.nb.get_interfaces(nb_dev_id)
+            except Exception as e:
+                logger.warning("  Failed to fetch Netbox interfaces for %s: %s", nb_name, e)
+                continue
+
+            if not nb_interfaces:
+                continue
+
+            # Get existing interfaces in iTop for this device
+            existing_ifaces = self.itop.get_interfaces_for_device(itop_id)
+            existing_names = set(existing_ifaces.keys())
+
+            # If device already has interfaces from Kafka pipeline (with MAC addresses),
+            # skip creating new ones from Netbox — only update comments
+            has_pipeline_ifaces = any(
+                (fields.get("macaddress") or "").strip()
+                for _, (_, fields) in existing_ifaces.items()
+            )
+
+            # Also build a set of existing names for fuzzy matching
+            # e.g., "NIC1" should match "Ethernet 1" for Lenovo servers
+            existing_names_lower = {n.lower(): n for n in existing_names}
+
+            for nb_iface in nb_interfaces:
+                iface_name = nb_iface.get("name", "")
+                if not iface_name:
+                    continue
+
+                # Build comment with connection info
+                comment = self._build_interface_comment(nb_name, iface_name, cable_lookup)
+
+                # Build speed from Netbox
+                speed_mbps = self._get_speed_mbps(nb_iface)
+
+                # Check if this Netbox interface already exists in iTop
+                # Try: exact match, case-insensitive, and IFACE_NAME_MAP (Ethernet 1 → NIC1)
+                matched_name = None
+                if iface_name in existing_names:
+                    matched_name = iface_name
+                elif iface_name.lower() in existing_names_lower:
+                    matched_name = existing_names_lower[iface_name.lower()]
+                else:
+                    # Try mapped name (Ethernet 1 → NIC1)
+                    mapped = nb_to_itop_iface_name(iface_name)
+                    if mapped != iface_name:
+                        if mapped in existing_names:
+                            matched_name = mapped
+                        elif mapped.lower() in existing_names_lower:
+                            matched_name = existing_names_lower[mapped.lower()]
+
+                if matched_name:
+                    # Interface already exists — only update comment if it has cable info
+                    # and the existing comment doesn't already have it
+                    iface_id, iface_fields = existing_ifaces[matched_name]
+                    existing_comment = iface_fields.get("comment", "")
+                    if comment and "Connected to:" in comment and "Connected to:" not in existing_comment:
+                        logger.info("  ↺ Updating comment for %s/%s", itop_name, matched_name)
+                        self.itop.update("PhysicalInterface", iface_id, {"comment": comment})
+                        self.stats["interfaces_updated"] += 1
+                    else:
+                        self.stats["interfaces_skipped"] += 1
+                    continue
+
+                # If device already has pipeline interfaces, skip creating Netbox duplicates
+                if has_pipeline_ifaces:
+                    self.stats["interfaces_skipped"] += 1
+                    continue
+
+                # Interface doesn't exist in iTop — create it
+                mac = (nb_iface.get("mac_address") or "").strip()
+                ip_addr = ""
+                # Try to get IP from primary_ip4
+                primary_ip = nb_iface.get("primary_ip4") or nb_iface.get("ip_addresses")
+                if isinstance(primary_ip, dict):
+                    ip_addr = primary_ip.get("address", "").split("/")[0]
+                elif isinstance(primary_ip, list) and primary_ip:
+                    ip_addr = primary_ip[0].get("address", "").split("/")[0]
+
+                fields = {
+                    "name": iface_name,
+                    "connectableci_id": itop_id,
+                    "macaddress": mac,
+                    "ipaddress": ip_addr,
+                    "speed": str(speed_mbps) if speed_mbps else "",
+                    "comment": comment or f"Netbox interface {nb_iface.get('id')}",
+                }
+
+                logger.info("  + Creating interface %s/%s (mac=%s)", itop_name, iface_name, mac or "none")
+                self.itop.create("PhysicalInterface", fields)
+                self.stats["interfaces_created"] += 1
+
+    def _build_cable_lookup(self) -> dict:
+        """Build lookup: (device_name, interface_name) → {peer_device, peer_interface, cable_type, cable_status}.
+        Also adds mapped interface names (Ethernet 1 → NIC1) for Lenovo servers."""
+        cables = self.nb.get_cables()
+        lookup = {}
+
+        for cable in cables:
+            a_terminations = cable.get("a_terminations") or []
+            b_terminations = cable.get("b_terminations") or []
+
+            if not a_terminations or not b_terminations:
+                continue
+
+            a_term = a_terminations[0].get("object") or {}
+            b_term = b_terminations[0].get("object") or {}
+
+            a_dev = (a_term.get("device") or {}).get("name", "")
+            a_iface = a_term.get("name", "")
+            b_dev = (b_term.get("device") or {}).get("name", "")
+            b_iface = b_term.get("name", "")
+
+            cable_type = ""
+            if isinstance(cable.get("type"), dict):
+                cable_type = cable["type"].get("label", cable["type"].get("value", ""))
+            elif cable.get("type"):
+                cable_type = str(cable["type"])
+
+            cable_status = ""
+            if isinstance(cable.get("status"), dict):
+                cable_status = cable["status"].get("label", cable["status"].get("value", ""))
+
+            info = {
+                "cable_id": cable.get("id"),
+                "cable_type": cable_type,
+                "cable_status": cable_status,
+            }
+
+            # A-end sees B-end as peer
+            lookup[(a_dev, a_iface)] = {**info, "peer_device": b_dev, "peer_interface": b_iface}
+            # B-end sees A-end as peer
+            lookup[(b_dev, b_iface)] = {**info, "peer_device": a_dev, "peer_interface": a_iface}
+
+            # Also add mapped interface names (Ethernet 1 → NIC1) for Lenovo servers
+            a_mapped = nb_to_itop_iface_name(a_iface)
+            b_mapped = nb_to_itop_iface_name(b_iface)
+            if a_mapped != a_iface:
+                lookup[(a_dev, a_mapped)] = {**info, "peer_device": b_dev, "peer_interface": b_iface}
+            if b_mapped != b_iface:
+                lookup[(b_dev, b_mapped)] = {**info, "peer_device": a_dev, "peer_interface": a_iface}
+
+        return lookup
+
+    def _build_interface_comment(self, nb_device: str, iface_name: str, cable_lookup: dict) -> str:
+        """Build a comment string with cable connection info."""
+        key = (nb_device, iface_name)
+        if key not in cable_lookup:
+            return ""
+
+        info = cable_lookup[key]
+        parts = [f"Connected to: {info['peer_device']}/{info['peer_interface']}"]
+        if info.get("cable_type"):
+            parts.append(f"Cable: {info['cable_type']}")
+        if info.get("cable_status"):
+            parts.append(f"Status: {info['cable_status']}")
+        return " | ".join(parts)
+
+    def _enrich_interfaces_with_cables(self, device_map: dict):
+        """Update existing iTop interfaces with cable connection info from Netbox."""
+        # This is already handled in _sync_interfaces via comment updates
+        pass
+
+    def _sync_device_links(self, device_map: dict):
+        """Create lnkConnectableCIToNetworkDevice links for Server/NAS → NetworkDevice connections."""
+        # Build cable lookup from DB (already synced in step 2)
+        conn = get_db_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT a_device, a_interface, b_device, b_interface, cable_type FROM netbox_cables")
+        cable_lookup = {}
+        for row in cur.fetchall():
+            a_dev, a_iface, b_dev, b_iface, ctype = row
+            cable_lookup[(a_dev.upper(), a_iface)] = (b_dev, b_iface, ctype)
+            cable_lookup[(b_dev.upper(), b_iface)] = (a_dev, a_iface, ctype)
+            # Also add mapped interface names
+            a_mapped = nb_to_itop_iface_name(a_iface)
+            b_mapped = nb_to_itop_iface_name(b_iface)
+            if a_mapped != a_iface:
+                cable_lookup[(a_dev.upper(), a_mapped)] = (b_dev, b_iface, ctype)
+            if b_mapped != b_iface:
+                cable_lookup[(b_dev.upper(), b_mapped)] = (a_dev, a_iface, ctype)
+        cur.close()
+        conn.close()
+
+        # Get existing links to avoid duplicates
+        existing_links = self.itop.find_all(
+            "lnkConnectableCIToNetworkDevice",
+            "SELECT lnkConnectableCIToNetworkDevice"
+        )
+        existing_pairs = set()
+        for _, fields in existing_links.items():
+            existing_pairs.add((fields.get("connectableci_id"), fields.get("networkdevice_id")))
+
+        # Get all NetworkDevice IDs in iTop
+        ndevs = self.itop.get_devices_by_class("NetworkDevice")
+        ndev_name_to_id = {name: oid for name, (oid, _) in ndevs.items()}
+
+        # Process each matched device
+        for nb_dev_id, mapping in device_map.items():
+            itop_name = mapping["itop_name"]
+            itop_id = mapping["itop_id"]
+            nb_name = mapping["nb_name"]
+            itop_class = mapping["itop_class"]
+
+            # Only process Server and NAS
+            if itop_class not in ("Server", "NAS"):
+                continue
+
+            nb_upper = nb_name.upper()
+
+            # Find all NetworkDevice connections from cable data
+            connected_ndevs = {}  # ndev_itop_name → (device_port, network_port)
+            for (cable_dev, cable_iface), (peer_dev, peer_iface, ctype) in cable_lookup.items():
+                if cable_dev == nb_upper:
+                    peer_itop = nb_to_itop_name(peer_dev)
+                    if peer_itop in ndev_name_to_id:
+                        if peer_itop not in connected_ndevs:
+                            connected_ndevs[peer_itop] = (cable_iface, peer_iface)
+
+            # Create links
+            for ndev_name, (device_port, network_port) in connected_ndevs.items():
+                ndev_id = ndev_name_to_id[ndev_name]
+                if (itop_id, ndev_id) in existing_pairs:
+                    continue
+
+                self.itop.create("lnkConnectableCIToNetworkDevice", {
+                    "connectableci_id": itop_id,
+                    "networkdevice_id": ndev_id,
+                    "network_port": network_port,
+                    "device_port": device_port,
+                    "connection_type": "downlink",
+                })
+                self.stats["links_created"] = self.stats.get("links_created", 0) + 1
+                logger.info("  ✓ %s → %s (%s→%s)", itop_name, ndev_name, device_port, network_port)
+
+    def _get_speed_mbps(self, iface: dict) -> int:
+        """Extract interface speed in Mbps from Netbox interface data."""
+        # Netbox may have 'speed' directly or in type
+        speed = iface.get("speed")
+        if speed:
+            return int(speed)
+
+        # Try to infer from type label
+        type_info = iface.get("type") or {}
+        type_label = ""
+        if isinstance(type_info, dict):
+            type_label = type_info.get("label", type_info.get("value", "")).lower()
+        elif isinstance(type_info, str):
+            type_label = type_info.lower()
+
+        speed_map = {
+            "100base-tx": 100,
+            "1000base-t": 1000,
+            "1000base-x": 1000,
+            "10gbase-t": 10000,
+            "10gbase-x": 10000,
+            "25gbase-x": 25000,
+            "40gbase-x": 40000,
+            "100gbase-x": 100000,
+            "sfp+": 10000,
+            "sfp": 1000,
+            "qsfp+": 40000,
+            "qsfp28": 100000,
+        }
+        for key, val in speed_map.items():
+            if key in type_label:
+                return val
+
+        return 0
+
+
+# ─── Entry Point ──────────────────────────────────────────────────────────────
+def main():
+    dry_run = "--dry-run" in sys.argv
+    daemon = "--daemon" in sys.argv
+
+    if dry_run:
+        logger.info("Running in DRY-RUN mode — no changes will be made")
+
+    while not _STOP:
+        try:
+            connector = NetboxConnector(dry_run=dry_run)
+            connector.run()
+        except Exception as e:
+            logger.exception("Sync failed: %s", e)
+
+        if not daemon:
+            break
+
+        logger.info("Next sync in %d seconds...", SYNC_INTERVAL)
+        for _ in range(SYNC_INTERVAL):
+            if _STOP:
+                break
+            time.sleep(1)
+
+    logger.info("Connector stopped.")
+
+
+if __name__ == "__main__":
+    main()
