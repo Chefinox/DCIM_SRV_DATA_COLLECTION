@@ -65,8 +65,9 @@ def get_server_hardware(hostname):
             
         new_ram = ""
         if mem_comps:
-            total_ram_bytes = sum([m.get("capacity_bytes", 0) for m in mem_comps])
-            total_ram_gb = int(total_ram_bytes / (1024**3))
+            # Memory 'size' is in MiB (from server_inventory_to_pg.py)
+            total_ram_mb = sum([m.get("size", 0) or m.get("size_mb", 0) or m.get("capacity_bytes", 0) // (1024*1024) for m in mem_comps])
+            total_ram_gb = int(total_ram_mb / 1024)
             if total_ram_gb > 0:
                 new_ram = f"{total_ram_gb} GB"
                 
