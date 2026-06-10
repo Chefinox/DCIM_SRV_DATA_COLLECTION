@@ -68,12 +68,12 @@ signal.signal(signal.SIGINT, _handle_signal)
 
 # Explicit overrides for devices that don't follow the simple pattern
 NAME_MAP = {
-    "FALAH01-NAS-01": "NAS-INFRA",
-    "FALAH01-NAS-02": "NAS-FAT",
-    "FALAH01-NAS-03": "NAS-SD01",
-    "FALAH01-NAS-04": "NAS-CD01",
-    "FALAH01-NAS-05": "NAS-CD02",
-    "FALAH01-NAS-06": "NAS-FIT",
+    "FALAH01-NAS-01": "NAS-FIT",
+    "FALAH01-NAS-02": "NAS-CD01",
+    "FALAH01-NAS-03": "NAS-CD02",
+    "FALAH01-NAS-04": "NAS-FAT",
+    "FALAH01-NAS-05": "NAS-INFRA",
+    "FALAH01-NAS-06": "NAS-SD01",
     "FALAH01-UPS-3PHASE-30kVA": "UPS-FIT",
     "FALAH01-NVR-HIKVISION": "NVR-FIT",
     "FALAH01-PC-RENDER-01": "PC-Render-01",
