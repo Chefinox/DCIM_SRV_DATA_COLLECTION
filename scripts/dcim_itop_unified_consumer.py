@@ -500,25 +500,34 @@ class ITopClient:
 
     def get_or_create_local_storage_system(self, hostname, org_id, location_id="0"):
         name = f"Local Storage - {hostname}"
-        body = self._post({
-            "operation": "core/get",
-            "class": "StorageSystem",
-            "key": f"SELECT StorageSystem WHERE name = '{name}'",
-            "output_fields": "id,location_id"
-        })
-        objs = body.get("objects", {})
-        if objs:
-            key = list(objs.keys())[0]
-            obj_id = key.split("::")[1] if "::" in key else key
-            current_loc = objs[key]["fields"].get("location_id")
-            if location_id != "0" and current_loc != location_id:
-                self._post({
-                    "operation": "core/update",
-                    "class": "StorageSystem",
-                    "key": obj_id,
-                    "fields": {"location_id": location_id}
-                })
-            return obj_id
+        
+        # Try exact name first, then alternate (SRV- vs SERVER-)
+        names_to_try = [name]
+        if hostname.startswith("SERVER-"):
+            names_to_try.append(f"Local Storage - SRV-{hostname[7:]}")
+        elif hostname.startswith("SRV-"):
+            names_to_try.append(f"Local Storage - SERVER-{hostname[4:]}")
+        
+        for try_name in names_to_try:
+            body = self._post({
+                "operation": "core/get",
+                "class": "StorageSystem",
+                "key": f"SELECT StorageSystem WHERE name = '{try_name}'",
+                "output_fields": "id,location_id"
+            })
+            objs = body.get("objects", {})
+            if objs:
+                key = list(objs.keys())[0]
+                obj_id = key.split("::")[1] if "::" in key else key
+                current_loc = objs[key]["fields"].get("location_id")
+                if location_id != "0" and current_loc != location_id:
+                    self._post({
+                        "operation": "core/update",
+                        "class": "StorageSystem",
+                        "key": obj_id,
+                        "fields": {"location_id": location_id}
+                    })
+                return obj_id
             
         res = self._post({
             "operation": "core/create",
