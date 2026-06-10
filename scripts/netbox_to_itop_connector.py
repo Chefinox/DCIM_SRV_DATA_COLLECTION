@@ -482,11 +482,21 @@ class NetboxConnector:
                                 break
 
                 if matched_name:
-                    # Interface already exists — only update comment if it has cable info
-                    # and the existing comment doesn't already have it
+                    # Interface already exists — update comment if:
+                    # 1. New comment has cable info and old doesn't
+                    # 2. New comment has bonding info and old doesn't
                     iface_id, iface_fields = existing_ifaces[matched_name]
                     existing_comment = iface_fields.get("comment", "")
-                    if comment and "Connected to:" in comment and "Connected to:" not in existing_comment:
+                    should_update = False
+                    if comment and "Connected to:" in comment:
+                        if "Connected to:" not in existing_comment:
+                            should_update = True
+                        elif ("Bonding" in comment or "Teaming" in comment) and "Bonding" not in existing_comment and "Teaming" not in existing_comment:
+                            should_update = True
+                        elif comment != existing_comment and "links):" in comment:
+                            # New comment has bonding count, old doesn't
+                            should_update = True
+                    if should_update:
                         logger.info("  ↺ Updating comment for %s/%s", itop_name, matched_name)
                         self.itop.update("PhysicalInterface", iface_id, {"comment": comment})
                         self.stats["interfaces_updated"] += 1
