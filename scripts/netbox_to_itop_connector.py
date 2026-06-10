@@ -596,6 +596,8 @@ class NetboxConnector:
                     "cable_id": cable.get("id"),
                     "cable_type": cable_type,
                     "cable_status": cable_status,
+                    "cable_label": cable.get("label", ""),
+                    "termination_count": max(len(a_terminations), len(b_terminations)),
                 }
 
                 # A-end sees B-end as peer
@@ -629,7 +631,20 @@ class NetboxConnector:
 
         info = cable_lookup[key]
         parts = [f"Connected to: {info['peer_device']}/{info['peer_interface']}"]
-        if info.get("cable_type"):
+        
+        # Add bonding/LACP info from cable label
+        cable_label = info.get("cable_label", "")
+        term_count = info.get("termination_count", 1)
+        if term_count > 1:
+            # Multi-termination = bonding/LACP/teaming
+            bonding_type = "Bonding/LACP" if "bond" in cable_label.lower() else "Team"
+            if "teaming" in cable_label.lower() or "team" in cable_label.lower():
+                bonding_type = "Teaming"
+            parts.append(f"{bonding_type} ({term_count} links): {cable_label}")
+        elif cable_label:
+            parts.append(f"Cable: {cable_label}")
+            
+        if info.get("cable_type") and not cable_label:
             parts.append(f"Cable: {info['cable_type']}")
         if info.get("cable_status"):
             parts.append(f"Status: {info['cable_status']}")
@@ -809,7 +824,7 @@ class NetboxConnector:
                     "networkdevice_id": ndev_id,
                     "network_port": network_port,
                     "device_port": device_port,
-                    "connection_type": "downlink",
+                    "connection_type": "uplink",
                 })
                 self.stats["links_created"] = self.stats.get("links_created", 0) + 1
                 logger.info("  ✓ %s → %s (%s→%s)", itop_name, ndev_name, device_port, network_port)
