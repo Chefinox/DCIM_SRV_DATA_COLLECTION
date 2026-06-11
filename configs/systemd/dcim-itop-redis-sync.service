@@ -1,0 +1,16 @@
+[Unit]
+Description=DCIM Redis Cache Sync — iTop to Redis (v4.0)
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+ExecStart=/usr/bin/python3 scripts/itop_to_cache_sync.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/infra/dcim_metrics_project/logs/itop_cache_sync.log
+StandardError=append:/home/infra/dcim_metrics_project/logs/itop_cache_sync.log
+
+[Install]
+WantedBy=multi-user.target
