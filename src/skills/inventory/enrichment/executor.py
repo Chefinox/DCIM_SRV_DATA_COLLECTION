@@ -28,39 +28,27 @@ try:
 except Exception as e:
     logger.error(f"Failed to connect to Redis: {e}")
 
-def lookup_sql_fallback(serial_number: str):
-    try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cur = conn.cursor()
-        query = """
-            SELECT hostname, serial_number, site, manufacturer, model, 
-                   rack_name, rack_position, asset_status, business_unit, environment
-            FROM unified_assets 
-            WHERE LOWER(serial_number) = %s OR LOWER(hostname) = %s
-            LIMIT 1
-        """
-        cur.execute(query, (serial_number.lower(), serial_number.lower()))
-        row = cur.fetchone()
-        if row:
-            # Menggunakan logika ekstraksi v3.4 yang tersimpan di schemas
-            meta = extract_metadata(row)
-            redis_client.setex(f"asset:{serial_number.lower()}", 3600, json.dumps(meta))
-            logger.info(f"Fallback Hit: Asset {serial_number} found in SQL and cached.")
-            return meta
-        cur.close()
-        conn.close()
-    except Exception as e:
-        logger.error(f"SQL Fallback failed: {e}")
-    return None
 
 def determine_enrichment_status(serial_number: str, data: dict) -> str:
+    """Determine enrichment completeness status.
+    Supports both iTop-sourced metadata (v4.0) and legacy PG-sourced metadata (v3.x).
+    """
     if not serial_number or serial_number.upper() in ("NO_IDENTIFIER", "NO_SN", "UNKNOWN", ""):
         return "NO_IDENTIFIER"
     if not data or data.get("is_fallback_placeholder"):
         return "NOT_IN_CMDB"
-    has_site = bool(data.get("site") and data.get("site") != "Unknown")
-    has_rack = bool(data.get("rack_name") and data.get("rack_name") != "Unknown")
-    return "FULL" if (has_site and has_rack) else "PARTIAL"
+    # v4.0 (iTop): 'location', 'rack', 'brand', 'model', 'ci_class'
+    # v3.x (legacy): 'site', 'rack_name', 'manufacturer', 'model', 'device_type'
+    has_site = bool(data.get("location") or data.get("site"))
+    has_rack = bool(data.get("rack") or (data.get("rack_name") and data.get("rack_name") != "Unknown"))
+    has_identity = bool(
+        (data.get("brand") and data.get("model"))
+        or (data.get("manufacturer") and data.get("manufacturer") != "Unknown" and data.get("model"))
+    )
+    ci_class = data.get("ci_class") or data.get("device_type") or ""
+    if ci_class.lower() in ("peripheral", "cctv") or data.get("ralph_endpoint") == "back-office-assets":
+        return "FULL" if (has_site and has_identity) else "PARTIAL"
+    return "FULL" if (has_site and has_rack and has_identity) else "PARTIAL"
 
 @app.get("/enrich/{identifier}")
 def get_enrichment(identifier: str):
@@ -79,15 +67,32 @@ def get_enrichment(identifier: str):
             "enrichment_match_method": "blocked",
             "enrichment_match_confidence": "none"
         }
-    data_str = redis_client.get(f"asset:{ident_clean.lower()}")
+    # Try with sn: prefix first (primary lookup)
+    data_str = redis_client.get(f"asset:sn:{ident_clean.lower()}")
     data = json.loads(data_str) if data_str else None
     method = "serial_number"
     confidence = "high"
+    
+    # Fallback to old format without sn: prefix (legacy compatibility)
     if not data:
-        data = lookup_sql_fallback(ident_clean)
+        data_str = redis_client.get(f"asset:{ident_clean.lower()}")
+        data = json.loads(data_str) if data_str else None
         if data:
-            method = "sql_fallback"
-            confidence = "medium"
+            method = "cache_fallback"
+
+    # Cache miss — return empty enrichment (no SQL fallback, v4.0 iTop metadata authority)
+    if not data:
+        logger.warning(f"Cache miss for SN: {ident_clean} — returning empty enrichment")
+        redis_client.sadd("unknown_assets", ident_clean.lower())
+        return {
+            "sn": ident_clean,
+            "enriched": False,
+            "enrichment_status": "NOT_IN_CMDB",
+            "enrichment_match_method": "none",
+            "enrichment_match_confidence": "none",
+            "reason": "cache_miss"
+        }
+
     status = determine_enrichment_status(ident_clean, data)
     if data:
         data["enrichment_status"] = status
