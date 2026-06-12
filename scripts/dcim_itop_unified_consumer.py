@@ -49,8 +49,12 @@ CACHE_TTL    = 120   # detik — TTL cache per CI (2 menit)
 LOCK_TTL     = 30    # detik — distributed lock timeout
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-logger = logging.getLogger(__name__)
+import sys
+if "/home/infra/dcim_metrics_project" not in sys.path:
+    sys.path.append("/home/infra/dcim_metrics_project")
+
+from src.observability.logging.dcim_logger import setup_logger
+logger = setup_logger("itop-unified-consumer", "/home/infra/dcim_metrics_project/logs/dcim_itop_unified_consumer.log")
 
 # ─── Redis ───────────────────────────────────────────────────────────────────
 r_cache = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=1, decode_responses=True)
@@ -692,7 +696,7 @@ def resolve_extra_fields(data: dict, class_name: str, ci_name: str, itop_client,
         loc_id = itop_client.get_or_create_location(loc_name, org_id)
         if loc_id and loc_id != "0":
             extra["location_id"] = loc_id
-            if rack_name:
+            if rack_name and class_name not in ("PowerSource", "PowerConnection"):
                 rack_id = itop_client.get_or_create_rack(rack_name, loc_id, org_id)
                 if rack_id and rack_id != "0":
                     extra["rack_id"] = rack_id
@@ -1087,11 +1091,11 @@ def process_message(msg_val: str, itop_client: ITopClient, auto_org_id: str) -> 
                     fields_to_update["model_id"] = model_id
 
     # Enrich serialnumber jika masih kosong
-    if serial_number and not current_serial:
+    if serial_number and not current_serial and class_name != "PowerSource":
         fields_to_update["serialnumber"] = serial_number
 
     # Enrich asset_number jika masih kosong (pakai serial sebagai fallback)
-    if serial_number and class_name in ("Server", "NetworkDevice", "StorageSystem", "NAS", "PowerSource"):
+    if serial_number and class_name in ("Server", "NetworkDevice", "StorageSystem", "NAS"):
         if not obj_fields.get("asset_number"):
             fields_to_update["asset_number"] = serial_number
 

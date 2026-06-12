@@ -37,20 +37,11 @@ if "/home/infra/dcim_metrics_project" not in sys.path:
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
-LOG_DIR = "/home/infra/dcim_metrics_project/logs"
-os.makedirs(LOG_DIR, exist_ok=True)
-LOG_FILE = os.path.join(LOG_DIR, f"itop_to_ralph_sync_{datetime.now().strftime('%Y%m%d')}.log")
+logging.getLogger("requests").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[
-        logging.FileHandler(LOG_FILE),
-        logging.StreamHandler(),
-    ],
-)
-logger = logging.getLogger("itop_to_ralph_sync")
+from src.observability.logging.dcim_logger import setup_logger
+logger = setup_logger("itop-ralph-sync", "/home/infra/dcim_metrics_project/logs/itop_to_ralph_sync.log")
 
 # ---------------------------------------------------------------------------
 # Secrets / Config
@@ -287,7 +278,7 @@ def update_management_ip(asset_id: int, ip: str, hostname: str, endpoint_type: s
 # PostgreSQL Hardware Enrichment
 # ---------------------------------------------------------------------------
 def load_hardware_data() -> dict:
-    """Load hardware data from PostgreSQL unified_assets.
+    """Load hardware data from PostgreSQL dcim_events.
     Returns dict keyed by serial_number (lowercase).
     """
     hw_data = {}
@@ -296,22 +287,48 @@ def load_hardware_data() -> dict:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
         cur.execute("""
-            SELECT serial_number, hostname, ip::text,
-                   ram_total_gb, cpu_count, cpu_model, disk_total_gb
-            FROM unified_assets
-            WHERE serial_number IS NOT NULL
+            SELECT DISTINCT ON (serial_number)
+                serial_number,
+                srv_cpu_components, 
+                srv_memory_components, 
+                srv_disk_components, 
+                raw_tags,
+                srv_firmware,
+                srv_bios_version
+            FROM dcim_events
+            WHERE device_type = 'server'
+              AND metric_name = 'inventory_snapshot'
+              AND serial_number IS NOT NULL
+            ORDER BY serial_number, event_time DESC
         """)
         for row in cur.fetchall():
             sn = (row[0] or "").strip().lower()
             if not sn:
                 continue
+            
+            cpus = row[1] or []
+            memory = row[2] or []
+            disks = row[3] or []
+            raw_tags = row[4] or {}
+            nics = raw_tags.get("nics", [])
+            firmware = row[5]
+            bios = row[6]
+            
+            cpu_count = len(cpus)
+            cpu_model = cpus[0].get("model_name") if cpu_count > 0 else None
+            ram_total_mb = sum([int(m.get("size", 0)) for m in memory])
+            ram_total_gb = int(ram_total_mb / 1024) if ram_total_mb > 0 else None
+            
             hw_data[sn] = {
-                "hostname": row[1],
-                "ip": row[2],
-                "ram_total_gb": row[3],
-                "cpu_count": row[4],
-                "cpu_model": row[5],
-                "disk_total_gb": row[6],
+                "ram_total_gb": ram_total_gb,
+                "cpu_count": cpu_count,
+                "cpu_model": cpu_model,
+                "cpus": cpus,
+                "memory": memory,
+                "disks": disks,
+                "nics": nics,
+                "firmware_version": firmware,
+                "bios_version": bios
             }
         cur.close()
         conn.close()
@@ -319,6 +336,92 @@ def load_hardware_data() -> dict:
     except Exception as e:
         logger.warning(f"PostgreSQL hardware enrichment unavailable: {e}")
     return hw_data
+
+
+# ---------------------------------------------------------------------------
+# Component Sync Logic (Restored from v3)
+# ---------------------------------------------------------------------------
+def sync_server_disks(asset_id, disk_components):
+    endpoint = f"{RALPH_API_BASE}/disks/"
+    existing = ralph_get_all(f"{endpoint}?base_object={asset_id}")
+    current_sns = {d["serial_number"]: d for d in disk_components if d.get("serial_number")}
+
+    for d in disk_components:
+        sn = d.get("serial_number")
+        if not sn:
+            continue
+        payload = {
+            "base_object": asset_id,
+            "model_name": d.get("model_name"),
+            "serial_number": sn,
+            "size": d.get("size"),
+            "firmware_version": d.get("firmware_version"),
+            "slot": d.get("slot")
+        }
+        match = next((e for e in existing if e["serial_number"] == sn), None)
+        if match:
+            requests.patch(f"{endpoint}{match['id']}/", headers=RALPH_HEADERS, json=payload, verify=False, timeout=15)
+        else:
+            requests.post(endpoint, headers=RALPH_HEADERS, json=payload, verify=False, timeout=15)
+
+    final_existing = ralph_get_all(f"{endpoint}?base_object={asset_id}")
+    seen_sns = set()
+    for disk in final_existing:
+        sn = disk["serial_number"]
+        if sn not in current_sns or sn in seen_sns:
+            requests.delete(f"{endpoint}{disk['id']}/", headers=RALPH_HEADERS, verify=False, timeout=15)
+        else:
+            seen_sns.add(sn)
+
+def sync_server_ethernets(asset_id, nic_components):
+    endpoint = f"{RALPH_API_BASE}/ethernets/"
+    existing = ralph_get_all(f"{endpoint}?base_object={asset_id}")
+    current_labels = {e["label"]: e for e in nic_components if e.get("label")}
+
+    for e in nic_components:
+        label = e.get("label")
+        if not label:
+            continue
+        payload = {
+            "base_object": asset_id,
+            "label": label,
+            "mac": e.get("mac"),
+            "speed": e.get("speed"),
+            "model_name": e.get("model_name")
+        }
+        match = next((ex for ex in existing if ex.get("label") == label), None)
+        if match:
+            requests.patch(f"{endpoint}{match['id']}/", headers=RALPH_HEADERS, json=payload, verify=False, timeout=15)
+        else:
+            requests.post(endpoint, headers=RALPH_HEADERS, json=payload, verify=False, timeout=15)
+
+    final_existing = ralph_get_all(f"{endpoint}?base_object={asset_id}")
+    seen_labels = set()
+    for eth in final_existing:
+        lbl = eth.get("label") or ""
+        if lbl.lower().startswith("management"):
+            seen_labels.add(lbl)
+            continue
+        if lbl not in current_labels or lbl in seen_labels:
+            requests.delete(f"{endpoint}{eth['id']}/", headers=RALPH_HEADERS, verify=False, timeout=15)
+        else:
+            seen_labels.add(lbl)
+
+def sync_generic_components(asset_id, category, redfish_items):
+    endpoint = f"{RALPH_API_BASE}/{category}/"
+    existing = ralph_get_all(f"{endpoint}?base_object={asset_id}")
+
+    for i, item in enumerate(redfish_items):
+        payload = {k: v for k, v in item.items()}
+        payload["base_object"] = asset_id
+        if i < len(existing):
+            requests.patch(f"{endpoint}{existing[i]['id']}/", headers=RALPH_HEADERS, json=payload, verify=False, timeout=15)
+        else:
+            requests.post(endpoint, headers=RALPH_HEADERS, json=payload, verify=False, timeout=15)
+
+    final_existing = ralph_get_all(f"{endpoint}?base_object={asset_id}")
+    for i in range(len(redfish_items), len(final_existing)):
+        requests.delete(f"{endpoint}{final_existing[i]['id']}/", headers=RALPH_HEADERS, verify=False, timeout=15)
 
 
 # ---------------------------------------------------------------------------
@@ -394,6 +497,10 @@ def sync_ci_to_ralph(ci: dict, ci_class: str, hw_data: dict, summary: dict):
         payload["cpu_cores"] = hw["cpu_count"]
     if hw.get("cpu_model"):
         payload["cpu_model"] = hw["cpu_model"]
+    if hw.get("firmware_version"):
+        payload["firmware_version"] = hw["firmware_version"]
+    if hw.get("bios_version"):
+        payload["bios_version"] = hw["bios_version"]
 
     # PATCH to Ralph
     try:
@@ -416,6 +523,17 @@ def sync_ci_to_ralph(ci: dict, ci_class: str, hw_data: dict, summary: dict):
             update_management_ip(asset_id, ip, hostname, endpoint)
         except Exception as e:
             logger.warning(f"  [IP] Failed to update management IP for {hostname}: {e}")
+
+    # Sync physical components if it's a server
+    if device_type == "server" and hw:
+        try:
+            sync_server_disks(asset_id, hw.get("disks", []))
+            sync_server_ethernets(asset_id, hw.get("nics", []))
+            sync_generic_components(asset_id, "memory", hw.get("memory", []))
+            sync_generic_components(asset_id, "processors", hw.get("cpus", []))
+            logger.info(f"  [COMPONENTS] Synced disks, NICs, memory, processors for {hostname}")
+        except Exception as e:
+            logger.warning(f"  [COMPONENTS] Failed to sync components for {hostname}: {e}")
 
 
 # ---------------------------------------------------------------------------

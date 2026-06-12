@@ -33,12 +33,11 @@ if "/home/infra/dcim_metrics_project" not in sys.path:
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger("itop_to_cache_sync")
+logging.getLogger("requests").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+from src.observability.logging.dcim_logger import setup_logger
+logger = setup_logger("itop-redis-sync", "/home/infra/dcim_metrics_project/logs/itop_to_cache_sync.log")
 
 # ---------------------------------------------------------------------------
 # Secrets / Config
@@ -79,23 +78,23 @@ CACHE_TTL  = int(os.getenv("CACHE_TTL", "3600"))  # 1 hour
 ITOP_CLASSES = [
     {
         "class": "Server",
-        "fields": "name,serialnumber,location_name,rack_name,brand_name,model_name,status,managementip",
+        "fields": "name,serialnumber,location_name,rack_name,brand_name,model_name,status,managementip,business_criticity,org_id_friendlyname",
     },
     {
         "class": "NetworkDevice",
-        "fields": "name,serialnumber,location_name,rack_name,brand_name,model_name,status,managementip",
+        "fields": "name,serialnumber,location_name,rack_name,brand_name,model_name,status,managementip,business_criticity,org_id_friendlyname",
     },
     {
         "class": "StorageSystem",
-        "fields": "name,serialnumber,location_name,rack_name,brand_name,model_name,status",
+        "fields": "name,serialnumber,location_name,rack_name,brand_name,model_name,status,business_criticity,org_id_friendlyname",
     },
     {
         "class": "Peripheral",
-        "fields": "name,serialnumber,location_name,brand_name,model_name,status",
+        "fields": "name,serialnumber,location_name,brand_name,model_name,status,business_criticity,org_id_friendlyname",
     },
     {
         "class": "PowerSource",
-        "fields": "name,serialnumber,location_name,brand_name,model_name,status",
+        "fields": "name,serialnumber,location_name,brand_name,model_name,status,business_criticity,org_id_friendlyname",
     },
 ]
 
@@ -164,6 +163,8 @@ def build_metadata(ci_class: str, fields: dict) -> dict:
         "status": fields.get("status", ""),
         "managementip": fields.get("managementip", ""),
         "ci_class": ci_class,
+        "criticality": fields.get("business_criticity", ""),
+        "org": fields.get("org_id_friendlyname", ""),
         "synced_at": datetime.now(timezone.utc).isoformat(),
     }
 
