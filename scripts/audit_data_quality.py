@@ -26,63 +26,79 @@ def load_schema():
 
 def run_audit(schema):
     now = datetime.now(timezone.utc)
-    yesterday = now - timedelta(days=1)
-    date_str = yesterday.strftime("%Y-%m-%d")
-    
+    since_24h = now - timedelta(hours=24)
+    date_str = since_24h.strftime("%Y-%m-%d %H:%M UTC")
+    today_str = now.strftime("%Y%m%d")
+
     os.makedirs(os.path.join(BASE_DIR, "logs"), exist_ok=True)
-    log_file = os.path.join(BASE_DIR, "logs", f"data_quality_{now.strftime('%Y%m%d')}.log")
-    
+    log_file = os.path.join(BASE_DIR, "logs", f"data_quality_{today_str}.log")
+
     with open(log_file, "w") as log:
-        log.write(f"=== Data Quality Audit for {date_str} ===\n")
-        
+        log.write(f"=== Data Quality Audit (last 24h from {date_str}) ===\n")
+
         for device_type, required_fields in schema.items():
-            # Build filters to ensure all fields exist
+            # Build exists filters for all required fields
             exists_filters = [{"exists": {"field": field}} for field in required_fields]
-            
-            # Query Total Documents for the last 24 hours
+
+            # Base filter: device_type match (nested under `tag`) + rolling 24-hour window
+            base_filter = [
+                {"term": {"tag.device_type.keyword": device_type}},
+                {"range": {
+                    "@timestamp": {
+                        "gte": "now-24h",
+                        "lt": "now"
+                    }
+                }}
+            ]
+
+            # Total documents query
             total_query = {
                 "query": {
                     "bool": {
-                        "filter": [
-                            {"term": {"tag.device_type.keyword": device_type}},
-                            {"range": {
-                                "@timestamp": {
-                                    "gte": f"{date_str}T00:00:00Z",
-                                    "lt": f"{now.strftime('%Y-%m-%d')}T00:00:00Z"
-                                }
-                            }}
-                        ]
+                        "filter": base_filter
                     }
                 }
             }
-            
-            # Query valid documents
+
+            # Valid documents = total filter + all required fields exist
             valid_query = {
                 "query": {
                     "bool": {
-                        "filter": total_query["query"]["bool"]["filter"] + exists_filters
+                        "filter": base_filter + exists_filters
                     }
                 }
             }
-            
+
             try:
-                res_total = requests.post(f"{ES_URL}/{INDEX}/_count", json=total_query, auth=AUTH, verify=False)
+                res_total = requests.post(
+                    f"{ES_URL}/{INDEX}/_count",
+                    json=total_query, auth=AUTH, verify=False, timeout=30
+                )
+                res_total.raise_for_status()
                 total_docs = res_total.json().get("count", 0)
-                
-                res_valid = requests.post(f"{ES_URL}/{INDEX}/_count", json=valid_query, auth=AUTH, verify=False)
+
+                res_valid = requests.post(
+                    f"{ES_URL}/{INDEX}/_count",
+                    json=valid_query, auth=AUTH, verify=False, timeout=30
+                )
+                res_valid.raise_for_status()
                 valid_docs = res_valid.json().get("count", 0)
-                
+
                 percentage = (valid_docs / total_docs * 100) if total_docs > 0 else 0.0
-                
-                msg = f"Device: {device_type.upper():<10} | Total: {total_docs:<8} | Valid: {valid_docs:<8} | Completeness: {percentage:.2f}%"
+
+                msg = f"Device: {device_type.upper():<15} | Total: {total_docs:<8} | Valid: {valid_docs:<8} | Completeness: {percentage:.2f}%"
                 print(msg)
                 log.write(msg + "\n")
-                
-                if percentage < 85.0 and total_docs > 0:
-                    anomaly_msg = f"  [WARNING] Completeness for {device_type} is below threshold (85%)"
+
+                if total_docs == 0:
+                    warn_msg = f"  [WARNING] No documents found for {device_type} in the last 24h. Check Telegraf or pipeline."
+                    print(warn_msg)
+                    log.write(warn_msg + "\n")
+                elif percentage < 85.0:
+                    anomaly_msg = f"  [WARNING] Completeness for {device_type} is below threshold (85%). Required fields: {required_fields}"
                     print(anomaly_msg)
                     log.write(anomaly_msg + "\n")
-                    
+
             except Exception as e:
                 err_msg = f"Error validating {device_type}: {e}"
                 print(err_msg)
