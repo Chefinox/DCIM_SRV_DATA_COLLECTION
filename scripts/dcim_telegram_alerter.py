@@ -20,6 +20,11 @@ from datetime import datetime, timezone
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+import sys
+sys.path.append("/home/infra/dcim_metrics_project")
+from src.observability.logging.dcim_logger import setup_logger
+logger = setup_logger("telegram-alerter", "/home/infra/dcim_metrics_project/logs/dcim_telegram_alerter.log")
+
 # === CONFIG ===
 ES_URL   = "https://10.70.0.56:9200"
 ES_AUTH  = ("elastic", "C+H+pFb*aIAqWcOo-X8q")
@@ -43,7 +48,7 @@ def send_telegram(message: str):
         }, timeout=10)
         return resp.ok
     except Exception as e:
-        print(f"[ERROR] Telegram send failed: {e}")
+        logger.error(f"Telegram send failed: {e}")
         return False
 
 
@@ -56,7 +61,7 @@ def es_count(query: dict) -> int:
         )
         return resp.json().get("count", 0)
     except Exception as e:
-        print(f"[ERROR] ES count failed: {e}")
+        logger.error(f"ES count failed: {e}")
         return -1
 
 
@@ -209,13 +214,12 @@ def check_dlq_spike(state: dict) -> list:
             )
             alerts.append(("dlq_spike", msg))
     except Exception as e:
-        print(f"[WARN] DLQ check skipped: {e}")
+        logger.warning(f"DLQ check skipped: {e}")
     return alerts
 
 
 def main():
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{now_str}] Running DCIM Telegram Alerter...")
+    logger.info("Running DCIM Telegram Alerter...")
 
     state = load_state()
     all_alerts = []
@@ -226,18 +230,18 @@ def main():
     all_alerts.extend(check_dlq_spike(state))
 
     if not all_alerts:
-        print(f"  ✅ All checks passed. No alerts.")
+        logger.info("All checks passed. No alerts.")
     else:
         for alert_key, msg in all_alerts:
-            print(f"  🔔 Sending alert: {alert_key}")
+            logger.info(f"Sending alert: {alert_key}")
             if send_telegram(msg):
                 state[alert_key] = datetime.now(timezone.utc).isoformat()
-                print(f"     ✅ Sent.")
+                logger.info(f"Sent {alert_key} successfully.")
             else:
-                print(f"     ❌ Failed to send.")
+                logger.error(f"Failed to send {alert_key}.")
 
     save_state(state)
-    print(f"  Done.")
+    logger.info("Done.")
 
 
 if __name__ == "__main__":

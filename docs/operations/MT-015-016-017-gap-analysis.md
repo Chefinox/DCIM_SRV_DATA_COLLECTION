@@ -187,7 +187,7 @@
 | 🟠 Tinggi | ST-015-01 | Verifikasi `inherit_tags` di semua Telegraf SNMP conf | 0.5 hari | ✅ Done 2026-06-12 |
 | 🟠 Tinggi | ST-017-05 | Integrasikan Kibana Alert ke Telegram/Email | 1 hari | ✅ Done 2026-06-12 |
 | 🟠 Tinggi | ST-017-02 | Buat Kibana Alert untuk kesehatan pipeline (DLQ, lag, timeout) | 2 hari | ✅ Done 2026-06-12 |
-| 🟡 Sedang | ST-016-02 | Implementasi `dcim_logger.py` (JSON structured logging) | 3 hari | ⬜ Belum |
+| 🟡 Sedang | ST-016-02 | Implementasi `dcim_logger.py` (JSON structured logging) | 3 hari | ✅ Done 2026-06-12 (Active Services) |
 | 🟡 Sedang | ST-016-05 | Tambah input `journald` di Filebeat untuk service DCIM | 0.5 hari | ⬜ Belum |
 | 🟡 Sedang | ST-017-01 | Buat Log Taxonomy & Retention Policy document | 1 hari | ⬜ Belum |
 | 🟡 Sedang | ST-017-03 | Buat Kibana Alert untuk CMDB Drift (`hostname != name`) | 1 hari | ⬜ Belum |
