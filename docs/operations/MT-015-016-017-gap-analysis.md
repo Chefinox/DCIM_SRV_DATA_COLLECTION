@@ -184,7 +184,7 @@
 |---|---|---|---|---|
 | 🔴 Kritis | ST-016-01 | Buat tabel `dlq_records` di PostgreSQL & investigasi DLQ spike | 1 hari | ✅ Done 2026-06-12 |
 | 🔴 Kritis | ST-015-02 | Debug & perbaiki `audit_data_quality.py` + reset Kafka consumer lag | 1 hari | ✅ Done 2026-06-12 |
-| 🟠 Tinggi | ST-015-01 | Verifikasi `inherit_tags` di semua Telegraf SNMP conf | 0.5 hari | ✅ NAS done, SW/UPS pending |
+| 🟠 Tinggi | ST-015-01 | Verifikasi `inherit_tags` di semua Telegraf SNMP conf | 0.5 hari | ✅ Done 2026-06-12 |
 | 🟠 Tinggi | ST-017-05 | Integrasikan Kibana Alert ke Telegram/Email | 1 hari | ✅ Done 2026-06-12 |
 | 🟠 Tinggi | ST-017-02 | Buat Kibana Alert untuk kesehatan pipeline (DLQ, lag, timeout) | 2 hari | ✅ Done 2026-06-12 |
 | 🟡 Sedang | ST-016-02 | Implementasi `dcim_logger.py` (JSON structured logging) | 3 hari | ⬜ Belum |
