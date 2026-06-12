@@ -43,12 +43,13 @@
 - **Status**: Diperbaiki 2026-06-12 untuk NAS. Perlu verifikasi untuk Network Switch dan UPS.
 - **Tindakan**: Cek semua file Telegraf .conf yang menggunakan [[inputs.snmp.table]] sudah memiliki inherit_tags lengkap.
 
-#### GAP-015-02 — Script audit_data_quality.py Menghasilkan 0% Completeness
+#### GAP-015-02 — Script audit_data_quality.py Menghasilkan 0% Completeness ✅ FIXED 2026-06-12
 > **Dampak**: Laporan kualitas data harian tidak akurat → tidak bisa dipakai sebagai acuan AI readiness
 
-- **Masalah**: Log audit (data_quality_20260611.log) menunjukkan `Total: 0 | Valid: 0 | Completeness: 0.00%` untuk semua device, meski data ES ada (38.4 juta dokumen).
-- **Penyebab**: Query ES menggunakan nama field yang tidak cocok dengan mapping aktual.
-- **Tindakan**: Debug dan perbaiki query di scripts/audit_data_quality.py.
+- **Root Cause 1**: Query time range menggunakan rentang hari kemarin (`2026-06-11T00:00Z` s.d. `2026-06-12T00:00Z`), bukan rolling 24 jam. Saat script dijalankan siang hari, range sudah lewat.
+- **Root Cause 2**: `data_quality_schema.yaml` menggunakan key `network_switch` tapi nilai aktual di ES adalah `network`.
+- **Root Cause 3** (kritis): Index ES `dcim-metrics-unified-*` berhenti diisi sejak 2026-06-06 karena Kafka consumer lag 4.3 juta pesan.
+- **Fix**: (1) Ubah query ke `now-24h/now`. (2) Perbaiki schema key ke `network`. (3) Reset Kafka offset `telegraf_unified_final` ke latest.
 
 #### GAP-015-03 — Field brand, location, rack Kosong di Data Historis ES (0%)
 > **Dampak**: Model AI yang dilatih data historis tidak punya konteks lokasi/merk perangkat
@@ -92,11 +93,12 @@
 
 ### ❌ Gap yang Masih Ada
 
-#### GAP-016-01 — Log DLQ Consumer Membengkak Tidak Terkendali (KRITIS)
+#### GAP-016-01 — Log DLQ Consumer Membengkak Tidak Terkendali (KRITIS) ✅ FIXED 2026-06-12
 > **Dampak**: Disk bisa penuh, Filebeat mati, kehilangan semua log
 
-- **Masalah**: dcim_dlq_consumer.log = 251 MB (aktif) + 407 MB (rotasi) = >650 MB total dari satu service.
-- **Tindakan**: (1) Investigasi kenapa volume DLQ sangat tinggi. (2) Aktifkan logrotate ketat untuk file ini.
+- **Root Cause**: Tabel `dlq_records` belum pernah dibuat di PostgreSQL. Setiap pesan DLQ yang masuk terus-menerus gagal INSERT dan mencetak error ke log — file log membengkak karena error berulang ini.
+- **Fix**: Tabel `dlq_records` dibuat di `dcim_sot` database dengan kolom `id`, `received_at`, `topic`, `original_payload`, `failure_reason`.
+- **Bonus Finding**: Ditemukan bahwa Kafka consumer `telegraf_unified_final` memiliki lag 4.391.807 pesan → index ES berhenti update sejak 2026-06-06. Offset di-reset ke `latest` dan `telegraf-consumer.service` di-restart.
 
 #### GAP-016-02 — Format Log Mayoritas Masih Plaintext (Bukan JSON Terstruktur)
 > **Dampak**: Filebeat tidak bisa parse log dengan benar → tidak bisa di-query di Kibana
