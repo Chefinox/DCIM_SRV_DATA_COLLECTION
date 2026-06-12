@@ -1,0 +1,12 @@
+[Unit]
+Description=DCIM Telegram Alerter
+After=network.target
+
+[Service]
+Type=oneshot
+User=infra
+Group=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+Environment="TELEGRAM_BOT_TOKEN=8320149476:AAFy2G5ma1YQnQeIC-PBuwFH1xxiKO38JF4"
+Environment="TELEGRAM_CHAT_ID=-5266403936"
+ExecStart=/usr/bin/python3 /home/infra/dcim_metrics_project/scripts/dcim_telegram_alerter.py
