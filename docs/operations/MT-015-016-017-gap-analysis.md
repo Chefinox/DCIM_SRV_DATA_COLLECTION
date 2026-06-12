@@ -190,10 +190,10 @@
 | 🟡 Sedang | ST-016-02 | Implementasi `dcim_logger.py` (JSON structured logging) | 3 hari | ✅ Done 2026-06-12 (Active Services) |
 | 🟡 Sedang | ST-016-05 | Tambah input `journald` di Filebeat untuk service DCIM | 0.5 hari | ⬜ Belum |
 | 🟡 Sedang | ST-017-01 | Buat Log Taxonomy & Retention Policy document | 1 hari | ⬜ Belum |
-| 🟡 Sedang | ST-017-03 | Buat Kibana Alert untuk CMDB Drift (`hostname != name`) | 1 hari | ⬜ Belum |
-| 🟢 Rendah | ST-016-03 | Perbaiki ownership `itop_cache_sync.log` (root → infra) | 0.1 hari | ⬜ Belum |
-| 🟢 Rendah | ST-016-04 | Pindahkan `hikvision_poller.log` ke `logs/` | 0.1 hari | ⬜ Belum |
-| 🟢 Rendah | ST-015-03 | Dokumentasikan batasan data historis ES untuk tim AI | 0.5 hari | ⬜ Belum |
+| 🟡 Sedang | ST-017-03 | Buat Kibana Alert untuk CMDB Drift (`hostname != name`) | 1 hari | ✅ Done 2026-06-12 (Via Python Alerter) |
+| 🟢 Rendah | ST-016-03 | Perbaiki ownership `itop_cache_sync.log` (root → infra) | 0.1 hari | ✅ Done 2026-06-12 |
+| 🟢 Rendah | ST-016-04 | Pindahkan `hikvision_poller.log` ke `logs/` | 0.1 hari | ✅ Done 2026-06-12 |
+| 🟢 Rendah | ST-015-03 | Dokumentasikan batasan data historis ES untuk tim AI | 0.5 hari | ✅ Done 2026-06-12 |
 | 🟢 Rendah | ST-015-04 | Tunggu data historis 30 hari penuh (~2026-06-20) | Otomatis | ⏳ Menunggu |
 | 🟢 Rendah | ST-015-05 | Koordinasi pengisian data finansial aset dengan tim finance | 1-2 hari + koordinasi | ⬜ Belum |
 | 🟢 Rendah | ST-016-06 | Buat Dashboard Kibana untuk log terpusat DCIM | 2 hari | ⬜ Belum |
