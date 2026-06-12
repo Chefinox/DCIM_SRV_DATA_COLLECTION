@@ -1,0 +1,10 @@
+[Unit]
+Description=DCIM Data Quality Check for AI Readiness
+After=network.target
+
+[Service]
+Type=oneshot
+User=infra
+Group=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+ExecStart=/usr/bin/python3 /home/infra/dcim_metrics_project/scripts/audit_data_quality.py

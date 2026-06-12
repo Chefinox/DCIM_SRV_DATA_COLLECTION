@@ -1,0 +1,24 @@
+# Data Quality Schema for AI Feature Readiness
+# Defines the required fields that must exist in Elasticsearch for each device type.
+
+server:
+  - tag.serial_number
+  - tag.model
+  - dcim_metrics.raw_fields_cpuUtilization
+  - dcim_metrics.raw_fields_memoryUsage
+  - dcim_metrics.raw_fields_power_output_watts
+
+ups:
+  - tag.serial_number
+  - tag.model
+  - dcim_metrics.raw_fields_output_load
+  - dcim_metrics.raw_fields_battery_temp
+  - dcim_metrics.raw_fields_battery_runtime_remain
+
+network_switch:
+  - tag.serial_number
+  - tag.model
+
+nas:
+  - tag.serial_number
+  - tag.model
