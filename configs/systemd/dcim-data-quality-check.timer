@@ -1,0 +1,9 @@
+[Unit]
+Description=Run DCIM Data Quality Check Daily at 06:00
+
+[Timer]
+OnCalendar=*-*-* 06:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
