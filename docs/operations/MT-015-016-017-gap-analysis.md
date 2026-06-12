@@ -35,7 +35,7 @@
 
 ### ❌ Gap yang Masih Ada
 
-#### GAP-015-01 — Enrichment Belum Menjangkau Semua Device Type
+#### ST-015-01 — Enrichment Belum Menjangkau Semua Device Type
 > **Dampak**: Data dcim.enriched.events untuk NAS, Network Switch, UPS masih parsial
 
 - **Masalah**: Telegraf measurement table (interface di nas-snmp.conf) tidak meneruskan serial_number ke Kafka karena inherit_tags yang tidak lengkap.
@@ -43,7 +43,7 @@
 - **Status**: Diperbaiki 2026-06-12 untuk NAS. Perlu verifikasi untuk Network Switch dan UPS.
 - **Tindakan**: Cek semua file Telegraf .conf yang menggunakan [[inputs.snmp.table]] sudah memiliki inherit_tags lengkap.
 
-#### GAP-015-02 — Script audit_data_quality.py Menghasilkan 0% Completeness ✅ FIXED 2026-06-12
+#### ST-015-02 — Script audit_data_quality.py Menghasilkan 0% Completeness ✅ FIXED 2026-06-12
 > **Dampak**: Laporan kualitas data harian tidak akurat → tidak bisa dipakai sebagai acuan AI readiness
 
 - **Root Cause 1**: Query time range menggunakan rentang hari kemarin (`2026-06-11T00:00Z` s.d. `2026-06-12T00:00Z`), bukan rolling 24 jam. Saat script dijalankan siang hari, range sudah lewat.
@@ -51,27 +51,27 @@
 - **Root Cause 3** (kritis): Index ES `dcim-metrics-unified-*` berhenti diisi sejak 2026-06-06 karena Kafka consumer lag 4.3 juta pesan.
 - **Fix**: (1) Ubah query ke `now-24h/now`. (2) Perbaiki schema key ke `network`. (3) Reset Kafka offset `telegraf_unified_final` ke latest.
 
-#### GAP-015-03 — Field brand, location, rack Kosong di Data Historis ES (0%)
+#### ST-015-03 — Field brand, location, rack Kosong di Data Historis ES (0%)
 > **Dampak**: Model AI yang dilatih data historis tidak punya konteks lokasi/merk perangkat
 
 - **Masalah**: Audit ES 2026-06-11 menunjukkan brand, location, rack = 0% di semua device type.
 - **Penyebab**: Field enrichment baru diterapkan via NiFi (setelah v4.0). Data historis lama tidak punya field ini.
 - **Tindakan**: Untuk data baru sudah teratasi (NiFi UpdateRecord+LookupRecord). Untuk data historis, tim AI harus pivot via serial_number ke Enrichment API. Dokumentasikan batasan ini.
 
-#### GAP-015-04 — Kedalaman Data Historis Belum Cukup (< 30 hari)
+#### ST-015-04 — Kedalaman Data Historis Belum Cukup (< 30 hari)
 > **Dampak**: UC-AI-1 (Predictive Failure) dan UC-AI-2 (Capacity Optimization) belum bisa dijalankan
 
 - **Masalah**: Semua device hanya punya ~21.7 hari data. Requirement minimum = 30 hari.
 - **Target**: 30 hari penuh tercapai ~2026-06-20 jika pipeline berjalan tanpa gangguan.
 - **Tindakan**: Pantau pipeline dan pastikan tidak ada service yang mati.
 
-#### GAP-015-05 — Atribut Finansial Aset Belum Terisi
+#### ST-015-05 — Atribut Finansial Aset Belum Terisi
 > **Dampak**: UC-CMDB-3 (Asset Lifecycle) tidak bisa menghasilkan laporan akurat
 
 - **Masalah**: purchase_date, warranty_end_date, acquisition_cost di iTop dan Ralph masih kosong.
 - **Tindakan**: Koordinasi dengan procurement/finance → isi template → jalankan import_financial_data_to_itop.py.
 
-#### GAP-015-06 — Tidak Ada Deteksi CMDB Drift Otomatis
+#### ST-015-06 — Tidak Ada Deteksi CMDB Drift Otomatis
 > **Dampak**: Perbedaan hostname (fisik) vs name (CMDB) tidak terdeteksi proaktif
 
 - **Masalah**: Desain data sudah benar (kedua field tersedia di Kafka), tapi belum ada Kibana Alert yang membandingkannya.
@@ -93,38 +93,38 @@
 
 ### ❌ Gap yang Masih Ada
 
-#### GAP-016-01 — Log DLQ Consumer Membengkak Tidak Terkendali (KRITIS) ✅ FIXED 2026-06-12
+#### ST-016-01 — Log DLQ Consumer Membengkak Tidak Terkendali (KRITIS) ✅ FIXED 2026-06-12
 > **Dampak**: Disk bisa penuh, Filebeat mati, kehilangan semua log
 
 - **Root Cause**: Tabel `dlq_records` belum pernah dibuat di PostgreSQL. Setiap pesan DLQ yang masuk terus-menerus gagal INSERT dan mencetak error ke log — file log membengkak karena error berulang ini.
 - **Fix**: Tabel `dlq_records` dibuat di `dcim_sot` database dengan kolom `id`, `received_at`, `topic`, `original_payload`, `failure_reason`.
 - **Bonus Finding**: Ditemukan bahwa Kafka consumer `telegraf_unified_final` memiliki lag 4.391.807 pesan → index ES berhenti update sejak 2026-06-06. Offset di-reset ke `latest` dan `telegraf-consumer.service` di-restart.
 
-#### GAP-016-02 — Format Log Mayoritas Masih Plaintext (Bukan JSON Terstruktur)
+#### ST-016-02 — Format Log Mayoritas Masih Plaintext (Bukan JSON Terstruktur)
 > **Dampak**: Filebeat tidak bisa parse log dengan benar → tidak bisa di-query di Kibana
 
 - **Masalah**: Mayoritas script Python menggunakan logging standar (plaintext). Filebeat dikonfigurasi dengan parser ndjson, sehingga log plaintext tidak bisa di-parse dengan benar.
 - **Tindakan**: Implementasi dcim_logger.py (modul logger sentral berformat JSON), migrasi script-script utama secara bertahap.
 
-#### GAP-016-03 — Log itop_cache_sync.log Dimiliki root (Bukan infra)
+#### ST-016-03 — Log itop_cache_sync.log Dimiliki root (Bukan infra)
 > **Dampak**: Filebeat tidak bisa membaca file ini
 
 - **Masalah**: itop_cache_sync.log memiliki permission root:root. Semua log lain dimiliki infra:infra.
 - **Tindakan**: `sudo chown infra:infra /home/infra/dcim_metrics_project/logs/itop_cache_sync.log`. Selidiki service systemd yang terkait dan pastikan menggunakan User=infra.
 
-#### GAP-016-04 — Log hikvision_poller.log Berada di Direktori scripts/ (Bukan logs/)
+#### ST-016-04 — Log hikvision_poller.log Berada di Direktori scripts/ (Bukan logs/)
 > **Dampak**: Melanggar standar direktori log; risiko tidak terpantau
 
 - **Masalah**: scripts/hikvision_poller.log (47 MB) berada di luar direktori logs/.
 - **Tindakan**: Perbaiki path output log di scripts/hikvision_poller.py → logs/hikvision_poller.log.
 
-#### GAP-016-05 — Log Systemd Services Tidak Dikirim ke Elasticsearch
+#### ST-016-05 — Log Systemd Services Tidak Dikirim ke Elasticsearch
 > **Dampak**: Log dari dcim-normalizer.service, dcim-enrichment-api.service, dll. tidak terpusat
 
 - **Masalah**: Filebeat belum dikonfigurasi untuk membaca journal dari service systemd DCIM.
 - **Tindakan**: Tambahkan input journald di Filebeat untuk service-service DCIM utama.
 
-#### GAP-016-06 — Belum Ada Dashboard Kibana untuk Log Terpusat
+#### ST-016-06 — Belum Ada Dashboard Kibana untuk Log Terpusat
 > **Dampak**: Tidak ada single pane of glass untuk memantau log semua komponen
 
 - **Tindakan**: Buat Dashboard Kibana dengan visualisasi: log level distribution, top error sources, DLQ volume trend, timeline error events.
@@ -145,12 +145,12 @@
 
 ### ❌ Gap yang Masih Ada
 
-#### GAP-017-01 — Belum Ada Klasifikasi Formal Log (Log Taxonomy)
+#### ST-017-01 — Belum Ada Klasifikasi Formal Log (Log Taxonomy)
 > **Dampak**: Tidak ada panduan retensi log; semua log diperlakukan sama
 
 - **Tindakan**: Buat docs/operations/log-taxonomy-and-retention-policy.md yang mendefinisikan kategori log (Operational/Security/Audit/Debug) dan kebijakan retensi per kategori.
 
-#### GAP-017-02 — Tidak Ada Alert untuk Kegagalan Pipeline DCIM Itu Sendiri
+#### ST-017-02 — Tidak Ada Alert untuk Kegagalan Pipeline DCIM Itu Sendiri
 > **Dampak**: NiFi mati, Enrichment API error, Kafka lag tidak terdeteksi proaktif
 
 - **Event kritis yang belum di-alert**:
@@ -160,17 +160,17 @@
   - Kafka consumer group lag > threshold
 - **Tindakan**: Buat Kibana Alert Rules tambahan untuk event-event pipeline di atas.
 
-#### GAP-017-03 — Tidak Ada Alert untuk Configuration Drift / CMDB Mismatch
+#### ST-017-03 — Tidak Ada Alert untuk Configuration Drift / CMDB Mismatch
 > **Dampak**: Perubahan konfigurasi tidak resmi tidak terdeteksi
 
 - **Tindakan**: Kibana Alert dengan kondisi: hostname ≠ name di dcim.enriched.events → notifikasi.
 
-#### GAP-017-04 — Log Security Events Tidak Dipisahkan
+#### ST-017-04 — Log Security Events Tidak Dipisahkan
 > **Dampak**: Tidak ada data untuk kepatuhan (compliance) dan forensik keamanan
 
 - **Tindakan**: (1) Definisikan daftar security events untuk DCIM. (2) Konfigurasi Filebeat pipeline untuk tag event.category: security. (3) Buat index dcim-security-events-*.
 
-#### GAP-017-05 — Belum Ada Notifikasi Alert ke Luar Elasticsearch
+#### ST-017-05 — Belum Ada Notifikasi Alert ke Luar Elasticsearch
 > **Dampak**: Alert hanya visible di Kibana; tim ops tidak mendapat notifikasi proaktif
 
 - **Masalah**: Semua alert hanya menulis ke index dcim-alerts. Tidak ada integrasi Telegram/Email/PagerDuty.
@@ -180,21 +180,21 @@
 
 ## Prioritas Tindakan yang Direkomendasikan
 
-| Prioritas | Gap ID | Tindakan | Estimasi |
-|---|---|---|---|
-| 🔴 Kritis | GAP-016-01 | Investigasi & atasi lonjakan volume DLQ Consumer | 1 hari |
-| 🔴 Kritis | GAP-015-02 | Debug & perbaiki audit_data_quality.py (hasil 0%) | 1 hari |
-| 🟠 Tinggi | GAP-015-01 | Verifikasi inherit_tags di semua Telegraf SNMP conf | 0.5 hari |
-| 🟠 Tinggi | GAP-017-02 | Buat Kibana Alert untuk kesehatan pipeline | 2 hari |
-| 🟠 Tinggi | GAP-017-05 | Integrasikan Kibana Alert ke Telegram/Email | 1 hari |
-| 🟡 Sedang | GAP-016-02 | Implementasi dcim_logger.py (JSON structured logging) | 3 hari |
-| 🟡 Sedang | GAP-016-05 | Tambah input journald di Filebeat | 0.5 hari |
-| 🟡 Sedang | GAP-017-01 | Buat Log Taxonomy & Retention Policy document | 1 hari |
-| 🟡 Sedang | GAP-017-03 | Buat Kibana Alert untuk CMDB Drift | 1 hari |
-| 🟢 Rendah | GAP-016-03 | Perbaiki ownership itop_cache_sync.log | 0.1 hari |
-| �� Rendah | GAP-016-04 | Pindahkan hikvision_poller.log ke logs/ | 0.1 hari |
-| 🟢 Rendah | GAP-015-03 | Dokumentasikan batasan data historis untuk tim AI | 0.5 hari |
-| 🟢 Rendah | GAP-015-04 | Tunggu hingga ~2026-06-20 untuk 30 hari data | Otomatis |
-| 🟢 Rendah | GAP-015-05 | Koordinasi pengisian data finansial dengan finance | 1-2 hari + koordinasi |
-| 🟢 Rendah | GAP-016-06 | Buat Dashboard Kibana untuk log terpusat | 2 hari |
-| 🟢 Rendah | GAP-017-04 | Pisahkan log security events ke index tersendiri | 2 hari |
+| Prioritas | Sub-Task ID | Tindakan | Estimasi | Status |
+|---|---|---|---|---|
+| 🔴 Kritis | ST-016-01 | Buat tabel `dlq_records` di PostgreSQL & investigasi DLQ spike | 1 hari | ✅ Done 2026-06-12 |
+| 🔴 Kritis | ST-015-02 | Debug & perbaiki `audit_data_quality.py` + reset Kafka consumer lag | 1 hari | ✅ Done 2026-06-12 |
+| 🟠 Tinggi | ST-015-01 | Verifikasi `inherit_tags` di semua Telegraf SNMP conf | 0.5 hari | ✅ NAS done, SW/UPS pending |
+| 🟠 Tinggi | ST-017-05 | Integrasikan Kibana Alert ke Telegram/Email | 1 hari | 🔄 In Progress |
+| 🟠 Tinggi | ST-017-02 | Buat Kibana Alert untuk kesehatan pipeline (DLQ, lag, timeout) | 2 hari | 🔄 In Progress |
+| 🟡 Sedang | ST-016-02 | Implementasi `dcim_logger.py` (JSON structured logging) | 3 hari | ⬜ Belum |
+| 🟡 Sedang | ST-016-05 | Tambah input `journald` di Filebeat untuk service DCIM | 0.5 hari | ⬜ Belum |
+| 🟡 Sedang | ST-017-01 | Buat Log Taxonomy & Retention Policy document | 1 hari | ⬜ Belum |
+| 🟡 Sedang | ST-017-03 | Buat Kibana Alert untuk CMDB Drift (`hostname != name`) | 1 hari | ⬜ Belum |
+| 🟢 Rendah | ST-016-03 | Perbaiki ownership `itop_cache_sync.log` (root → infra) | 0.1 hari | ⬜ Belum |
+| 🟢 Rendah | ST-016-04 | Pindahkan `hikvision_poller.log` ke `logs/` | 0.1 hari | ⬜ Belum |
+| 🟢 Rendah | ST-015-03 | Dokumentasikan batasan data historis ES untuk tim AI | 0.5 hari | ⬜ Belum |
+| 🟢 Rendah | ST-015-04 | Tunggu data historis 30 hari penuh (~2026-06-20) | Otomatis | ⏳ Menunggu |
+| 🟢 Rendah | ST-015-05 | Koordinasi pengisian data finansial aset dengan tim finance | 1-2 hari + koordinasi | ⬜ Belum |
+| 🟢 Rendah | ST-016-06 | Buat Dashboard Kibana untuk log terpusat DCIM | 2 hari | ⬜ Belum |
+| 🟢 Rendah | ST-017-04 | Pisahkan log security events ke index `dcim-security-events-*` | 2 hari | ⬜ Belum |
