@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer for DCIM ES to PG Metrics Archive
+
+[Timer]
+# Run daily at 03:00
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

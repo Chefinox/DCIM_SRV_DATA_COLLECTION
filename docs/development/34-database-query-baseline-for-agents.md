@@ -8,7 +8,7 @@
 
 | Item | Value |
 | :--- | :--- |
-| Host | `192.168.100.115` |
+| Host | `localhost` |
 | Port | `5432` |
 | Database | `dcim_sot` |
 | Main table | `public.dcim_events` |
@@ -18,7 +18,7 @@
 Gunakan credential dari environment/secret store. Jangan hardcode password di script agent.
 
 ```bash
-export PGHOST=192.168.100.115
+export PGHOST=localhost
 export PGPORT=5432
 export PGDATABASE=dcim_sot
 export PGUSER=sot_admin
@@ -28,7 +28,7 @@ export PGUSER=sot_admin
 ## 2. Tabel Utama
 
 ### 2.1 `dcim_events`
-
+**Fungsi Query**:
 Fungsi: event telemetry historis + inventory snapshot + enrichment metadata.
 
 Kolom identitas utama:
@@ -50,8 +50,18 @@ Kolom identitas utama:
 | `site`, `rack_name`, `rack_position` | text/int | metadata CMDB |
 | `manufacturer`, `model`, `asset_status` | text | metadata asset |
 
-### 2.2 `unified_assets`
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
 
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
+
+### 2.2 `unified_assets`
+**Fungsi Query**:
 Fungsi: cache asset metadata dari Ralph/CMDB.
 
 | Column | Type | Fungsi |
@@ -67,8 +77,18 @@ Fungsi: cache asset metadata dari Ralph/CMDB.
 | `ralph_endpoint` | text | endpoint Ralph: `data-center-assets` / `back-office-assets` |
 | `last_synced_at` | timestamptz | waktu sync terakhir |
 
-### 2.3 Server component tables
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
 
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
+
+### 2.3 Server component tables
+**Fungsi Query**:
 | Table | Key | Isi |
 | :--- | :--- | :--- |
 | `dcim_server_disks` | `server_ip` | disk serial, model, size, firmware, slot |
@@ -109,9 +129,31 @@ Measurements 24h:
 
 > **Placeholder note**: syntax `:identifier`, `:hostname`, `:serial_number`, dan sejenisnya adalah placeholder untuk aplikasi/agent. Jika menjalankan langsung di `psql`, gunakan CTE `params` seperti contoh di bawah, atau ganti nilai placeholder dengan literal SQL yang aman.
 
-### 4.1 Cari perangkat by identifier fleksibel
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
 
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
+
+### 4.1 Cari perangkat by identifier fleksibel
+**Fungsi Query**:
 Gunakan query ini jika input agent bisa berupa hostname, IP, atau serial number.
+
+Menemukan identitas terbaru satu perangkat ketika user hanya memberi salah satu identifier. Query ini cocok sebagai langkah pertama sebelum drill-down ke raw sample atau query spesifik device type.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 WITH params AS (
@@ -122,7 +164,7 @@ WITH params AS (
 ), matched_events AS (
   SELECT *
   FROM dcim_events e, q
-  WHERE e.event_time > NOW() - INTERVAL '30 days'
+  WHERE e.event_time > NOW() - INTERVAL '30 days'  -- Filter kondisi awal pencarian
     AND (
       e.serial_number = q.ident
       OR e.hostname ILIKE q.ident
@@ -142,23 +184,29 @@ ORDER BY event_time DESC;
 ```
 
 ### 4.2 Ambil ringkasan semua perangkat aktif
-
+**Fungsi Query**:
 Query ini memakai fallback ke `unified_assets` dan `raw_tags` supaya metadata tetap muncul ketika normalized event belum lengkap. Contoh kasus tervalidasi: UPS event tidak membawa `ip` di `dcim_events` sehingga perlu fallback ke `unified_assets.ip`; CCTV model bisa ada di `raw_tags.model`; CCTV vendor Hikvision bisa diinfer dari model `DS-*`.
+
+Membuat inventory aktif 24 jam terakhir lintas device type. Query ini dipakai untuk melihat daftar perangkat aktif, metadata CMDB, last event, jumlah event, dan gap metadata dalam satu output.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 WITH latest_events AS (
   SELECT DISTINCT ON (
     device_type,
-    CASE
-      WHEN device_type IN ('cctv', 'nvr') THEN ip::text
-      ELSE COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text)
-    END
+    COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text)
   )
     device_type,
-    CASE
-      WHEN device_type IN ('cctv', 'nvr') THEN ip::text
-      ELSE COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text)
-    END AS device_key,
+    COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text) AS device_key,
     hostname,
     ip,
     serial_number,
@@ -170,30 +218,21 @@ WITH latest_events AS (
     asset_status,
     event_time
   FROM dcim_events
-  WHERE event_time > NOW() - INTERVAL '24 hours'
+  WHERE event_time > NOW() - INTERVAL '24 hours'  -- Filter kondisi awal pencarian
   ORDER BY
     device_type,
-    CASE
-      WHEN device_type IN ('cctv', 'nvr') THEN ip::text
-      ELSE COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text)
-    END,
+    COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text),
     event_time DESC
 ), event_counts AS (
   SELECT
     device_type,
-    CASE
-      WHEN device_type IN ('cctv', 'nvr') THEN ip::text
-      ELSE COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text)
-    END AS device_key,
+    COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text) AS device_key,
     COUNT(*) AS events_24h
   FROM dcim_events
-  WHERE event_time > NOW() - INTERVAL '24 hours'
+  WHERE event_time > NOW() - INTERVAL '24 hours'  -- Filter kondisi awal pencarian
   GROUP BY
     device_type,
-    CASE
-      WHEN device_type IN ('cctv', 'nvr') THEN ip::text
-      ELSE COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text)
-    END
+    COALESCE(NULLIF(NULLIF(serial_number, 'NO_SN'), 'NO_IDENTIFIER'), NULLIF(hostname, 'unknown'), ip::text)
 ), enriched AS (
   SELECT
     le.*,
@@ -250,6 +289,18 @@ ORDER BY device_type, hostname;
 ```
 
 ### 4.3 Cek kesehatan data per device type
+**Fungsi Query**:
+Validasi cepat apakah tiap kategori perangkat masih mengirim data. Query ini menunjukkan volume event, jumlah host/serial unik, waktu event terakhir, dan umur data terbaru.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT
@@ -260,12 +311,24 @@ SELECT
   MAX(event_time) AS last_event,
   NOW() - MAX(event_time) AS age
 FROM dcim_events
-WHERE event_time > NOW() - INTERVAL '24 hours'
+WHERE event_time > NOW() - INTERVAL '24 hours'  -- Filter kondisi awal pencarian
 GROUP BY device_type
 ORDER BY device_type;
 ```
 
 ### 4.4 Cek measurement yang tersedia
+**Fungsi Query**:
+Melihat measurement/source apa saja yang masuk per device type. Query ini berguna untuk cek collector mana yang aktif, apakah ada measurement hilang, dan distribusi event per source.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT
@@ -275,12 +338,24 @@ SELECT
   COUNT(DISTINCT hostname) AS hosts,
   MAX(event_time) AS last_event
 FROM dcim_events
-WHERE event_time > NOW() - INTERVAL '24 hours'
+WHERE event_time > NOW() - INTERVAL '24 hours'  -- Filter kondisi awal pencarian
 GROUP BY device_type, measurement
 ORDER BY device_type, total_events DESC;
 ```
 
 ### 4.5 Ambil raw sample terakhir perangkat
+**Fungsi Query**:
+Mengambil contoh event mentah terakhir untuk satu perangkat. Query ini dipakai saat debugging field kosong/salah mapping karena menampilkan `raw_tags` dan `raw_fields` asli.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT
@@ -296,24 +371,43 @@ SELECT
   raw_tags,
   raw_fields
 FROM dcim_events
-WHERE event_time > NOW() - INTERVAL '24 hours'
+WHERE event_time > NOW() - INTERVAL '24 hours'  -- Filter kondisi awal pencarian
   AND (
-    serial_number = :serial_number
-    OR hostname = :hostname
-    OR ip = :ip::inet
+    -- Contoh aktual server dari dcim_events.
+    -- Ganti 3 nilai di bawah jika ingin cek perangkat lain.
+    serial_number = 'J901GKXY'
+    OR hostname = 'SRV-HCI-01'
+    OR ip = '10.50.0.2'::inet
+
+    -- Contoh ganti ke perangkat lain:
+    -- serial_number = 'ABC123456789'
+    -- OR hostname = 'HOSTNAME-LAIN'
+    -- OR ip = '192.168.100.10'::inet
   )
 ORDER BY event_time DESC
 LIMIT 50;
 ```
 
 ### 4.6 Join event terbaru dengan `unified_assets`
+**Fungsi Query**:
+Membandingkan telemetry terbaru dengan cache CMDB. Query ini membantu menemukan beda hostname/IP/status/lokasi antara event dan Ralph cache.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 WITH latest AS (
   SELECT DISTINCT ON (COALESCE(serial_number, hostname, ip::text))
     *
   FROM dcim_events
-  WHERE event_time > NOW() - INTERVAL '24 hours'
+  WHERE event_time > NOW() - INTERVAL '24 hours'  -- Filter kondisi awal pencarian
   ORDER BY COALESCE(serial_number, hostname, ip::text), event_time DESC
 )
 SELECT
@@ -341,37 +435,119 @@ ORDER BY l.device_type, l.hostname;
 ## 5. Query Baseline per Device Type
 
 ### 5.1 Server
-
 #### Latest server identity + health
+**Fungsi Query**:
+Melihat identitas dan status kesehatan server terbaru. Query ini dipakai untuk ringkasan Redfish/server inventory: model, firmware, BIOS, health, suhu, power, kipas, CPU, memory, lokasi, dan status asset.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
-SELECT DISTINCT ON (serial_number)
-  event_time,
-  hostname,
-  ip,
-  serial_number,
-  srv_system_name,
-  manufacturer,
-  model,
-  srv_firmware,
-  srv_bios_version,
-  srv_health,
-  srv_state,
-  srv_reading_celsius,
-  srv_power_watts,
-  srv_reading_rpm,
-  srv_cpu_count,
-  srv_memory_total_mb,
-  site,
-  rack_name,
-  asset_status
-FROM dcim_events
-WHERE device_type = 'server'
-  AND event_time > NOW() - INTERVAL '24 hours'
-ORDER BY serial_number, event_time DESC;
+WITH recent AS (
+  SELECT *
+  FROM dcim_events
+  WHERE device_type = 'server'  -- Filter kondisi awal pencarian
+    AND event_time > NOW() - INTERVAL '24 hours'  -- Filter rentang waktu observasi
+), latest_identity AS (
+  SELECT DISTINCT ON (serial_number)
+    event_time,
+    hostname,
+    ip,
+    serial_number,
+    COALESCE(srv_system_name, hostname) AS srv_system_name,
+    manufacturer,
+    model,
+    site,
+    rack_name,
+    asset_status
+  FROM recent
+  WHERE serial_number IS NOT NULL  -- Filter kondisi awal pencarian
+  ORDER BY serial_number, event_time DESC
+), latest_inventory AS (
+  SELECT DISTINCT ON (serial_number)
+    serial_number,
+    srv_firmware,
+    srv_bios_version,
+    srv_cpu_components,
+    srv_memory_components,
+    srv_disk_components,
+    raw_tags,
+    event_time AS inventory_event_time
+  FROM recent
+  WHERE serial_number IS NOT NULL  -- Filter kondisi awal pencarian
+    AND metric_name = 'inventory_snapshot'
+  ORDER BY serial_number, event_time DESC
+), latest_values AS (
+  SELECT
+    serial_number,
+    -- Ambil nilai non-null terbaru per kolom karena sensor Redfish masuk sebagai banyak baris.
+    (ARRAY_AGG(COALESCE(srv_firmware, raw_fields->>'firmware') ORDER BY event_time DESC) FILTER (WHERE COALESCE(srv_firmware, raw_fields->>'firmware') IS NOT NULL))[1] AS srv_firmware,
+    (ARRAY_AGG(COALESCE(srv_bios_version, raw_fields->>'bios_version', raw_fields->>'BiosVersion') ORDER BY event_time DESC) FILTER (WHERE COALESCE(srv_bios_version, raw_fields->>'bios_version', raw_fields->>'BiosVersion') IS NOT NULL))[1] AS srv_bios_version,
+    (ARRAY_AGG(srv_health ORDER BY event_time DESC) FILTER (WHERE srv_health IS NOT NULL))[1] AS srv_health,
+    (ARRAY_AGG(srv_state ORDER BY event_time DESC) FILTER (WHERE srv_state IS NOT NULL))[1] AS srv_state,
+    (ARRAY_AGG(srv_reading_celsius ORDER BY event_time DESC) FILTER (WHERE srv_reading_celsius IS NOT NULL))[1] AS srv_reading_celsius,
+    (ARRAY_AGG(srv_power_watts ORDER BY event_time DESC) FILTER (WHERE srv_power_watts IS NOT NULL))[1] AS srv_power_watts,
+    (ARRAY_AGG(srv_reading_rpm ORDER BY event_time DESC) FILTER (WHERE srv_reading_rpm IS NOT NULL))[1] AS srv_reading_rpm,
+    (ARRAY_AGG(srv_cpu_count ORDER BY event_time DESC) FILTER (WHERE srv_cpu_count IS NOT NULL))[1] AS srv_cpu_count,
+    (ARRAY_AGG(srv_memory_total_mb ORDER BY event_time DESC) FILTER (WHERE srv_memory_total_mb IS NOT NULL))[1] AS srv_memory_total_mb
+  FROM recent
+  WHERE serial_number IS NOT NULL  -- Filter kondisi awal pencarian
+  GROUP BY serial_number
+)
+SELECT
+  i.event_time,
+  i.hostname,
+  i.ip,
+  i.serial_number,
+  i.srv_system_name,
+  i.manufacturer,
+  i.model,
+  COALESCE(inv.srv_firmware, v.srv_firmware) AS srv_firmware,
+  COALESCE(inv.srv_bios_version, v.srv_bios_version) AS srv_bios_version,
+  v.srv_health,
+  v.srv_state,
+  v.srv_reading_celsius,
+  v.srv_power_watts,
+  v.srv_reading_rpm,
+  COALESCE(v.srv_cpu_count, jsonb_array_length(COALESCE(inv.srv_cpu_components, '[]'::jsonb))) AS srv_cpu_count,
+  COALESCE(
+    v.srv_memory_total_mb,
+    (SELECT SUM((mem->>'size')::int) FROM jsonb_array_elements(COALESCE(inv.srv_memory_components, '[]'::jsonb)) mem)
+  ) AS srv_memory_total_mb,
+  jsonb_array_length(COALESCE(inv.srv_disk_components, '[]'::jsonb)) AS srv_disk_count,
+  jsonb_array_length(COALESCE(inv.raw_tags->'nics', '[]'::jsonb)) AS srv_nic_count,
+  inv.inventory_event_time,
+  i.site,
+  i.rack_name,
+  i.asset_status
+FROM latest_identity i
+LEFT JOIN latest_values v USING (serial_number)
+LEFT JOIN latest_inventory inv USING (serial_number)
+ORDER BY i.hostname;
 ```
 
+Catatan: BIOS, firmware, CPU, RAM, disk, dan NIC berasal dari event `metric_name = 'inventory_snapshot'` yang dibuat oleh `scripts/server_inventory_to_pg.py`. Sensor suhu/power/RPM berasal dari event Redfish berkala. Karena sumbernya beda baris, query ini menggabungkan keduanya.
+
 #### Server sensors recent metrics
+**Fungsi Query**:
+Melihat sensor server terbaru untuk hostname atau serial tertentu. Query ini cocok untuk troubleshooting suhu, RPM, power, dan health sensor dalam 1 jam terakhir.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT
@@ -388,14 +564,31 @@ SELECT
   srv_health,
   srv_state
 FROM dcim_events
-WHERE device_type = 'server'
-  AND event_time > NOW() - INTERVAL '1 hour'
-  AND (hostname = :hostname OR serial_number = :serial_number)
+WHERE device_type = 'server'  -- Filter kondisi awal pencarian
+  AND event_time > NOW() - INTERVAL '1 hour'  -- Filter rentang waktu observasi
+  AND (
+    -- Contoh aktual server dari dcim_events.
+    -- Ganti nilai ini jika ingin cek server lain.
+    hostname = 'SRV-HCI-01'
+    OR serial_number = 'J901GKXY'
+  )
 ORDER BY event_time DESC, srv_sensor_name
 LIMIT 500;
 ```
 
 #### Server components from JSONB columns
+**Fungsi Query**:
+Mengambil komponen server dari snapshot JSONB terbaru. Query ini dipakai jika agent butuh daftar CPU, RAM, disk, dan NIC dari event terakhir tanpa join table komponen.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT DISTINCT ON (serial_number)
@@ -408,33 +601,58 @@ SELECT DISTINCT ON (serial_number)
   raw_tags->'nics' AS srv_nic_components,
   event_time
 FROM dcim_events
-WHERE device_type = 'server'
-  AND serial_number = :serial_number
+WHERE device_type = 'server'  -- Filter kondisi awal pencarian
+  -- Contoh aktual server dari dcim_events. Ganti jika perlu.
+  AND serial_number = 'J901GKXY'
 ORDER BY serial_number, event_time DESC;
 ```
 
 #### Server component relational tables by IP
+**Fungsi Query**:
+Mengambil detail komponen server dari tabel relasional inventory. Query ini lebih cocok untuk lookup komponen by IP dengan struktur konsisten per disk/NIC/CPU/RAM.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT 'disk' AS component, server_ip::text, serial_number, model_name, size_gb::text AS value, firmware_version, slot, collected_at
 FROM dcim_server_disks
-WHERE server_ip = :ip::inet
+WHERE server_ip = '10.50.0.2'::inet  -- Filter kondisi awal pencarian
 UNION ALL
 SELECT 'nic', server_ip::text, mac_address, model_name, speed_gbps::text, NULL, label, collected_at
 FROM dcim_server_nics
-WHERE server_ip = :ip::inet
+WHERE server_ip = '10.50.0.2'::inet  -- Filter kondisi awal pencarian
 UNION ALL
 SELECT 'cpu', server_ip::text, NULL, model_name, cores::text || ' cores / ' || logical_cores::text || ' threads', speed_mhz::text, NULL, collected_at
 FROM dcim_server_processors
-WHERE server_ip = :ip::inet
+WHERE server_ip = '10.50.0.2'::inet  -- Filter kondisi awal pencarian
 UNION ALL
 SELECT 'ram', server_ip::text, NULL, model_name, size_mb::text || ' MB', speed_mhz::text, NULL, collected_at
 FROM dcim_server_ram
-WHERE server_ip = :ip::inet
+WHERE server_ip = '10.50.0.2'::inet  -- Filter kondisi awal pencarian
 ORDER BY component, collected_at DESC;
 ```
 
 ### 5.2 UPS
+**Fungsi Query**:
+Melihat identitas dan metrik UPS terbaru. Query ini menampilkan serial/model, firmware, kapasitas baterai, runtime, load, tegangan input/output, suhu baterai, lokasi, dan status asset.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT DISTINCT ON (serial_number)
@@ -458,12 +676,14 @@ SELECT DISTINCT ON (serial_number)
   rack_name,
   asset_status
 FROM dcim_events
-WHERE device_type = 'ups'
-  AND event_time > NOW() - INTERVAL '24 hours'
+WHERE device_type = 'ups'  -- Filter kondisi awal pencarian
+  AND event_time > NOW() - INTERVAL '24 hours'  -- Filter rentang waktu observasi
 ORDER BY serial_number, event_time DESC;
 ```
 
 UPS trend:
+
+Melihat tren UPS per bucket 5 menit. Query ini dipakai untuk analisis perubahan battery capacity, output load, temperature, dan voltage selama 24 jam.
 
 ```sql
 SELECT
@@ -475,13 +695,25 @@ SELECT
   AVG(ups_input_voltage) AS input_voltage_avg,
   AVG(ups_output_voltage) AS output_voltage_avg
 FROM dcim_events
-WHERE device_type = 'ups'
-  AND event_time > NOW() - INTERVAL '24 hours'
+WHERE device_type = 'ups'  -- Filter kondisi awal pencarian
+  AND event_time > NOW() - INTERVAL '24 hours'  -- Filter rentang waktu observasi
 GROUP BY bucket, hostname
 ORDER BY bucket DESC;
 ```
 
 ### 5.3 NAS
+**Fungsi Query**:
+Melihat identitas dan kondisi NAS terbaru. Query ini menampilkan model, firmware, suhu sistem/disk, status disk, raw fields, lokasi, dan status asset.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT DISTINCT ON (serial_number)
@@ -501,12 +733,14 @@ SELECT DISTINCT ON (serial_number)
   rack_name,
   asset_status
 FROM dcim_events
-WHERE device_type = 'nas'
-  AND event_time > NOW() - INTERVAL '24 hours'
+WHERE device_type = 'nas'  -- Filter kondisi awal pencarian
+  AND event_time > NOW() - INTERVAL '24 hours'  -- Filter rentang waktu observasi
 ORDER BY serial_number, event_time DESC;
 ```
 
 NAS disk/volume metrics:
+
+Melihat metrik disk/volume NAS untuk hostname atau serial tertentu. Query ini dipakai untuk troubleshooting disk temperature, disk status, metric name/value, dan raw payload NAS.
 
 ```sql
 SELECT
@@ -521,14 +755,26 @@ SELECT
   metric_value,
   raw_fields
 FROM dcim_events
-WHERE device_type = 'nas'
-  AND event_time > NOW() - INTERVAL '6 hours'
-  AND (hostname = :hostname OR serial_number = :serial_number)
+WHERE device_type = 'nas'  -- Filter kondisi awal pencarian
+  AND event_time > NOW() - INTERVAL '6 hours'  -- Filter rentang waktu observasi
+  AND (hostname = :hostname OR serial_number = :serial_number)  -- Filter untuk multi-identitas perangkat
 ORDER BY event_time DESC
 LIMIT 500;
 ```
 
 ### 5.4 Network Switch
+**Fungsi Query**:
+Melihat identitas switch terbaru. Query ini dipakai untuk cek model, firmware, status, power state, lokasi, asset status, dan payload SNMP/raw terbaru.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT DISTINCT ON (serial_number)
@@ -547,12 +793,14 @@ SELECT DISTINCT ON (serial_number)
   raw_tags,
   raw_fields
 FROM dcim_events
-WHERE device_type = 'network_switch'
-  AND event_time > NOW() - INTERVAL '24 hours'
+WHERE device_type = 'network_switch'  -- Filter kondisi awal pencarian
+  AND event_time > NOW() - INTERVAL '24 hours'  -- Filter rentang waktu observasi
 ORDER BY serial_number, event_time DESC;
 ```
 
 Interface metrics:
+
+Melihat metrik interface switch per port. Query ini dipakai untuk cek operational/admin status, speed, traffic octets, dan error counter dalam 1 jam terakhir.
 
 ```sql
 SELECT
@@ -570,15 +818,17 @@ SELECT
   raw_tags,
   raw_fields
 FROM dcim_events
-WHERE device_type = 'network_switch'
+WHERE device_type = 'network_switch'  -- Filter kondisi awal pencarian
   AND measurement = 'interface'
-  AND event_time > NOW() - INTERVAL '1 hour'
-  AND (hostname = :hostname OR serial_number = :serial_number)
+  AND event_time > NOW() - INTERVAL '1 hour'  -- Filter rentang waktu observasi
+  AND (hostname = :hostname OR serial_number = :serial_number)  -- Filter untuk multi-identitas perangkat
 ORDER BY event_time DESC, net_if_name
 LIMIT 1000;
 ```
 
 Top interface errors:
+
+Menemukan port switch dengan error tertinggi. Query ini membantu prioritas investigasi interface bermasalah berdasarkan `in_errors` dan `out_errors` 24 jam terakhir.
 
 ```sql
 SELECT
@@ -588,9 +838,9 @@ SELECT
   MAX(net_if_out_errors) AS max_out_errors,
   MAX(event_time) AS last_event
 FROM dcim_events
-WHERE device_type = 'network_switch'
+WHERE device_type = 'network_switch'  -- Filter kondisi awal pencarian
   AND measurement = 'interface'
-  AND event_time > NOW() - INTERVAL '24 hours'
+  AND event_time > NOW() - INTERVAL '24 hours'  -- Filter rentang waktu observasi
 GROUP BY hostname, net_if_name
 HAVING COALESCE(MAX(net_if_in_errors), 0) > 0
     OR COALESCE(MAX(net_if_out_errors), 0) > 0
@@ -598,6 +848,18 @@ ORDER BY (COALESCE(MAX(net_if_in_errors), 0) + COALESCE(MAX(net_if_out_errors), 
 ```
 
 ### 5.5 CCTV
+**Fungsi Query**:
+Melihat identitas dan status CCTV terbaru. Query ini dipakai untuk cek IP, serial, model, firmware, status online/offline, raw tags/fields, lokasi, dan asset status.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT DISTINCT ON (serial_number)
@@ -617,20 +879,22 @@ SELECT DISTINCT ON (serial_number)
   rack_name,
   asset_status
 FROM dcim_events
-WHERE device_type = 'cctv'
-  AND event_time > NOW() - INTERVAL '24 hours'
+WHERE device_type = 'cctv'  -- Filter kondisi awal pencarian
+  AND event_time > NOW() - INTERVAL '24 hours'  -- Filter rentang waktu observasi
 ORDER BY serial_number, event_time DESC;
 ```
 
 CCTV online/offline summary:
+
+Menghitung total CCTV, online, dan tidak online dari snapshot terbaru. Query ini cocok untuk status ringkas monitoring CCTV 24 jam terakhir.
 
 ```sql
 WITH latest AS (
   SELECT DISTINCT ON (serial_number)
     hostname, ip, serial_number, cctv_status_online, cctv_status_text, event_time
   FROM dcim_events
-  WHERE device_type = 'cctv'
-    AND event_time > NOW() - INTERVAL '24 hours'
+  WHERE device_type = 'cctv'  -- Filter kondisi awal pencarian
+    AND event_time > NOW() - INTERVAL '24 hours'  -- Filter rentang waktu observasi
   ORDER BY serial_number, event_time DESC
 )
 SELECT
@@ -642,6 +906,18 @@ FROM latest;
 ```
 
 ### 5.6 NVR
+**Fungsi Query**:
+Melihat identitas dan status NVR terbaru. Query ini dipakai untuk cek NVR sebagai perangkat CCTV utama, termasuk serial, model, firmware, status, dan metadata CMDB.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT DISTINCT ON (serial_number)
@@ -660,12 +936,14 @@ SELECT DISTINCT ON (serial_number)
   rack_name,
   asset_status
 FROM dcim_events
-WHERE device_type = 'nvr'
-  AND event_time > NOW() - INTERVAL '24 hours'
+WHERE device_type = 'nvr'  -- Filter kondisi awal pencarian
+  AND event_time > NOW() - INTERVAL '24 hours'  -- Filter rentang waktu observasi
 ORDER BY serial_number, event_time DESC;
 ```
 
 NVR storage fields from raw JSON:
+
+Mengambil field storage/health NVR dari raw JSON. Query ini berguna karena sebagian data NVR belum selalu dinormalisasi ke kolom khusus.
 
 ```sql
 SELECT
@@ -679,8 +957,8 @@ SELECT
   raw_fields->>'memoryUsage' AS memory_usage,
   raw_fields
 FROM dcim_events
-WHERE device_type = 'nvr'
-  AND event_time > NOW() - INTERVAL '24 hours'
+WHERE device_type = 'nvr'  -- Filter kondisi awal pencarian
+  AND event_time > NOW() - INTERVAL '24 hours'  -- Filter rentang waktu observasi
 ORDER BY event_time DESC
 LIMIT 100;
 ```
@@ -688,6 +966,18 @@ LIMIT 100;
 ## 6. Query Relasi Perangkat → CMDB → Metrics
 
 ### 6.1 Semua data terkait satu serial number
+**Fungsi Query**:
+Menggabungkan ringkasan event 24 jam dan metadata CMDB untuk satu serial number. Query ini dipakai untuk investigasi lengkap satu asset dari telemetry sampai Ralph cache.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 WITH ident AS (
@@ -695,7 +985,7 @@ WITH ident AS (
 ), asset AS (
   SELECT *
   FROM unified_assets ua, ident
-  WHERE ua.serial_number = ident.sn
+  WHERE ua.serial_number = ident.sn  -- Filter kondisi awal pencarian
 ), event_summary AS (
   SELECT
     device_type,
@@ -706,7 +996,7 @@ WITH ident AS (
     MAX(event_time) AS last_event,
     ARRAY_AGG(DISTINCT measurement) AS measurements
   FROM dcim_events e, ident
-  WHERE e.serial_number = ident.sn
+  WHERE e.serial_number = ident.sn  -- Filter kondisi awal pencarian
     AND e.event_time > NOW() - INTERVAL '24 hours'
   GROUP BY device_type, hostname, ip, serial_number
 )
@@ -723,13 +1013,25 @@ LEFT JOIN asset a USING (serial_number);
 ```
 
 ### 6.2 Perangkat ada di PostgreSQL tapi belum ada di `unified_assets`
+**Fungsi Query**:
+Menemukan perangkat yang sudah muncul di telemetry tetapi belum ada di cache CMDB. Query ini menjadi input untuk commissioning/auto-register dan pengecekan gap Ralph sync.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 WITH latest_events AS (
   SELECT DISTINCT ON (device_type, serial_number)
     device_type, hostname, ip, serial_number, manufacturer, model, MAX(event_time) OVER (PARTITION BY device_type, serial_number) AS last_event
   FROM dcim_events
-  WHERE event_time > NOW() - INTERVAL '24 hours'
+  WHERE event_time > NOW() - INTERVAL '24 hours'  -- Filter kondisi awal pencarian
     AND serial_number IS NOT NULL
     AND serial_number NOT IN ('NO_SN', 'NO_IDENTIFIER', '')
   ORDER BY device_type, serial_number, event_time DESC
@@ -737,11 +1039,23 @@ WITH latest_events AS (
 SELECT le.*
 FROM latest_events le
 LEFT JOIN unified_assets ua ON ua.serial_number = le.serial_number
-WHERE ua.serial_number IS NULL
+WHERE ua.serial_number IS NULL  -- Filter kondisi awal pencarian
 ORDER BY le.device_type, le.hostname;
 ```
 
 ### 6.3 Perangkat known stale > 30 menit
+**Fungsi Query**:
+Menemukan perangkat yang tidak mengirim telemetry lebih dari 30 menit. Query ini dipakai untuk stale alert, kandidat decommissioning, atau investigasi collector/device down.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 WITH latest AS (
@@ -752,7 +1066,7 @@ WITH latest AS (
     MAX(ip::text) AS ip,
     MAX(event_time) AS last_event
   FROM dcim_events
-  WHERE event_time > NOW() - INTERVAL '7 days'
+  WHERE event_time > NOW() - INTERVAL '7 days'  -- Filter kondisi awal pencarian
   GROUP BY device_type, COALESCE(serial_number, hostname, ip::text)
 )
 SELECT
@@ -763,44 +1077,92 @@ SELECT
   last_event,
   NOW() - last_event AS age
 FROM latest
-WHERE last_event < NOW() - INTERVAL '30 minutes'
+WHERE last_event < NOW() - INTERVAL '30 minutes'  -- Filter kondisi awal pencarian
 ORDER BY age DESC;
 ```
 
 ## 7. Query Discovery & Schema Exploration
 
 ### 7.1 List tables
+**Fungsi Query**:
+Melihat daftar tabel publik di database. Query ini dipakai agent saat eksplorasi schema atau validasi nama tabel.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT table_schema, table_name
 FROM information_schema.tables
-WHERE table_schema = 'public'
+WHERE table_schema = 'public'  -- Filter kondisi awal pencarian
 ORDER BY table_name;
 ```
 
 ### 7.2 List columns for a table
+**Fungsi Query**:
+Melihat daftar kolom dan tipe data dari satu tabel. Query ini dipakai sebelum membuat query baru agar nama kolom valid.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT column_name, data_type
 FROM information_schema.columns
-WHERE table_schema = 'public'
+WHERE table_schema = 'public'  -- Filter kondisi awal pencarian
   AND table_name = :table_name
 ORDER BY ordinal_position;
 ```
 
 ### 7.3 JSONB keys per device type
+**Fungsi Query**:
+Menemukan key JSONB yang tersedia di `raw_fields` untuk device type tertentu. Query ini membantu mapping field baru dari payload mentah ke kolom normalized.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT key, COUNT(*) AS count
 FROM dcim_events e,
 LATERAL jsonb_object_keys(e.raw_fields) AS key
-WHERE e.device_type = :device_type
+WHERE e.device_type = :device_type  -- Filter kondisi awal pencarian
   AND e.event_time > NOW() - INTERVAL '24 hours'
 GROUP BY key
 ORDER BY count DESC, key;
 ```
 
 ### 7.4 Sample raw JSON by measurement
+**Fungsi Query**:
+Mengambil contoh `raw_tags` dan `raw_fields` per device type + measurement. Query ini dipakai untuk debugging parser, normalizer, dan metric mapping.
+
+**Penjelasan Bagian Query**:
+- `SELECT`: Mengambil kolom yang relevan dari data.
+- `FROM / JOIN`: Menggabungkan tabel sumber data (seperti `dcim_events` dan `unified_assets`).
+- `WHERE`: Memfilter data berdasarkan waktu dan tipe/identitas perangkat.
+
+**Apa yang Perlu Diperhatikan**:
+- Pastikan parameter waktu (`NOW() - INTERVAL`) disesuaikan jika data dari collector terhambat.
+- Perhatikan potensi data `NULL` pada kolom identitas seperti `ip` jika perangkat tidak menyediakannya.
+- Hati-hati dengan nilai duplikat; gunakan `DISTINCT ON` jika hanya butuh identitas/snapshot terbaru.
 
 ```sql
 SELECT
@@ -812,9 +1174,9 @@ SELECT
   jsonb_pretty(raw_tags) AS raw_tags,
   jsonb_pretty(raw_fields) AS raw_fields
 FROM dcim_events
-WHERE device_type = :device_type
+WHERE device_type = :device_type  -- Filter kondisi awal pencarian
   AND measurement = :measurement
-  AND event_time > NOW() - INTERVAL '24 hours'
+  AND event_time > NOW() - INTERVAL '24 hours'  -- Filter rentang waktu observasi
 ORDER BY event_time DESC
 LIMIT 5;
 ```

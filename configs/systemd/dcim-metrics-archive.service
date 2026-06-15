@@ -1,0 +1,11 @@
+[Unit]
+Description=DCIM ES to PG Metrics Archiver
+After=network.target
+
+[Service]
+Type=oneshot
+User=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+ExecStart=/usr/bin/python3 -u scripts/es_to_pg_archive.py --mode incremental
+StandardOutput=journal
+StandardError=journal

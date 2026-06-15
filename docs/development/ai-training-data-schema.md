@@ -1,11 +1,11 @@
 # AI Training Data Schema (DCIM Metrics)
 
-**Date**: 2026-06-11
-**Context**: Schema ini mendefinisikan format ekspor data CSV/JSONL yang dihasilkan oleh `scripts/export_training_data.py`. Data ini akan digunakan oleh tim AI untuk feature engineering dan model training.
+**Date**: 2026-06-15
+**Context**: Schema ini mendefinisikan format ekspor data CSV/JSONL yang dihasilkan oleh `scripts/export_training_data.py`. Sesuai dengan arsitektur v4.1 (L13), data historis untuk training time-series kini bersumber dari **PostgreSQL (golden source)** melalui materialized views `v_train_*`, bukan lagi dari Elasticsearch.
 
 ## 1. Export Script Usage
 
-Script untuk mengekstrak data historis dari Elasticsearch ke format CSV/JSONL:
+Script untuk mengekstrak data historis dari PostgreSQL ke format CSV/JSONL:
 
 ```bash
 python3 scripts/export_training_data.py \
@@ -19,34 +19,43 @@ python3 scripts/export_training_data.py \
 
 ## 2. Feature Schemas
 
-### A. Server (UC-AI-1 & UC-AI-2)
-Kolom yang diekstrak untuk `device_type=server`:
+Data yang diekstrak mengikuti skema tabel `v_train_*` pada PostgreSQL, yang sudah di-pivot ke bentuk *wide* (kolom per metrik) agar siap dilatih (ready-to-train).
 
-| Column Name | ES Mapping Path | Description |
+### A. Server (UC-AI-1 & UC-AI-2)
+Kolom yang diekstrak dari view `v_train_server`:
+
+| Column Name | PostgreSQL View Path | Description |
 |---|---|---|
-| `timestamp` | `@timestamp` | ISO 8601 Timestamp |
-| `serial_number` | `tag.serial_number` | Unique identifier (untuk join dengan Enrichment API) |
-| `model` | `tag.model` | Model hardware perangkat |
-| `cpu_usage` | `dcim_metrics.raw_fields_cpuUtilization` | Persentase utilitas CPU (0-100) |
-| `ram_usage` | `dcim_metrics.raw_fields_memoryUsage` | Total memori terpakai (dalam KB/MB) |
-| `power_draw` | `dcim_metrics.raw_fields_power_output_watts` | Konsumsi daya server dalam Watts |
-| `temperature` | `dcim_metrics.raw_fields_system_temp` | Suhu sistem dalam Celcius |
+| `ts` | `ts` | ISO 8601 Timestamp (truncated per menit) |
+| `serial_number` | `serial_number` | Unique identifier (untuk join dengan iTop/Enrichment) |
+| `hostname` | `hostname` | Hostname perangkat |
+| `model` | `model` | Model hardware perangkat |
+| `temp_celsius` | `temp_celsius` | Suhu sistem dalam Celcius |
+| `power_watts` | `power_watts` | Konsumsi daya server dalam Watts |
+| `fan_rpm` | `fan_rpm` | Kecepatan kipas dalam RPM |
+| `cpu_util_pct` | `cpu_util_pct` | Persentase utilitas CPU (0-100) (via Redfish Telemetry) |
+| `mem_util_pct` | `mem_util_pct` | Persentase utilitas Memori (0-100) |
 
 ### B. UPS (UC-AI-3)
-Kolom yang diekstrak untuk `device_type=ups`:
+Kolom yang diekstrak dari view `v_train_ups`:
 
-| Column Name | ES Mapping Path | Description |
+| Column Name | PostgreSQL View Path | Description |
 |---|---|---|
-| `timestamp` | `@timestamp` | ISO 8601 Timestamp |
-| `serial_number` | `tag.serial_number` | Unique identifier UPS |
-| `model` | `tag.model` | Model UPS |
-| `output_load` | `dcim_metrics.raw_fields_output_load` | Persentase beban UPS (0-100) |
-| `battery_temp` | `dcim_metrics.raw_fields_battery_temp` | Suhu baterai (Celcius) |
-| `battery_runtime` | `dcim_metrics.raw_fields_battery_runtime_remain`| Sisa waktu runtime baterai (menit) |
+| `ts` | `ts` | ISO 8601 Timestamp |
+| `serial_number` | `serial_number` | Unique identifier UPS |
+| `hostname` | `hostname` | Hostname perangkat |
+| `model` | `model` | Model UPS |
+| `input_voltage` | `input_voltage` | Tegangan input |
+| `output_voltage` | `output_voltage` | Tegangan output |
+| `load_pct` | `load_pct` | Persentase beban UPS (0-100) |
+| `battery_pct` | `battery_pct` | Kapasitas baterai (%) |
+| `battery_runtime_sec` | `battery_runtime_sec` | Sisa waktu runtime baterai (detik) |
+| `temp_celsius` | `temp_celsius` | Suhu baterai (Celcius) |
+
+*(Schema serupa juga tersedia untuk nas, network, cctv, dan nvr).*
 
 ## 3. Enrichment Integration
 
-Untuk mendapatkan context tambahan (seperti `criticality`, `org`, `location`), tim AI diwajibkan menggunakan **Enrichment API** (Redis) sebagai referensi statis untuk melengkapi file CSV historis ini:
+Untuk mendapatkan context tambahan relasi perangkat (seperti `location_id`, `org_id`, `criticality`), tim AI dapat melakukan **JOIN** dengan CMDB **iTop** atau query langsung ke tabel relasional di PostgreSQL (`dcim_server_disks`, dsb).
+Tim AI juga dapat menggunakan **Enrichment API** (Redis) secara real-time pada saat inferensi agen AI:
 `GET http://localhost:8000/enrich/{serial_number}`
-
-Enrichment API akan mengembalikan atribut tambahan yang diperlukan untuk context model LLM tanpa memberatkan index Elasticsearch.
