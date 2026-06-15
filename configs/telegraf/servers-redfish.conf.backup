@@ -47,10 +47,3 @@
   name_override = "server_redfish"
   [inputs.redfish.tags]
     host = "server-Render-02"
-
-# Redfish CPU/Memory utilization poller (OEM telemetry)
-[[inputs.exec]]
-  commands = ["/usr/bin/python3 /home/infra/dcim_metrics_project/scripts/redfish_telemetry_poller.py"]
-  timeout = "15s"
-  interval = "120s"
-  data_format = "influx"
