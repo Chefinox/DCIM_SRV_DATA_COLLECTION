@@ -12,6 +12,8 @@
     "ups_apc": "ups",
     "dcim_nas": "nas",
     "server_redfish": "server",
+    "server_redfish_util": "server",
+    "server_inventory": "server",
     "cctv_metrics": "cctv"
   },
   "dcim_nas": {
@@ -27,16 +29,16 @@
   },
   "ups_apc": {
     "metric_name": "battery_capacity",
-    "metric_field": "upsBatteryCapacity",
+    "metric_field": "battery_capacity",
     "metric_unit": "percent",
     "secondary_metrics": [
       {
-        "field": "upsBatteryTemp",
+        "field": "battery_temp",
         "name": "battery_temperature",
         "unit": "celsius"
       },
       {
-        "field": "upsOutputVoltage",
+        "field": "output_voltage",
         "name": "output_voltage",
         "unit": "volt"
       }
@@ -51,5 +53,21 @@
     "metric_name": "general_metric",
     "metric_field": null,
     "metric_unit": null
+  },
+  "server_redfish_util": {
+    "metric_name": "cpu_utilization",
+    "metric_field": "cpuUtilization",
+    "metric_unit": "percent",
+    "secondary_metrics": [
+      {
+        "field": "memoryUsage",
+        "name": "memory_utilization",
+        "unit": "percent"
+      }
+    ]
+  },
+  "server_inventory": {
+    "metric_name": "inventory_snapshot",
+    "metric_field": null
   }
 }
