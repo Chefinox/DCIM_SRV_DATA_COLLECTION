@@ -191,6 +191,22 @@ def run_archive(mode="incremental", dry_run=False):
             
         logger.info(f"Archival complete. Processed {total_docs} docs, inserted {total_inserted} rows.", extra={"event_type": "archive_complete"})
             
+        # Refresh Materialized Views
+        logger.info("Refreshing materialized views...")
+        try:
+            with conn.cursor() as cur:
+                cur.execute("REFRESH MATERIALIZED VIEW v_train_server;")
+                cur.execute("REFRESH MATERIALIZED VIEW v_train_network;")
+                cur.execute("REFRESH MATERIALIZED VIEW v_train_ups;")
+                cur.execute("REFRESH MATERIALIZED VIEW v_train_nas;")
+                cur.execute("REFRESH MATERIALIZED VIEW v_train_cctv;")
+                cur.execute("REFRESH MATERIALIZED VIEW v_train_environmental;")
+            conn.commit()
+            logger.info("Materialized views refreshed successfully.")
+        except Exception as mv_e:
+            conn.rollback()
+            logger.error(f"Failed to refresh materialized views: {mv_e}")
+            
     except Exception as e:
         logger.error(f"Archival failed: {e}", extra={"event_type": "archive_failure"}, exc_info=True)
     finally:
