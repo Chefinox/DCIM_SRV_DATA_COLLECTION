@@ -200,7 +200,7 @@ def run_archive(mode="incremental", dry_run=False):
                 cur.execute("REFRESH MATERIALIZED VIEW v_train_ups;")
                 cur.execute("REFRESH MATERIALIZED VIEW v_train_nas;")
                 cur.execute("REFRESH MATERIALIZED VIEW v_train_cctv;")
-                cur.execute("REFRESH MATERIALIZED VIEW v_train_environmental;")
+                cur.execute("REFRESH MATERIALIZED VIEW v_train_nvr;")
             conn.commit()
             logger.info("Materialized views refreshed successfully.")
         except Exception as mv_e:
