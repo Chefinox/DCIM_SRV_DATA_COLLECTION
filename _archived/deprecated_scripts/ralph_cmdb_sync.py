@@ -15,6 +15,11 @@ Gunakan fungsi ralph_get_all() untuk menghindari bug paginasi Ralph (default lim
 
 import json
 import logging
+import sys
+if "/home/infra/dcim_metrics_project" not in sys.path:
+    sys.path.append("/home/infra/dcim_metrics_project")
+from src.observability.logging.dcim_logger import setup_logger
+import os
 import requests
 import psycopg2
 import urllib3
@@ -25,22 +30,23 @@ from psycopg2.extras import RealDictCursor
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- CONFIGURATION ---
-RALPH_API_BASE = "http://192.168.101.73:8088/api"
+# MIGRATION NOTE (2026-06-01): Ralph dan PostgreSQL SOT sudah dimigrasi ke server ini (10.70.0.56)
+# Host lama: 192.168.100.115:8088 (Ralph) / 192.168.100.115:5432 (PostgreSQL)
+# Host baru: localhost:8082 (ralph_nginx container) / localhost:5432 (dcim_sot_postgres container)
+RALPH_API_BASE = os.getenv("RALPH_API_BASE", "http://localhost:8082/api")
 RALPH_TOKEN    = "1cd05b8d36e258399a52c59f1a4016addb2346a3"
 
 DB_CONFIG = {
-    "host":     "192.168.101.73",
+    "host":     os.getenv("SOT_DB_HOST", "localhost"),  # Migrated: was 192.168.100.115, now dcim_sot_postgres container
     "port":     5432,
-    "dbname":   "dcim_sot",
-    "user":     "sot_admin",
-    "password": "Inovasi@0918"
+    "dbname":   os.getenv("SOT_DB_NAME", "dcim_sot"),
+    "user":     os.getenv("SOT_DB_USER", "sot_admin"),
+    "password": os.getenv("SOT_DB_PASS", "Inovasi@0918")
 }
 
 LOG_FILE = "/home/infra/dcim_metrics_project/logs/ralph_cmdb_sync.log"
-logging.basicConfig(
-    filename=LOG_FILE,
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s: %(message)s'
+logger = setup_logger("ralph_cmdb_sync", LOG_FILE)
+logging = loggers %(levelname)s: %(message)s'
 )
 
 RALPH_HEADERS = {
@@ -81,34 +87,170 @@ def find_ralph_asset_by_sn(sn):
     return None, None
 
 
-def update_management_ip(asset_id, ip, hostname, endpoint_type="data-center-assets"):
-    """Update atau buat objek IPAddress is_management=True untuk aset."""
-    # Ralph menggunakan base_object ID yang unik lintas kategori (DC/BO)
-    url = f"{RALPH_API_BASE}/ipaddresses/?ethernet__base_object={asset_id}&is_management=True"
-    existing = ralph_get_all(url)
-    if existing:
-        ip_id = existing[0]["id"]
-        r = requests.patch(
-            f"{RALPH_API_BASE}/ipaddresses/{ip_id}/",
-            headers=RALPH_HEADERS,
-            json={"address": ip, "hostname": hostname},
-            verify=False
-        )
-        logging.info(f"  [IP] PATCH management IP {ip} → HTTP {r.status_code}")
+# --- AUTO-REGISTER: Model & Rack mapping for new devices ---
+DEVICE_TYPE_MODEL_MAP = {
+    "server": 26,         # ThinkSystem SR650 V3 (generic)
+    "ups": 34,            # APC Easy UPS 3S 30kVA
+    "nas": 16,            # RS2423RP (generic Synology)
+    "network_switch": 6,  # CCR2004-16G-2S+ (generic MikroTik)
+    "nvr": 18,            # DS-7732NXI-K4
+}
+DEFAULT_RACK = 3  # Rack Server 1
+
+
+def auto_register_dc_asset(sn, hostname, device_type, model_name=None, ip=None):
+    """Auto-register device baru ke Ralph DC Assets jika belum ada.
+
+    Dipanggil ketika find_ralph_asset_by_sn() return None.
+    Hanya register dengan info minimal — detail di-update oleh sync berikutnya.
+    """
+    model_id = DEVICE_TYPE_MODEL_MAP.get(device_type)
+    if not model_id:
+        logging.warning(f"  [AUTO-REG] Tidak ada model mapping untuk device_type={device_type}, skip SN={sn}")
+        return None, None
+
+    payload = {
+        "sn": sn,
+        "hostname": hostname or f"AUTO-{device_type.upper()}-{sn[-6:]}",
+        "model": model_id,
+        "rack": DEFAULT_RACK,
+        "status": "in use",
+        "remarks": f"Auto-registered by ralph_cmdb_sync.py | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    }
+
+    r = requests.post(f"{RALPH_API_BASE}/data-center-assets/",
+                      headers=RALPH_HEADERS, json=payload, verify=False)
+    if r.ok:
+        asset = r.json()
+        asset_id = asset["id"]
+        logging.info(f"  [AUTO-REG] NEW {device_type}: {hostname} (SN:{sn}) -> id={asset_id}")
+        return asset, "data-center-assets"
     else:
-        # Perlu ethernet ID untuk membuat IP baru
-        eths = ralph_get_all(f"{RALPH_API_BASE}/ethernets/?base_object={asset_id}")
-        eth_id = eths[0]["id"] if eths else None
-        payload = {"address": ip, "hostname": hostname, "is_management": True}
-        if eth_id:
-            payload["ethernet"] = eth_id
-        r = requests.post(
-            f"{RALPH_API_BASE}/ipaddresses/",
-            headers=RALPH_HEADERS,
-            json=payload,
-            verify=False
+        logging.error(f"  [AUTO-REG] FAIL register {sn}: {r.status_code} {r.text[:200]}")
+        return None, None
+
+
+def _ensure_management_ethernet(asset_id):
+    """Pastikan ada minimal 1 ethernet untuk asset; kembalikan eth_id atau None."""
+    eths = ralph_get_all(f"{RALPH_API_BASE}/ethernets/?base_object={asset_id}")
+    if eths:
+        # Prefer ethernet yang labelnya mengandung "management" (case-insensitive)
+        for e in eths:
+            if (e.get("label") or "").lower().startswith("management"):
+                return e["id"]
+        return eths[0]["id"]
+
+    # Tidak ada ethernet sama sekali → buat default "Management"
+    eth_payload = {"base_object": asset_id, "label": "Management"}
+    r_eth = requests.post(f"{RALPH_API_BASE}/ethernets/", headers=RALPH_HEADERS, json=eth_payload, verify=False)
+    if r_eth.ok:
+        eth_id = r_eth.json().get("id")
+        logging.info(f"  [ETH] POST management ethernet → HTTP {r_eth.status_code} (id={eth_id})")
+        return eth_id
+    logging.warning(f"  [ETH] POST management ethernet GAGAL → HTTP {r_eth.status_code}: {r_eth.text[:200]}")
+    return None
+
+
+def _ip_belongs_to_asset(ip_obj, asset_id):
+    """Cek apakah objek IPAddress sudah terikat ke asset ini via ethernet."""
+    eth_ref = ip_obj.get("ethernet")
+    if not eth_ref:
+        return False
+    # Field "ethernet" bisa berupa dict (detail) atau int (id) tergantung serializer
+    if isinstance(eth_ref, dict):
+        # Coba cari base_object di dalamnya, atau ambil id lalu lookup
+        bo = eth_ref.get("base_object")
+        if isinstance(bo, dict):
+            return bo.get("id") == asset_id
+        if isinstance(bo, int):
+            return bo == asset_id
+        eth_id = eth_ref.get("id")
+    else:
+        eth_id = eth_ref
+    if not eth_id:
+        return False
+    # Lookup ethernet ke base_object
+    r = requests.get(f"{RALPH_API_BASE}/ethernets/{eth_id}/", headers=RALPH_HEADERS, verify=False)
+    if not r.ok:
+        return False
+    bo = r.json().get("base_object")
+    if isinstance(bo, dict):
+        return bo.get("id") == asset_id
+    return bo == asset_id
+
+
+def update_management_ip(asset_id, ip, hostname, endpoint_type="data-center-assets"):
+    """Update atau buat objek IPAddress is_management=True untuk aset.
+
+    Robust flow:
+      1. Cari IPAddress by address (handle IP orphan / duplikat dari run sebelumnya).
+      2. Pastikan asset punya ethernet (buat default 'Management' kalau belum ada).
+      3. Jika IP sudah ada:
+           - terikat ke asset ini → PATCH (update hostname/is_management).
+           - orphan (ethernet=null) → PATCH attach ke ethernet asset ini.
+           - terikat ke asset lain → WARN, skip (jangan timpa).
+      4. Jika IP belum ada → POST baru dengan ethernet terikat.
+      5. Log body error untuk respons non-2xx.
+    """
+    if not ip:
+        logging.warning(f"  [IP] IP kosong untuk asset {asset_id}, skip.")
+        return
+
+    # 1. Cari IP existing berdasarkan address (lebih reliable dari filter ethernet).
+    existing = ralph_get_all(f"{RALPH_API_BASE}/ipaddresses/?address={ip}")
+    eth_id = _ensure_management_ethernet(asset_id)
+
+    if existing:
+        ip_obj = existing[0]
+        ip_id = ip_obj["id"]
+
+        if _ip_belongs_to_asset(ip_obj, asset_id):
+            # Sudah terikat ke asset yang benar → cukup update hostname & flag
+            payload = {"hostname": hostname, "is_management": True}
+            r = requests.patch(
+                f"{RALPH_API_BASE}/ipaddresses/{ip_id}/",
+                headers=RALPH_HEADERS, json=payload, verify=False
+            )
+            if r.ok:
+                logging.info(f"  [IP] PATCH (linked) management IP {ip} → HTTP {r.status_code}")
+            else:
+                logging.warning(f"  [IP] PATCH gagal {ip} → HTTP {r.status_code}: {r.text[:200]}")
+            return
+
+        if ip_obj.get("ethernet") is None:
+            # Orphan IP (dibuat oleh run sebelumnya tanpa ethernet) → attach ke asset ini
+            payload = {"hostname": hostname, "is_management": True}
+            if eth_id:
+                payload["ethernet"] = eth_id
+            r = requests.patch(
+                f"{RALPH_API_BASE}/ipaddresses/{ip_id}/",
+                headers=RALPH_HEADERS, json=payload, verify=False
+            )
+            if r.ok:
+                logging.info(f"  [IP] PATCH (attach orphan) management IP {ip} → HTTP {r.status_code}")
+            else:
+                logging.warning(f"  [IP] PATCH attach gagal {ip} → HTTP {r.status_code}: {r.text[:200]}")
+            return
+
+        # IP terikat ke asset lain → jangan ganggu
+        logging.warning(
+            f"  [IP] {ip} sudah terikat ke asset lain (ethernet={ip_obj.get('ethernet')}). "
+            f"Skip update untuk asset {asset_id}."
         )
+        return
+
+    # 2. IP belum ada → buat baru
+    payload = {"address": ip, "hostname": hostname, "is_management": True}
+    if eth_id:
+        payload["ethernet"] = eth_id
+    r = requests.post(
+        f"{RALPH_API_BASE}/ipaddresses/",
+        headers=RALPH_HEADERS, json=payload, verify=False
+    )
+    if r.ok:
         logging.info(f"  [IP] POST management IP {ip} → HTTP {r.status_code}")
+    else:
+        logging.warning(f"  [IP] POST gagal {ip} → HTTP {r.status_code}: {r.text[:200]}")
 
 
 # --- SERVER SYNC ---
@@ -175,11 +317,15 @@ def sync_server_ethernets(asset_id, nic_components):
         else:
             requests.post(endpoint, headers=RALPH_HEADERS, json=payload, verify=False)
 
-    # Prune
+    # Prune (proteksi ethernet "Management" agar tidak terhapus)
     final_existing = ralph_get_all(f"{endpoint}?base_object={asset_id}")
     seen_labels = set()
     for eth in final_existing:
-        lbl = eth.get("label")
+        lbl = eth.get("label") or ""
+        # NEVER prune Management ethernet — dipakai untuk management IP
+        if lbl.lower().startswith("management"):
+            seen_labels.add(lbl)
+            continue
         if lbl not in current_labels or lbl in seen_labels:
             r = requests.delete(f"{endpoint}{eth['id']}/", headers=RALPH_HEADERS, verify=False)
             logging.info(f"  [NIC] Prune ID {eth['id']} (Label:{lbl}) → HTTP {r.status_code}")
@@ -215,42 +361,38 @@ def sync_server(row):
 
     asset, endpoint = find_ralph_asset_by_sn(sn)
     if not asset:
-        logging.warning(f"  [SERVER] Aset SN {sn} tidak ditemukan di Ralph (DC/BO), skip.")
-        return
+        # Auto-register device baru
+        asset, endpoint = auto_register_dc_asset(sn, hostname, "server", ip=ip)
+        if not asset:
+            return
 
     asset_id = asset["id"]
     logging.info(f"  [SERVER] Sync {hostname} (SN:{sn}, ID:{asset_id}) via {endpoint}")
 
     # Basic Info
-    last_sync_str = row.get("event_time").strftime("%Y-%m-%d %H:%M:%S") if row.get("event_time") else "Unknown"
+    last_sync_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     basic_payload = {
         "hostname": hostname,
         "firmware_version": row.get("srv_firmware"),
         "bios_version": row.get("srv_bios_version"),
         "remarks": f"Last Sync: {last_sync_str}",
+        "management_ip": ip,
+        "management_hostname": hostname,
         "custom_fields": {"power_consumption": None, "device_temperature": None}
     }
     r = requests.patch(f"{RALPH_API_BASE}/{endpoint}/{asset_id}/",
                        headers=RALPH_HEADERS, json=basic_payload, verify=False)
     logging.info(f"  [BASIC] PATCH asset → HTTP {r.status_code}")
 
-    # Management IP
+    # Management IP (ensure IP object linked via ethernet)
     update_management_ip(asset_id, ip, hostname, endpoint)
 
-    # Components (dari Tabel Relasional)
-    with psycopg2.connect(**DB_CONFIG) as subconn:
-        with subconn.cursor(cursor_factory=RealDictCursor) as subcur:
-            subcur.execute("SELECT serial_number, model_name, size_gb as size, firmware_version, slot FROM dcim_server_disks WHERE server_ip = %s", (ip,))
-            disks = subcur.fetchall()
-            
-            subcur.execute("SELECT label, mac_address as mac, speed_gbps as speed, model_name FROM dcim_server_nics WHERE server_ip = %s", (ip,))
-            nics = subcur.fetchall()
-            
-            subcur.execute("SELECT model_name, size_mb as size, speed_mhz as speed FROM dcim_server_ram WHERE server_ip = %s", (ip,))
-            memory = subcur.fetchall()
-            
-            subcur.execute("SELECT model_name, cores, logical_cores, speed_mhz as speed FROM dcim_server_processors WHERE server_ip = %s", (ip,))
-            cpus = subcur.fetchall()
+    # Components (dari JSONB columns di dcim_events — tabel relational kosong)
+    disks = row.get("srv_disk_components") or []
+    memory = row.get("srv_memory_components") or []
+    cpus = row.get("srv_cpu_components") or []
+    raw_tags = row.get("raw_tags") or {}
+    nics = raw_tags.get("nics") or []
 
     sync_server_disks(asset_id, disks)
     sync_server_ethernets(asset_id, nics)
@@ -261,12 +403,38 @@ def sync_server(row):
 # --- UPS SYNC ---
 
 def sync_ups(row):
-    """Sync satu UPS dari baris PostgreSQL ke Ralph."""
-    sn = row.get("ups_serial_snmp") or row.get("serial_number")
-    hostname = row.get("hostname")
-    ip = str(row["ip"])
-    firmware = row.get("ups_firmware")
-    model = row.get("ups_model_snmp")
+    """Sync satu UPS dari baris PostgreSQL ke Ralph.
+
+    Catatan: Telegraf SNMP UPS menulis seluruh data ke ``raw_fields`` (JSONB),
+    bukan ke kolom dedicated ``ups_*``. Karena itu fungsi ini melakukan fallback
+    berurutan: kolom dedicated → ``raw_fields`` → ``raw_tags``.
+    """
+    raw_fields = row.get("raw_fields") or {}
+    raw_tags = row.get("raw_tags") or {}
+
+    sn = (
+        row.get("ups_serial_snmp")
+        or row.get("serial_number")
+        or raw_fields.get("serial_number")
+    )
+    hostname = (row.get("hostname")
+                or raw_fields.get("system_name")
+                or raw_fields.get("system_description"))
+    if hostname:
+        hostname = hostname.strip()
+
+    # IP: kolom inet → raw_tags.ip → raw_tags.agent_host (Telegraf default)
+    ip_val = row.get("ip") or raw_tags.get("ip") or raw_tags.get("agent_host")
+    ip = str(ip_val) if ip_val else None
+
+    firmware = (
+        row.get("ups_firmware")
+        or raw_fields.get("firmware_version")
+        or raw_fields.get("agent_firmware")
+    )
+    model = row.get("ups_model_snmp") or raw_fields.get("model")
+    if model:
+        model = model.strip()
 
     if not sn:
         logging.warning(f"  [UPS] Serial number kosong untuk IP {ip}, skip.")
@@ -274,27 +442,39 @@ def sync_ups(row):
 
     asset, endpoint = find_ralph_asset_by_sn(sn)
     if not asset:
-        logging.warning(f"  [UPS] Aset SN {sn} tidak ditemukan di Ralph (DC/BO), skip.")
-        return
+        asset, endpoint = auto_register_dc_asset(sn, hostname, "ups", ip=ip)
+        if not asset:
+            return
 
     asset_id = asset["id"]
     logging.info(f"  [UPS] Sync {hostname} (SN:{sn}, ID:{asset_id}) via {endpoint}")
 
     # Basic Info
-    last_sync_str = row.get("event_time").strftime("%Y-%m-%d %H:%M:%S") if row.get("event_time") else "Unknown"
+    last_sync_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     payload = {
         "hostname": hostname,
-        "firmware_version": firmware,
     }
-    remarks = f"Last Sync: {last_sync_str}"
-    payload["remarks"] = remarks
+    if firmware:
+        payload["firmware_version"] = firmware
+    if ip:
+        payload["management_ip"] = ip
+        payload["management_hostname"] = hostname
+
+    remarks_parts = []
+    if model:
+        remarks_parts.append(f"Model: {model}")
+    remarks_parts.append(f"Last Sync: {last_sync_str}")
+    payload["remarks"] = " | ".join(remarks_parts)
 
     r = requests.patch(f"{RALPH_API_BASE}/{endpoint}/{asset_id}/",
                        headers=RALPH_HEADERS, json=payload, verify=False)
     logging.info(f"  [BASIC] PATCH asset → HTTP {r.status_code}")
 
-    # Management IP
-    update_management_ip(asset_id, ip, hostname, endpoint)
+    # Management IP (skip kalau IP tidak tersedia di sumber)
+    if ip:
+        update_management_ip(asset_id, ip, hostname, endpoint)
+    else:
+        logging.warning(f"  [UPS] IP tidak tersedia untuk SN {sn}, skip update management IP.")
 
 
 # --- NAS & NETWORK SWITCH SYNC ---
@@ -309,6 +489,7 @@ def sync_network_storage(row):
     model = row.get("model")
     if not model or model == "Unknown":
         model = tags.get("model")
+    manufacturer = row.get("manufacturer")
     device_type = row.get("device_type").upper()
 
     if not sn or sn == 'NO_SN':
@@ -317,23 +498,36 @@ def sync_network_storage(row):
 
     asset, endpoint = find_ralph_asset_by_sn(sn)
     if not asset:
-        logging.warning(f"  [{device_type}] Aset SN {sn} tidak ditemukan di Ralph (DC/BO), skip.")
-        return
+        # Auto-register (skip CCTV — handled by register_cctv_to_ralph.py)
+        if row.get("device_type") == "cctv":
+            logging.warning(f"  [{device_type}] CCTV SN {sn} tidak di Ralph, skip (gunakan register_cctv_to_ralph.py).")
+            return
+        asset, endpoint = auto_register_dc_asset(sn, hostname, row.get("device_type"), ip=ip)
+        if not asset:
+            return
 
     asset_id = asset["id"]
     logging.info(f"  [{device_type}] Sync {hostname} (SN:{sn}, ID:{asset_id}) via {endpoint}")
 
     # Basic Info
-    last_sync_str = row.get("event_time").strftime("%Y-%m-%d %H:%M:%S") if row.get("event_time") else "Unknown"
+    last_sync_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     payload = {
         "hostname": hostname,
+        "management_ip": ip,
+        "management_hostname": hostname,
     }
     if firmware:
         payload["firmware_version"] = firmware
 
-    # Update remarks dengan detail model asli
-    remarks = f"Last Sync: {last_sync_str}"
-    payload["remarks"] = remarks
+    # Update remarks dengan detail: IP, model, manufacturer, Last Sync
+    remarks_parts = []
+    remarks_parts.append(f"IP: {ip}")
+    if manufacturer:
+        remarks_parts.append(f"Manufacturer: {manufacturer}")
+    if model:
+        remarks_parts.append(f"Model: {model}")
+    remarks_parts.append(f"Last Sync: {last_sync_str}")
+    payload["remarks"] = " | ".join(remarks_parts)
 
     r = requests.patch(f"{RALPH_API_BASE}/{endpoint}/{asset_id}/",
                        headers=RALPH_HEADERS, json=payload, verify=False)
@@ -388,11 +582,12 @@ def run():
         cur.execute("""
             SELECT DISTINCT ON (serial_number)
                 event_time, hostname, ip, serial_number, model,
-                srv_firmware, srv_bios_version, srv_system_name, srv_management_ip
+                srv_firmware, srv_bios_version, srv_system_name, srv_management_ip,
+                srv_cpu_components, srv_memory_components, srv_disk_components, raw_tags
             FROM dcim_events
             WHERE device_type = 'server'
+              AND metric_name = 'inventory_snapshot'
               AND serial_number IS NOT NULL
-              AND srv_system_name IS NOT NULL
             ORDER BY serial_number, event_time DESC
         """)
         servers = cur.fetchall()
@@ -404,15 +599,21 @@ def run():
                 logging.error(f"  ERROR server {row['ip']}: {e}")
 
         # === SYNC UPS ===
+        # Telegraf SNMP UPS menulis SN/firmware/model ke raw_fields (JSONB),
+        # bukan ke kolom dedicated. Kolom inet `ip` juga selalu NULL untuk UPS,
+        # jadi kita kelompokkan berdasarkan serial_number dan ambil semua
+        # raw_fields/raw_tags untuk fallback.
         logging.info("--- Syncing UPS ---")
         cur.execute("""
-            SELECT DISTINCT ON (ip)
+            SELECT DISTINCT ON (serial_number)
                 event_time, hostname, ip, serial_number,
-                ups_serial_snmp, ups_firmware, ups_model_snmp
+                ups_serial_snmp, ups_firmware, ups_model_snmp,
+                raw_fields, raw_tags
             FROM dcim_events
             WHERE device_type = 'ups'
-              AND ip IS NOT NULL
-            ORDER BY ip, event_time DESC
+              AND serial_number IS NOT NULL
+              AND serial_number NOT IN ('NO_IDENTIFIER', 'NO_SN', 'unknown')
+            ORDER BY serial_number, event_time DESC
         """)
         ups_list = cur.fetchall()
         logging.info(f"  Ditemukan {len(ups_list)} UPS unik di PostgreSQL")

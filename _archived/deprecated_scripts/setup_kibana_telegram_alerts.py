@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Setup Kibana Telegram Alert Integration (GAP-017-05 & GAP-017-02)
+Setup Kibana Telegram Alert Integration
 Creates:
   1. Webhook connector pointing to Telegram Bot API
   2. Alert Rule: ES index tidak diperbarui > 2 jam (pipeline mati)
@@ -21,7 +21,7 @@ import sys
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-KIBANA_URL = "https://10.70.0.56:5601"
+KIBANA_URL = "http://10.70.0.56:5601"
 ES_URL     = "https://10.70.0.56:9200"
 AUTH       = ("elastic", "C+H+pFb*aIAqWcOo-X8q")
 HEADERS    = {"kbn-xsrf": "true", "Content-Type": "application/json"}
@@ -137,16 +137,22 @@ def create_rule_enrichment_failure(connector_id):
             "threshold": [50],
             "esQuery": json.dumps({
                 "query": {
-                    "term": {"tag.enrichment_status.keyword": "NOT_IN_CMDB"}
+                    "terms": {
+                        "tag.enrichment_status.keyword": [
+                            "NOT_IN_CMDB",
+                            "NO_IDENTIFIER",
+                            "ENRICHMENT_ERROR"
+                        ]
+                    }
                 }
             })
         },
         "actions": [make_telegram_action(
             connector_id,
             "⚠️ <b>DCIM ALERT: Enrichment Failure Tinggi!</b>\n"
-            "Lebih dari 50 event dengan status NOT_IN_CMDB dalam 1 jam.\n"
-            "Kemungkinan: Redis cache tidak sinkron atau perangkat baru belum terdaftar di iTop.\n"
-            "Cek: dcim-itop-redis-sync.service"
+            "Lebih dari 50 event gagal diperkaya (Enriched) dalam 1 jam.\n"
+            "Status Error: NOT_IN_CMDB / NO_IDENTIFIER / ENRICHMENT_ERROR\n"
+            "Cek: Konfigurasi Telegraf (Missing Tags) atau Redis Sync API."
         )]
     }
     resp = requests.post(

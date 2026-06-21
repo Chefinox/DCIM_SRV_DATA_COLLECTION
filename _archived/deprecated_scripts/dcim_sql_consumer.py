@@ -1,4 +1,10 @@
 import json
+import sys
+if "/home/infra/dcim_metrics_project" not in sys.path:
+    sys.path.append("/home/infra/dcim_metrics_project")
+from src.observability.logging.dcim_logger import setup_logger
+logger = setup_logger("dcim_sql_consumer", "/home/infra/dcim_metrics_project/logs/dcim_sql_consumer.log")
+
 import os
 import psycopg2
 from kafka import KafkaConsumer
@@ -21,7 +27,7 @@ KAFKA_BROKER = os.getenv("KAFKA_BROKER", "127.0.0.1:9092")
 KAFKA_TOPIC  = os.getenv("KAFKA_TOPIC", "dcim.enriched.events")
 
 DB_CONFIG = {
-    "host":     read_secret("SOT_DB_HOST", "192.168.101.73"),
+    "host":     read_secret("SOT_DB_HOST", "192.168.100.115"),
     "database": read_secret("SOT_DB_NAME", "dcim_sot"),
     "user":     read_secret("SOT_DB_USER", "sot_admin"),
     "password": read_secret("SOT_DB_PASS", "Inovasi@0918")
@@ -54,7 +60,7 @@ def update_db(data):
         category      = t.get('category') or f.get('category', 'infrastructure')
         model         = t.get('model') or f.get('model', '')
         firmware      = t.get('firmware') or f.get('firmware_version', '')
-        site          = f.get('site') or t.get('site', 'FIT-Head-Office')
+        site          = f.get('site') or t.get('site') or "Unknown"
         rack          = f.get('rack_name') or t.get('rack_name', 'Unknown')
         
         status        = f.get('status_text') or f.get('status', 'Unknown')
@@ -88,13 +94,13 @@ def update_db(data):
         conn.commit()
         cur.close()
         conn.close()
-        print(f"[{datetime.datetime.now()}] Persisted to Postgres: {hostname} ({dev_type})")
+        logger.info(f"[{datetime.datetime.now()}] Persisted to Postgres: {hostname} ({dev_type})")
         
     except Exception as e:
-        print(f"DB Error: {e}")
+        logger.info(f"DB Error: {e}")
 
 def main():
-    print(f"Starting JSON SQL Consumer for topic: {KAFKA_TOPIC}")
+    logger.info(f"Starting JSON SQL Consumer for topic: {KAFKA_TOPIC}")
     
     def safe_json_decode(v):
         if v is None or len(v) == 0:
@@ -102,7 +108,7 @@ def main():
         try:
             return json.loads(v.decode('utf-8'))
         except Exception as e:
-            print(f"JSON Decode Error: {e} | Raw data: {v}")
+            logger.info(f"JSON Decode Error: {e} | Raw data: {v}")
             return None
 
     consumer = KafkaConsumer(
