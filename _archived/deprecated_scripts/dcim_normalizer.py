@@ -1,5 +1,11 @@
 import os
 import json
+import sys
+if "/home/infra/dcim_metrics_project" not in sys.path:
+    sys.path.append("/home/infra/dcim_metrics_project")
+from src.observability.logging.dcim_logger import setup_logger
+logger = setup_logger("dcim_normalizer", "/home/infra/dcim_metrics_project/logs/dcim_normalizer.log")
+
 import uuid
 from datetime import datetime, timezone
 from confluent_kafka import Consumer, Producer
@@ -12,7 +18,7 @@ def load_config():
             with open(CONFIG_PATH, "r") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"Error loading config: {e}")
+            logger.error(f"Error loading config: {e}"")
     return {}
 
 config = load_config()
@@ -91,14 +97,14 @@ def main():
     consumer = Consumer(consumer_conf)
     producer = Producer(producer_conf)
     consumer.subscribe(['^dcim\.raw\..*'])
-    print("Starting python normalizer service (V3 - event_time enabled)...")
+    logger.info("Starting python normalizer service (V3 - event_time enabled)...")
     try:
         while True:
             msg = consumer.poll(1.0)
             if msg is None:
                 continue
             if msg.error():
-                print(f"Consumer error: {msg.error()}")
+                logger.info(f"Consumer error: {msg.error()}")
                 continue
             try:
                 raw_data = json.loads(msg.value().decode('utf-8'))
@@ -108,10 +114,10 @@ def main():
                     "dcim.normalized.events",
                     value=json.dumps(normalized).encode('utf-8')
                 )
-                print(f"Processed: {topic} -> {normalized['hostname']} [{normalized['device_type']}]")
+                logger.info(f"Processed: {topic} -> {normalized['hostname']} [{normalized['device_type']}]")
                 producer.poll(0)
             except Exception as e:
-                print(f"Error processing message: {e}")
+                logger.error(f"Error processing message: {e}"")
     except KeyboardInterrupt:
         pass
     finally:
