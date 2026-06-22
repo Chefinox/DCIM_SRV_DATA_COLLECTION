@@ -1,18 +1,20 @@
 # AI Agent Data Access Guide
 
-**Version**: 1.1 (Updated 2026-06-15)
-**Target Audience**: AI/ML Engineers & Autonomous Agents
+**Version**: 1.3 — selaras arsitektur **v4.2** (Updated 2026-06-22)
+**Target Audience**: AI/ML Engineers & Autonomous Agents (akses dari luar host)
 
 Dokumen ini adalah panduan teknis tentang bagaimana Agent AI dapat mengakses data operasional (DCIM), metadata aset (CMDB), dan metrics historis untuk keperluan analitik, training, maupun inference (RAG/Contextual Reasoning).
 
-## 1. Arsitektur Sumber Data (v4.1)
+## 1. Arsitektur Sumber Data (v4.2)
 
-Berdasarkan keputusan arsitektur terbaru (v4.1 L13), **PostgreSQL** adalah *golden source* untuk AI Training Data, sedangkan **iTop** adalah *golden source* untuk relasi perangkat.
+Berdasarkan keputusan arsitektur v4.2 (§16 — L14 *Data Interface for AI*), host `srv-rnd-dcim` berperan sebagai **penyedia data**; training & inference dijalankan **tim AI di infrastruktur sendiri**, mengakses **dari luar** secara read-only. **PostgreSQL** adalah *golden source* untuk AI Training Data, **iTop** adalah *golden source* untuk relasi perangkat.
 
-1. **PostgreSQL (`dcim_sot` di localhost:5432)**: Sumber utama untuk data training time-series AI historis beresolusi panjang (tabel `dcim_metrics_archive` dan materialized views `v_train_*`). PostgreSQL juga menampung raw `dcim_events` untuk rentang 7 hari terakhir.
-2. **Elasticsearch (10.70.0.56:9200)**: Digunakan untuk Kibana Dashboard, Alerting real-time, dan Log JSON (`dcim-logs-app-*`). **Tidak lagi digunakan** sebagai sumber utama export training data.
-3. **Redis Enrichment API (localhost:8000/enrich)**: Metadata aset in-memory yang sangat cepat. Menggabungkan data dari iTop (lokasi, criticality, brand) yang siap pakai.
-4. **iTop REST API (localhost:8080/webservices)**: *Source of Truth* utama untuk metadata CMDB dan Lifecycle (finansial, warranty).
+1. **PostgreSQL (`dcim_sot` @ 10.70.0.56:5432)** — akses pakai akun read-only **`dcim_ai_reader`** (bukan `sot_admin`): sumber utama time-series historis (`dcim_metrics_archive` + materialized views `v_train_*`), label `dcim_failure_events`, dan raw `dcim_events` (7 hari). Tim AI **menulis hasil** skor anomali hanya ke `dcim_server_anomalies`.
+2. **Elasticsearch (10.70.0.56:9200)**: Kibana, alerting real-time, log JSON (`dcim-logs-app-*`). **Bukan** sumber export training.
+3. **iTop REST API (10.70.0.56:8080/webservices)**: relasi CMDB & lifecycle — akses read-only pakai akun **`ai_readonly`** (lihat `itop-api-baseline-for-agents.md`).
+4. **Redis Enrichment API (`localhost:8000/enrich`)**: hanya internal pipeline (NiFi). **Tidak dapat diakses dari luar host**; tim AI mengambil metadata lewat kolom enrichment di `dcim_events`/`v_train_*` atau langsung iTop.
+
+> **Penting (v4.2)**: tidak ada proses inference AI yang berjalan di host ini. Host hanya menyediakan data (read) + wadah hasil `dcim_server_anomalies` (write dari luar).
 
 ---
 
@@ -20,7 +22,7 @@ Berdasarkan keputusan arsitektur terbaru (v4.1 L13), **PostgreSQL** adalah *gold
 
 ### A. PostgreSQL (AI Training Golden Source)
 
-- **Endpoint**: `localhost:5432`, DB: `dcim_sot`, User: `sot_admin`
+- **Endpoint**: `10.70.0.56:5432`, DB: `dcim_sot`, User: `dcim_ai_reader` (read-only; password via secret store / `configs/ai_reader.credentials`)
 - **Tables/Views**: `v_train_server`, `v_train_ups`, `v_train_nas`, `v_train_network`, `v_train_cctv`, `v_train_nvr`.
 - **Tujuan**: Mendapatkan data berformat *wide* yang sudah siap-latih (ready-to-train) untuk AI.
 
@@ -57,8 +59,8 @@ ORDER BY ts ASC;
 
 Jika AI Agent diminta untuk melakukan analisis finansial (misal: *capacity planning* berdasarkan umur garansi), AI harus melakukan query ke iTop.
 
-- **URL**: `http://localhost:8080/webservices/rest.php?version=1.3`
-- **Auth**: `auth_user` & `auth_pwd` (Tanyakan tim Infra)
+- **URL**: `http://10.70.0.56:8080/webservices/rest.php?version=1.3`
+- **Auth**: akun read-only **`ai_readonly`** (`auth_user`/`auth_pwd`); password via kanal aman. Jangan pakai akun `admin`.
 
 **Contoh Payload (core/get):**
 ```json
@@ -80,8 +82,8 @@ Berikut adalah contoh skenario **"Cara mendapatkan semua konteks & data historis
 2. **Ambil Konteks Fisik**: AI melakukan `GET http://localhost:8000/enrich/J901GKXY`.
    - *Hasil*: AI tahu ini adalah `Server` merk `Lenovo` di `Rack Server 2`, tingkat *criticality* `low`.
 3. **Ambil Data Historis (Metrics)**: AI melakukan eksekusi SQL query ke PostgreSQL (database `dcim_sot`, view `v_train_server`) untuk menarik *time-series* `cpu_util_pct` dan `power_watts` selama 7 hari ke belakang.
-   - *Alternatif Offline*: Jika AI sedang mode training offline, gunakan file `training_YYYYMMDD_server.csv` (lihat [ai-training-data-schema.md](ai-training-data-schema.md)).
-4. **Kalkulasi/Inference**: Berdasarkan metrics time-series (adakah lonjakan suhu/CPU secara konstan?) dan konteks CMDB (Server ini milik divisi A, ada di rak B), AI membuat kesimpulan atau rekomendasi.
+   - *Alternatif Offline / Training*: Jika AI sedang mode melatih model (training) offline, gunakan alat ekspor: `python3 scripts/export_training_data.py --device server --start 2026-05-01 --end 2026-06-01` untuk mendapatkan CSV/JSONL yang siap pakai (lihat [ai-training-data-schema.md](ai-training-data-schema.md)).
+4. **Kalkulasi/Inference**: Berdasarkan metrics time-series (adakah lonjakan suhu/CPU secara konstan?) dan konteks CMDB (Server ini milik divisi A, ada di rak B), AI membuat kesimpulan atau rekomendasi. Inference dijalankan **di infrastruktur tim AI**; hasil skor disimpan kembali ke tabel `dcim_server_anomalies` lewat koneksi `dcim_ai_reader` (satu-satunya tabel yang boleh ditulis dari luar).
 
 ---
 
