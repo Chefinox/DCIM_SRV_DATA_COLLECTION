@@ -1,28 +1,36 @@
 # Database Query Baseline for Agents
 
-> **Last Updated**: 2026-05-21  
-> **Version**: v3.5.5  
-> **Purpose**: Referensi query PostgreSQL agar agent bisa menemukan seluruh data terkait perangkat dari `dcim_sot`.
+> **Last Updated**: 2026-06-17  
+> **Version**: v4.2  
+> **Purpose**: Referensi query PostgreSQL agar agent/tim AI bisa menemukan seluruh data terkait perangkat dari `dcim_sot`, termasuk untuk AI Training Data.
+> **Selaras**: `docs/architecture/v4.2-pipeline-architecture.md` §16 (L14 — Data Interface for AI) & `docs/development/ai-team-data-access-connection-guide.md`.
 
 ## 1. Koneksi Database
 
+> **Tim AI mengakses dari LUAR dengan akun read-only `dcim_ai_reader`** (least privilege), **bukan** `sot_admin`. Lihat hak akses & cara koneksi lengkap di `docs/development/ai-team-data-access-connection-guide.md`. Password ada di file rahasia `configs/ai_reader.credentials` di host (tidak dimuat di repo).
+
 | Item | Value |
 | :--- | :--- |
-| Host | `localhost` |
+| Host | `10.70.0.56` |
 | Port | `5432` |
 | Database | `dcim_sot` |
-| Main table | `public.dcim_events` |
+| User (tim AI) | `dcim_ai_reader` (read-only + write hanya ke `dcim_server_anomalies`) |
+| Main table | `public.dcim_events` (operasional, retensi 7 hari) |
 | Asset cache table | `public.unified_assets` |
 | Server component tables | `dcim_server_disks`, `dcim_server_nics`, `dcim_server_processors`, `dcim_server_ram` |
+| **AI training views** | `v_train_server`, `v_train_ups`, `v_train_nas`, `v_train_network`, `v_train_cctv`, `v_train_nvr` |
+| **Long-term archive** | `dcim_metrics_archive` (histori panjang, format long/EAV) |
+| **Failure labels** | `dcim_failure_events` (label supervised) |
+| **Anomaly result sink** | `dcim_server_anomalies` (tim AI menulis skor ke sini) |
 
 Gunakan credential dari environment/secret store. Jangan hardcode password di script agent.
 
 ```bash
-export PGHOST=localhost
+export PGHOST=10.70.0.56
 export PGPORT=5432
 export PGDATABASE=dcim_sot
-export PGUSER=sot_admin
-# export PGPASSWORD=...  # isi manual/secret manager
+export PGUSER=dcim_ai_reader
+# export PGPASSWORD=...  # ambil dari configs/ai_reader.credentials / secret manager
 ```
 
 ## 2. Tabel Utama
@@ -533,7 +541,7 @@ LEFT JOIN latest_inventory inv USING (serial_number)
 ORDER BY i.hostname;
 ```
 
-Catatan: BIOS, firmware, CPU, RAM, disk, dan NIC berasal dari event `metric_name = 'inventory_snapshot'` yang dibuat oleh `scripts/server_inventory_to_pg.py`. Sensor suhu/power/RPM berasal dari event Redfish berkala. Karena sumbernya beda baris, query ini menggabungkan keduanya.
+Catatan: BIOS, firmware, CPU, RAM, disk, dan NIC berasal dari event `metric_name = 'inventory_snapshot'` yang dibuat oleh `scripts/server_inventory_collector.py` (deep-scan harian 01:00 → Kafka `dcim.raw.hardware.server.inventory` → consumer → `dcim_events`). Sensor suhu/power/RPM berasal dari event Redfish berkala. Karena sumbernya beda baris, query ini menggabungkan keduanya.
 
 #### Server sensors recent metrics
 **Fungsi Query**:
@@ -757,7 +765,7 @@ SELECT
 FROM dcim_events
 WHERE device_type = 'nas'  -- Filter kondisi awal pencarian
   AND event_time > NOW() - INTERVAL '6 hours'  -- Filter rentang waktu observasi
-  AND (hostname = :hostname OR serial_number = :serial_number)  -- Filter untuk multi-identitas perangkat
+  AND (hostname = 'NAS-FIT' OR serial_number = '2050PDN123456')  -- Ganti dengan hostname/SN aktual
 ORDER BY event_time DESC
 LIMIT 500;
 ```
@@ -821,7 +829,7 @@ FROM dcim_events
 WHERE device_type = 'network_switch'  -- Filter kondisi awal pencarian
   AND measurement = 'interface'
   AND event_time > NOW() - INTERVAL '1 hour'  -- Filter rentang waktu observasi
-  AND (hostname = :hostname OR serial_number = :serial_number)  -- Filter untuk multi-identitas perangkat
+  AND (hostname = 'FIT-Core-RTR' OR serial_number = 'HC707RR1T60')  -- Ganti dengan hostname/SN aktual
 ORDER BY event_time DESC, net_if_name
 LIMIT 1000;
 ```
@@ -981,7 +989,7 @@ Menggabungkan ringkasan event 24 jam dan metadata CMDB untuk satu serial number.
 
 ```sql
 WITH ident AS (
-  SELECT :serial_number::text AS sn
+  SELECT 'J901GKXY'::text AS sn  -- Ganti dengan serial number aktual
 ), asset AS (
   SELECT *
   FROM unified_assets ua, ident
@@ -1122,7 +1130,7 @@ Melihat daftar kolom dan tipe data dari satu tabel. Query ini dipakai sebelum me
 SELECT column_name, data_type
 FROM information_schema.columns
 WHERE table_schema = 'public'  -- Filter kondisi awal pencarian
-  AND table_name = :table_name
+  AND table_name = 'dcim_events'  -- Ganti dengan nama tabel aktual
 ORDER BY ordinal_position;
 ```
 
@@ -1144,7 +1152,7 @@ Menemukan key JSONB yang tersedia di `raw_fields` untuk device type tertentu. Qu
 SELECT key, COUNT(*) AS count
 FROM dcim_events e,
 LATERAL jsonb_object_keys(e.raw_fields) AS key
-WHERE e.device_type = :device_type  -- Filter kondisi awal pencarian
+WHERE e.device_type = 'server'  -- Ganti dengan tipe perangkat aktual
   AND e.event_time > NOW() - INTERVAL '24 hours'
 GROUP BY key
 ORDER BY count DESC, key;
@@ -1174,8 +1182,8 @@ SELECT
   jsonb_pretty(raw_tags) AS raw_tags,
   jsonb_pretty(raw_fields) AS raw_fields
 FROM dcim_events
-WHERE device_type = :device_type  -- Filter kondisi awal pencarian
-  AND measurement = :measurement
+WHERE device_type = 'server'  -- Ganti dengan tipe perangkat aktual
+  AND measurement = 'server_redfish'  -- Ganti dengan measurement aktual
   AND event_time > NOW() - INTERVAL '24 hours'  -- Filter rentang waktu observasi
 ORDER BY event_time DESC
 LIMIT 5;
@@ -1207,3 +1215,62 @@ LIMIT 5;
 6. For dashboard fields, prefer normalized columns when present; use `raw_fields` only when normalized column is missing.
 7. CCTV count by hostname can look low because NVR/poller may group channels; use serial-level query for camera identities.
 8. Kafka short sampling can false-warn because collectors run every 120 seconds. Verify with DB/ES counts and topic offsets.
+
+## 10. AI Training Data (Materialized Views + Archive)
+
+Sesuai arsitektur v4.2 (§16 — L14 Data Interface for AI), **golden source untuk training adalah PostgreSQL**. Tersedia dua lapisan:
+
+1. **`v_train_*` (materialized view, disarankan)** — sudah di-*pivot* per tipe perangkat (long→wide), satu baris per menit per perangkat. Inilah jalur utama untuk training.
+2. **`dcim_metrics_archive` (tabel arsip, format long/EAV)** — histori mentah jangka panjang. **Boleh** diquery `dcim_ai_reader` bila butuh field di luar view, **tetapi** selalu filter `device_type` + rentang `event_time` karena tabel ini besar (partisi bulanan).
+
+> Catatan: `v_train_*` di-*refresh* harian (~03:00 WIB), jadi datanya bisa tertinggal beberapa jam dari realtime. Untuk data paling segar, baca `dcim_metrics_archive` langsung dengan filter waktu.
+
+### 10.1 Materialized Views — kolom aktual
+
+| Materialized View | Kategori | Kolom (selain `ts, serial_number, hostname, model`) |
+|---|---|---|
+| `v_train_server` | Server | `temp_celsius, power_watts, fan_rpm, cpu_util_pct, mem_util_pct` |
+| `v_train_ups` | UPS | `input_voltage, output_voltage, output_load, output_load_l1/l2/l3, output_current, output_current_l1/l2/l3, battery_capacity, battery_runtime_remain, battery_temp, temp_celsius` |
+| `v_train_nas` | NAS | `vol_used_pct, temp_celsius, cpu_util_pct, mem_util_pct, net_rx_bytes, net_tx_bytes` |
+| `v_train_network` | Switch | `cpu_util_pct, mem_util_kb, net_rx, net_tx, in_errors, out_errors, in_discards, out_discards, oper_status, active_connections` |
+| `v_train_cctv` | CCTV | `cpu_util_pct, mem_util_pct, net_throughput` |
+| `v_train_nvr` | NVR | `cpu_util_pct, mem_util_pct, disk_used_pct` |
+
+> **Cakupan fitur**: `cpu_util_pct`/`mem_util_pct` terisi untuk CCTV/NVR/NAS/Network. Untuk **server**, kedua kolom ini masih banyak `NULL` (utilisasi CPU/RAM server belum terkoleksi via Redfish — lihat v4.2 §15.4). `temp_celsius`/`power_watts`/`fan_rpm` server terisi normal.
+
+**Contoh Query untuk Model Training:**
+```sql
+SELECT ts, serial_number, hostname, temp_celsius, power_watts, fan_rpm
+FROM v_train_server
+WHERE ts >= '2026-05-01' AND ts < '2026-06-01'
+ORDER BY ts ASC;
+```
+
+### 10.2 Label kegagalan (supervised)
+
+```sql
+SELECT * FROM dcim_failure_events ORDER BY event_time DESC;
+```
+
+### 10.3 Tabel hasil anomali (result sink)
+
+Tim AI **menulis** hasil scoring model ke `dcim_server_anomalies` (satu-satunya tabel yang boleh ditulis `dcim_ai_reader`). Kolom aktual:
+`id, event_time, hostname, serial_number, cpu_util_pct, mem_util_pct, net_rx, net_tx, temp_celsius, power_watts, anomaly, anomaly_score, model_version`.
+
+> VIEW alias `server_anomalies` tersedia untuk kompatibilitas nama. Kolom flag bernama **`anomaly`** (boolean), **bukan** `is_anomaly`.
+
+```sql
+-- Baca hasil terbaru
+SELECT event_time, serial_number, anomaly, anomaly_score, model_version
+FROM dcim_server_anomalies
+ORDER BY event_time DESC LIMIT 10;
+
+-- Tulis hasil scoring (dilakukan tim AI dari luar)
+INSERT INTO dcim_server_anomalies
+  (event_time, hostname, serial_number, cpu_util_pct, mem_util_pct,
+   temp_celsius, power_watts, anomaly, anomaly_score, model_version)
+VALUES
+  (now(), 'SRV-HCI-01', 'J901GKXY', 42.5, 63.1, 51.2, 320, true, 0.97, 'isoforest-v1');
+```
+
+> **Penting (v4.2)**: tidak ada proses inference AI yang berjalan di host ini. Training & inference dijalankan tim AI di infrastruktur mereka; host ini hanya menyediakan data (read) dan wadah hasil (write ke `dcim_server_anomalies`).

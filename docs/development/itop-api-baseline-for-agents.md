@@ -1,35 +1,40 @@
 # iTop API Baseline for AI Agents
 
-**Version**: 1.0  
-**Date**: 2026-06-11  
-**Purpose**: Referensi untuk AI agent yang perlu query atau update data di iTop CMDB.
+**Version**: 1.2  
+**Date**: 2026-06-17  
+**Purpose**: Referensi untuk AI agent/tim AI yang perlu query relasi aset mendalam (impact analysis, contact, koneksi antar-CI) di iTop CMDB.
+**Selaras**: `docs/architecture/v4.2-pipeline-architecture.md` §16 (L14 — Data Interface for AI).
+
+> **Peran iTop untuk AI (v4.2)**: iTop = sumber **relasi antar-perangkat** (CMDB), pelengkap data time-series di PostgreSQL. Untuk fitur dasar (`site`, `rack_name`) cukup pakai `v_train_*` di PostgreSQL; query langsung ke iTop hanya untuk relasi mendalam (lihat §8).
+>
+> ⚠️ **Keamanan kredensial**: iTop **belum punya role read-only** seperti `dcim_ai_reader` di PostgreSQL. Akun `admin` punya akses tulis penuh. **Jangan tanam password di kode/repo.** Ambil dari environment (`ITOP_API_USER` / `ITOP_API_PASS`) yang diisi dari secret store. Bila tim AI hanya perlu **baca relasi**, mintakan akun iTop dengan profil read-only ke admin infra (rekomendasi), bukan memakai `admin`.
 
 ---
 
 ## 1. Endpoint dan Autentikasi
 
-**Base URL**: `http://localhost:8080/webservices/rest.php`  
+**Base URL**: `http://10.70.0.56:8080/webservices/rest.php`  
 **Method**: `POST`  
 **Content-Type**: `application/x-www-form-urlencoded`  
 **API Version**: 1.3 (ditambahkan sebagai query parameter `?version=1.3`)
 
 ### Autentikasi
 
-| Parameter | Description | Contoh |
+| Parameter | Description | Sumber nilai |
 |---|---|---|
-| `auth_user` | Username iTop | `admin` |
-| `auth_pwd` | Password iTop | `Inovasi@0918` |
+| `auth_user` | Username iTop | env `ITOP_API_USER` (mis. `admin`) |
+| `auth_pwd` | Password iTop | env `ITOP_API_PASS` (dari secret store — **jangan hardcode**) |
 
 ### Payload Format
 
 Setiap request dikirim sebagai form-encoded dengan parameter `json_data` berisi JSON string:
 
 ```python
-import requests, json
+import os, requests, json
 
-ITOP_URL = "http://localhost:8080/webservices/rest.php?version=1.3"
-ITOP_USER = "admin"
-ITOP_PASS = "Inovasi@0918"
+ITOP_URL = "http://10.70.0.56:8080/webservices/rest.php?version=1.3"
+ITOP_USER = os.environ["ITOP_API_USER"]   # mis. "admin"
+ITOP_PASS = os.environ["ITOP_API_PASS"]   # dari secret store, jangan hardcode
 
 def itop_post(payload: dict) -> dict:
     data = {
@@ -517,11 +522,30 @@ def safe_itop_call(payload: dict) -> tuple[bool, dict]:
 
 | Item | Value |
 |---|---|
-| iTop URL | `http://localhost:8080` |
+| iTop URL | `http://10.70.0.56:8080` |
 | API Endpoint | `/webservices/rest.php?version=1.3` |
-| Auth User | `admin` |
-| Auth Password | `Inovasi@0918` (via env `ITOP_API_PASS`) |
+| Auth User | via env `ITOP_API_USER` (mis. `admin`) |
+| Auth Password | via env `ITOP_API_PASS` (secret store — tidak dicantumkan di dokumen) |
 | Organization ID | `1` (PT. Falah Inovasi Teknologi) |
 | Database | MariaDB (internal Docker network) |
 | iTop Version | 3.1.1 (container `vbkunin/itop:3.1.1`) |
 | Total CI Count | ~79 (5 Server, 6 NetworkDevice, 5 StorageSystem, 61 Peripheral, 2 PowerSource) |
+
+---
+
+## 8. Pencarian Relasi Perangkat Mendalam (Untuk AI)
+
+Dalam proses persiapan data (*AI Readiness* v4.2), sebagian besar lokasi dasar (`site`, `rack_name`) sudah disertakan di PostgreSQL `v_train_*` sehingga AI bisa langsung menggunakannya. Namun, jika AI membutuhkan relasi CMDB yang lebih mendalam (contoh: Mengetahui nama *Contact Person* atau menelusuri dampak (*Impact Analysis*) jika sebuah Switch mati terhadap Server yang terhubung dengannya), AI harus melakukan query langsung ke iTop.
+
+Gunakan **OQL** dengan kunci `serialnumber` untuk mendapatkan relasi utuh tersebut:
+
+```python
+# Contoh: Mencari relasi dan kontak dari Server
+payload = {
+    "operation": "core/get",
+    "class": "Server",
+    "key": f"SELECT Server WHERE serialnumber = '{serial_number}'",
+    "output_fields": "contacts_list,documents_list,physicalinterface_list"
+}
+result = itop_post(payload)
+```
