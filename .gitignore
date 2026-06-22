@@ -4,3 +4,7 @@ logs/*.1
 .venv*/
 tmp_*
 scripts/tmp_*
+
+# AI integration secrets (never commit)
+configs/ai_reader.credentials
+sql/*.local
