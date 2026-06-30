@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: dcim-redis-cache
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    secrets:
+      - sot_db_pass
+
+  nifi:
+    image: apache/nifi:1.24.0
+    container_name: dcim-nifi
+    network_mode: "host"
+    environment:
+      - NIFI_WEB_HTTPS_HOST=0.0.0.0
+      - NIFI_WEB_HTTPS_PORT=8443
+      - SINGLE_USER_CREDENTIALS_USERNAME=admin
+      - SINGLE_USER_CREDENTIALS_PASSWORD_FILE=/run/secrets/nifi_password
+      - NIFI_WEB_PROXY_HOST=10.70.0.56:8443
+    volumes:
+      - nifi_conf:/opt/nifi/nifi-current/conf
+      - /etc/dcim/registry:/etc/dcim/registry:ro
+    restart: unless-stopped
+    mem_limit: 2g
+    secrets:
+      - nifi_password
+      - sot_db_pass
+      - redfish_pass
+      - ups_snmp_auth_pass
+      - ups_snmp_priv_pass
+      - nas_pass_rest
+      - nas_pass_snmp
+      - hikvision_nvr_pass
+      - hikvision_cam_pass
+      - ralph_api_token
+  telegraf-consumer:
+    image: telegraf:1.30-alpine
+    container_name: dcim-telegraf-consumer
+    network_mode: "host"
+    volumes:
+      - /etc/telegraf/telegraf-consumer.conf:/etc/telegraf/telegraf.conf:ro
+    restart: unless-stopped
+    depends_on:
+      - nifi
+
+  kafbat-ui:
+    image: ghcr.io/kafbat/kafka-ui:latest
+    container_name: dcim-kafka-ui
+    network_mode: "host"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "DCIM-Production"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "localhost:9092"
+      SERVER_PORT: 9000
+      DYNAMIC_CONFIG_ENABLED: "true"
+    depends_on:
+      - nifi
+
+secrets:
+  nifi_password:
+    file: /run/secrets/dcim/nifi_password
+  sot_db_pass:
+    file: /run/secrets/dcim/sot_db_pass
+  redfish_pass:
+    file: /run/secrets/dcim/redfish_pass
+  ups_snmp_auth_pass:
+    file: /run/secrets/dcim/ups_snmp_auth_pass
+  ups_snmp_priv_pass:
+    file: /run/secrets/dcim/ups_snmp_priv_pass
+  nas_pass_rest:
+    file: /run/secrets/dcim/nas_pass_rest
+  nas_pass_snmp:
+    file: /run/secrets/dcim/nas_pass_snmp
+  hikvision_nvr_pass:
+    file: /run/secrets/dcim/hikvision_nvr_pass
+  hikvision_cam_pass:
+    file: /run/secrets/dcim/hikvision_cam_pass
+  ralph_api_token:
+    file: /run/secrets/dcim/ralph_api_token
+
+volumes:
+  nifi_conf:
+    external: true
+    name: 30cba839864bb0c13d48bece2c728130e3f9005a8fbf3d102039efa7a0ccc292
+
+networks:
+  default:
+    name: phase2_default
+  kafka_default:
+    external: true
