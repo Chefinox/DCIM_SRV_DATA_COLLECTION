@@ -43,8 +43,8 @@ def main():
         cam_metrics = executor.poll_device(ip, DEVICE_USER, DEVICE_PASS, "CCTV")
         
         # Fallback to NVR mapping if device is offline or unauthorized
-        if cam_metrics["serial_number"] == "NO_SN" and ip in cam_mapping:
-            cam_metrics["serial_number"] = cam_mapping[ip]
+        if str(cam_metrics.get("serial_number", "")).startswith("CCTV-IP-") and ip in cam_mapping:
+            cam_metrics["serial_number"] = cam_mapping[ip].get("serial_number", cam_metrics["serial_number"])
             
         print(format_cctv_to_influx(cam_metrics))
 

@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DCIM Block 2 — Data Ingestion & Integration Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: #020617;
+      min-height: 100vh;
+      padding: 2rem;
+      color: white;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+    .pulse-dot { width: 12px; height: 12px; background: #fb923c; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em; }
+    .subtitle { color: #94a3b8; font-size: 0.875rem; margin-left: 1.75rem; }
+    .diagram-container {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 1rem;
+      border: 1px solid #1e293b;
+      padding: 1.5rem;
+      overflow-x: auto;
+    }
+    svg { width: 100%; min-width: 1100px; display: block; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 2rem; }
+    .card {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 0.75rem;
+      border: 1px solid #1e293b;
+      padding: 1.25rem;
+    }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card-dot.cyan { background: #22d3ee; }
+    .card-dot.emerald { background: #34d399; }
+    .card-dot.violet { background: #a78bfa; }
+    .card-dot.amber { background: #fbbf24; }
+    .card-dot.rose { background: #fb7185; }
+    .card-dot.orange { background: #fb923c; }
+    .card h3 { font-size: 0.875rem; font-weight: 600; }
+    .card ul { list-style: none; color: #94a3b8; font-size: 0.75rem; }
+    .card li { margin-bottom: 0.375rem; }
+    .footer { text-align: center; margin-top: 1.5rem; color: #475569; font-size: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>DCIM Block 2 — Data Ingestion & Integration</h1>
+      </div>
+      <p class="subtitle">Reference Architecture • NiFi Flows • Kafka Pipeline • Validation • Enrichment • DLQ • Lineage • Connectors</p>
+    </div>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1200 1000">
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+          </marker>
+          <marker id="arrowhead-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#fb923c" />
+          </marker>
+          <marker id="arrowhead-emerald" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#34d399" />
+          </marker>
+          <marker id="arrowhead-violet" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa" />
+          </marker>
+          <marker id="arrowhead-rose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#fb7185" />
+          </marker>
+          <marker id="arrowhead-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- ================================================================
+             ZONE: Source Systems (Left)
+             ================================================================ -->
+        <rect x="20" y="20" width="160" height="520" rx="12" fill="rgba(30, 41, 59, 0.15)" stroke="#94a3b8" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="32" y="40" fill="#94a3b8" font-size="11" font-weight="600">Source Systems</text>
+
+        <!-- BMS/EPMS -->
+        <rect x="35" y="60" width="130" height="55" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="100" y="82" fill="white" font-size="10" font-weight="600" text-anchor="middle">BMS / EPMS</text>
+        <text x="100" y="97" fill="#94a3b8" font-size="8" text-anchor="middle">REST • SNMP • Modbus</text>
+
+        <!-- NMS -->
+        <rect x="35" y="130" width="130" height="55" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="100" y="152" fill="white" font-size="10" font-weight="600" text-anchor="middle">NMS</text>
+        <text x="100" y="167" fill="#94a3b8" font-size="8" text-anchor="middle">SNMP v2c/v3 • REST</text>
+
+        <!-- Server/Storage -->
+        <rect x="35" y="200" width="130" height="55" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="100" y="222" fill="white" font-size="10" font-weight="600" text-anchor="middle">Server / Storage</text>
+        <text x="100" y="237" fill="#94a3b8" font-size="8" text-anchor="middle">SSH • REST • SNMP</text>
+
+        <!-- Virtualization/Cloud -->
+        <rect x="35" y="270" width="130" height="55" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="100" y="292" fill="white" font-size="10" font-weight="600" text-anchor="middle">Cloud / VM</text>
+        <text x="100" y="307" fill="#94a3b8" font-size="8" text-anchor="middle">vSphere • AWS • GCP</text>
+
+        <!-- Access Control -->
+        <rect x="35" y="340" width="130" height="55" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="100" y="362" fill="white" font-size="10" font-weight="600" text-anchor="middle">Access Control</text>
+        <text x="100" y="377" fill="#94a3b8" font-size="8" text-anchor="middle">Badge • CCTV</text>
+
+        <!-- ITSM/ERP/DMS -->
+        <rect x="35" y="410" width="130" height="55" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="100" y="432" fill="white" font-size="10" font-weight="600" text-anchor="middle">ITSM / ERP / DMS</text>
+        <text x="100" y="447" fill="#94a3b8" font-size="8" text-anchor="middle">REST • OAuth2</text>
+
+        <!-- Protocol labels -->
+        <text x="100" y="490" fill="#94a3b8" font-size="8" text-anchor="middle">Protocols: REST, SNMP,</text>
+        <text x="100" y="502" fill="#94a3b8" font-size="8" text-anchor="middle">Modbus, MQTT, SSH, SFTP</text>
+
+        <!-- ================================================================
+             ZONE: NiFi Ingestion Layer
+             ================================================================ -->
+        <rect x="200" y="20" width="200" height="520" rx="12" fill="rgba(6, 78, 59, 0.08)" stroke="#34d399" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="212" y="40" fill="#34d399" font-size="11" font-weight="600">NiFi Ingestion Layer</text>
+
+        <!-- BMS Flow -->
+        <rect x="215" y="60" width="170" height="70" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="300" y="82" fill="white" font-size="10" font-weight="600" text-anchor="middle">BMS/EPMS Flow</text>
+        <text x="300" y="97" fill="#34d399" font-size="8" text-anchor="middle">GetHTTP → Jolt → Validate</text>
+        <text x="300" y="110" fill="#94a3b8" font-size="7" text-anchor="middle">→ PublishKafka</text>
+
+        <!-- NMS Flow -->
+        <rect x="215" y="140" width="170" height="70" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="300" y="162" fill="white" font-size="10" font-weight="600" text-anchor="middle">NMS Flow</text>
+        <text x="300" y="177" fill="#34d399" font-size="8" text-anchor="middle">GetSNMP → Split → Jolt</text>
+        <text x="300" y="190" fill="#94a3b8" font-size="7" text-anchor="middle">→ Validate → PublishKafka</text>
+
+        <!-- Server/Storage Flow -->
+        <rect x="215" y="220" width="170" height="70" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="300" y="242" fill="white" font-size="10" font-weight="600" text-anchor="middle">Server/Storage Flow</text>
+        <text x="300" y="257" fill="#34d399" font-size="8" text-anchor="middle">SSH → Convert → Jolt</text>
+        <text x="300" y="270" fill="#94a3b8" font-size="7" text-anchor="middle">→ Validate → PublishKafka</text>
+
+        <!-- Cloud/VM Flow -->
+        <rect x="215" y="300" width="170" height="70" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="300" y="322" fill="white" font-size="10" font-weight="600" text-anchor="middle">Cloud/VM Flow</text>
+        <text x="300" y="337" fill="#34d399" font-size="8" text-anchor="middle">InvokeHTTP → Jolt</text>
+        <text x="300" y="350" fill="#94a3b8" font-size="7" text-anchor="middle">→ Validate → PublishKafka</text>
+
+        <!-- Access Control Flow -->
+        <rect x="215" y="380" width="170" height="70" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="300" y="402" fill="white" font-size="10" font-weight="600" text-anchor="middle">Access Control Flow</text>
+        <text x="300" y="417" fill="#34d399" font-size="8" text-anchor="middle">GetFile → Convert → Jolt</text>
+        <text x="300" y="430" fill="#94a3b8" font-size="7" text-anchor="middle">→ Validate → PublishKafka</text>
+
+        <!-- NiFi label -->
+        <text x="300" y="485" fill="#34d399" font-size="8" text-anchor="middle">HTTPS :8443 • Visual UI</text>
+
+        <!-- ================================================================
+             ZONE: Kafka Pipeline (Center)
+             ================================================================ -->
+        <rect x="420" y="20" width="220" height="520" rx="12" fill="rgba(251, 146, 60, 0.06)" stroke="#fb923c" stroke-width="1.5"/>
+        <text x="432" y="40" fill="#fb923c" font-size="11" font-weight="600">Kafka Pipeline</text>
+
+        <!-- dcim.events.raw -->
+        <rect x="435" y="60" width="190" height="55" rx="6" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1.5"/>
+        <text x="530" y="82" fill="white" font-size="10" font-weight="600" text-anchor="middle">dcim.events.raw</text>
+        <text x="530" y="97" fill="#fb923c" font-size="8" text-anchor="middle">12 partitions • RF=3 • 7d retention</text>
+
+        <!-- Validation Processor -->
+        <rect x="435" y="135" width="190" height="60" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/>
+        <text x="530" y="157" fill="white" font-size="10" font-weight="600" text-anchor="middle">Validation Processor</text>
+        <text x="530" y="172" fill="#fb7185" font-size="8" text-anchor="middle">Schema • Type • Range • Duplicate</text>
+        <text x="530" y="185" fill="#94a3b8" font-size="7" text-anchor="middle">JSON Schema + Redis dedup</text>
+
+        <!-- Pass/Fail split -->
+        <text x="480" y="218" fill="#34d399" font-size="8">pass (99%+)</text>
+        <text x="580" y="218" fill="#fb7185" font-size="8">fail (<1%)</text>
+
+        <!-- dcim.events.validated -->
+        <rect x="435" y="230" width="190" height="55" rx="6" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1.5"/>
+        <text x="530" y="252" fill="white" font-size="10" font-weight="600" text-anchor="middle">dcim.events.validated</text>
+        <text x="530" y="267" fill="#fb923c" font-size="8" text-anchor="middle">12 partitions • RF=3 • 30d retention</text>
+
+        <!-- Enrichment Processor -->
+        <rect x="435" y="305" width="190" height="60" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="530" y="327" fill="white" font-size="10" font-weight="600" text-anchor="middle">Enrichment Processor</text>
+        <text x="530" y="342" fill="#34d399" font-size="8" text-anchor="middle">CI Lookup • Location • Priority</text>
+        <text x="530" y="355" fill="#94a3b8" font-size="7" text-anchor="middle">CMDB + Asset Repo + Redis cache</text>
+
+        <!-- dcim.events.enriched -->
+        <rect x="435" y="385" width="190" height="55" rx="6" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1.5"/>
+        <text x="530" y="407" fill="white" font-size="10" font-weight="600" text-anchor="middle">dcim.events.enriched</text>
+        <text x="530" y="422" fill="#fb923c" font-size="8" text-anchor="middle">12 partitions • RF=3 • 90d retention</text>
+
+        <!-- Router -->
+        <rect x="435" y="460" width="190" height="55" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="530" y="482" fill="white" font-size="10" font-weight="600" text-anchor="middle">Router</text>
+        <text x="530" y="497" fill="#a78bfa" font-size="8" text-anchor="middle">Route by event_type → Target Store</text>
+
+        <!-- DLQ Topic (side) -->
+        <rect x="660" y="135" width="140" height="55" rx="6" fill="rgba(136, 19, 55, 0.3)" stroke="#fb7185" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="730" y="157" fill="#fb7185" font-size="9" font-weight="600" text-anchor="middle">dcim.events.dlq</text>
+        <text x="730" y="172" fill="#94a3b8" font-size="7" text-anchor="middle">6 partitions • 30d compact</text>
+
+        <!-- DLQ Consumer -->
+        <rect x="660" y="205" width="140" height="50" rx="6" fill="rgba(136, 19, 55, 0.3)" stroke="#fb7185" stroke-width="1"/>
+        <text x="730" y="227" fill="white" font-size="9" font-weight="600" text-anchor="middle">DLQ Monitor</text>
+        <text x="730" y="242" fill="#94a3b8" font-size="7" text-anchor="middle">Retry • Archive • Alert</text>
+
+        <!-- ================================================================
+             ZONE: Target Stores (Right)
+             ================================================================ -->
+        <rect x="820" y="20" width="360" height="520" rx="12" fill="rgba(76, 29, 149, 0.06)" stroke="#a78bfa" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="832" y="40" fill="#a78bfa" font-size="11" font-weight="600">Target Stores & Consumers</text>
+
+        <!-- CMDB -->
+        <rect x="835" y="60" width="160" height="65" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="915" y="82" fill="white" font-size="11" font-weight="600" text-anchor="middle">CMDB</text>
+        <text x="915" y="97" fill="#a78bfa" font-size="8" text-anchor="middle">CI Updates</text>
+        <text x="915" y="110" fill="#94a3b8" font-size="7" text-anchor="middle">dcim.cmdb.updates</text>
+
+        <!-- Asset Repository -->
+        <rect x="835" y="140" width="160" height="65" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="915" y="162" fill="white" font-size="11" font-weight="600" text-anchor="middle">Asset Repository</text>
+        <text x="915" y="177" fill="#a78bfa" font-size="8" text-anchor="middle">Asset Updates</text>
+        <text x="915" y="190" fill="#94a3b8" font-size="7" text-anchor="middle">dcim.asset.updates</text>
+
+        <!-- Time-Series / Analytics -->
+        <rect x="835" y="220" width="160" height="65" rx="6" fill="rgba(251, 191, 36, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="915" y="242" fill="white" font-size="11" font-weight="600" text-anchor="middle">Analytics Engine</text>
+        <text x="915" y="257" fill="#fbbf24" font-size="8" text-anchor="middle">Metrics & Anomaly</text>
+        <text x="915" y="270" fill="#94a3b8" font-size="7" text-anchor="middle">dcim.analytics.metrics</text>
+
+        <!-- SIEM -->
+        <rect x="835" y="300" width="160" height="65" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/>
+        <text x="915" y="322" fill="white" font-size="11" font-weight="600" text-anchor="middle">SIEM / SOC</text>
+        <text x="915" y="337" fill="#fb7185" font-size="8" text-anchor="middle">Security Events</text>
+        <text x="915" y="350" fill="#94a3b8" font-size="7" text-anchor="middle">dcim.siem.events</text>
+
+        <!-- Workflow Engine -->
+        <rect x="835" y="380" width="160" height="65" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="915" y="402" fill="white" font-size="11" font-weight="600" text-anchor="middle">Workflow Engine</text>
+        <text x="915" y="417" fill="#22d3ee" font-size="8" text-anchor="middle">Ticketing & Automation</text>
+        <text x="915" y="430" fill="#94a3b8" font-size="7" text-anchor="middle">dcim.workflow.events</text>
+
+        <!-- Connectors (right side) -->
+        <rect x="1020" y="60" width="145" height="130" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1"/>
+        <text x="1092" y="82" fill="white" font-size="9" font-weight="600" text-anchor="middle">External Connectors</text>
+        <text x="1092" y="100" fill="#94a3b8" font-size="7" text-anchor="middle">• ServiceNow (ITSM)</text>
+        <text x="1092" y="114" fill="#94a3b8" font-size="7" text-anchor="middle">• Jira (ITSM)</text>
+        <text x="1092" y="128" fill="#94a3b8" font-size="7" text-anchor="middle">• SAP (ERP)</text>
+        <text x="1092" y="142" fill="#94a3b8" font-size="7" text-anchor="middle">• Oracle (ERP)</text>
+        <text x="1092" y="156" fill="#94a3b8" font-size="7" text-anchor="middle">• Custom DMS</text>
+        <text x="1092" y="174" fill="#fb7185" font-size="7" text-anchor="middle">Circuit Breaker + OAuth2</text>
+
+        <!-- ================================================================
+             ZONE: Cross-cutting — Lineage
+             ================================================================ -->
+        <rect x="200" y="560" width="980" height="100" rx="12" fill="rgba(251, 191, 36, 0.05)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="212" y="580" fill="#fbbf24" font-size="11" font-weight="600">Cross-cutting: Data Lineage Tracking</text>
+
+        <!-- Lineage stages -->
+        <rect x="215" y="595" width="100" height="40" rx="4" fill="rgba(251, 191, 36, 0.2)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="265" y="615" fill="white" font-size="8" font-weight="600" text-anchor="middle">Ingested</text>
+        <text x="265" y="627" fill="#fbbf24" font-size="7" text-anchor="middle">timestamp</text>
+
+        <line x1="315" y1="615" x2="335" y2="615" stroke="#fbbf24" stroke-width="1" marker-end="url(#arrowhead-amber)"/>
+
+        <rect x="337" y="595" width="100" height="40" rx="4" fill="rgba(251, 191, 36, 0.2)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="387" y="615" fill="white" font-size="8" font-weight="600" text-anchor="middle">Validated</text>
+        <text x="387" y="627" fill="#fbbf24" font-size="7" text-anchor="middle">status + errors</text>
+
+        <line x1="437" y1="615" x2="457" y2="615" stroke="#fbbf24" stroke-width="1" marker-end="url(#arrowhead-amber)"/>
+
+        <rect x="459" y="595" width="100" height="40" rx="4" fill="rgba(251, 191, 36, 0.2)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="509" y="615" fill="white" font-size="8" font-weight="600" text-anchor="middle">Enriched</text>
+        <text x="509" y="627" fill="#fbbf24" font-size="7" text-anchor="middle">CI + location</text>
+
+        <line x1="559" y1="615" x2="579" y2="615" stroke="#fbbf24" stroke-width="1" marker-end="url(#arrowhead-amber)"/>
+
+        <rect x="581" y="595" width="100" height="40" rx="4" fill="rgba(251, 191, 36, 0.2)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="631" y="615" fill="white" font-size="8" font-weight="600" text-anchor="middle">Routed</text>
+        <text x="631" y="627" fill="#fbbf24" font-size="7" text-anchor="middle">target store</text>
+
+        <line x1="681" y1="615" x2="701" y2="615" stroke="#fbbf24" stroke-width="1" marker-end="url(#arrowhead-amber)"/>
+
+        <rect x="703" y="595" width="100" height="40" rx="4" fill="rgba(251, 191, 36, 0.2)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="753" y="615" fill="white" font-size="8" font-weight="600" text-anchor="middle">Stored</text>
+        <text x="753" y="627" fill="#fbbf24" font-size="7" text-anchor="middle">target_id</text>
+
+        <text x="860" y="615" fill="#94a3b8" font-size="8">→ PostgreSQL (dcim_lineage)</text>
+
+        <!-- ================================================================
+             ZONE: Monitoring (Bottom)
+             ================================================================ -->
+        <rect x="200" y="680" width="980" height="120" rx="12" fill="rgba(6, 78, 59, 0.05)" stroke="#34d399" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="212" y="700" fill="#34d399" font-size="11" font-weight="600">Monitoring & Observability</text>
+
+        <!-- Prometheus metrics -->
+        <rect x="215" y="715" width="180" height="70" rx="6" fill="rgba(6, 78, 59, 0.3)" stroke="#34d399" stroke-width="1"/>
+        <text x="305" y="737" fill="white" font-size="9" font-weight="600" text-anchor="middle">Prometheus Metrics</text>
+        <text x="305" y="752" fill="#34d399" font-size="7" text-anchor="middle">dii_events_ingested_total</text>
+        <text x="305" y="764" fill="#34d399" font-size="7" text-anchor="middle">dii_validation_latency</text>
+        <text x="305" y="776" fill="#34d399" font-size="7" text-anchor="middle">dii_dlq_messages_total</text>
+
+        <!-- Alert Rules -->
+        <rect x="415" y="715" width="180" height="70" rx="6" fill="rgba(136, 19, 55, 0.3)" stroke="#fb7185" stroke-width="1"/>
+        <text x="505" y="737" fill="white" font-size="9" font-weight="600" text-anchor="middle">Alert Rules</text>
+        <text x="505" y="752" fill="#fb7185" font-size="7" text-anchor="middle">DLQ growth > 10/min</text>
+        <text x="505" y="764" fill="#fb7185" font-size="7" text-anchor="middle">Validation p99 > 100ms</text>
+        <text x="505" y="776" fill="#fb7185" font-size="7" text-anchor="middle">Consumer lag > 10k</text>
+
+        <!-- Grafana Dashboards -->
+        <rect x="615" y="715" width="180" height="70" rx="6" fill="rgba(8, 51, 68, 0.3)" stroke="#22d3ee" stroke-width="1"/>
+        <text x="705" y="737" fill="white" font-size="9" font-weight="600" text-anchor="middle">Grafana Dashboards</text>
+        <text x="705" y="752" fill="#22d3ee" font-size="7" text-anchor="middle">DI&I Pipeline Overview</text>
+        <text x="705" y="764" fill="#22d3ee" font-size="7" text-anchor="middle">Data Quality Scorecard</text>
+        <text x="705" y="776" fill="#22d3ee" font-size="7" text-anchor="middle">Source System Health</text>
+
+        <!-- Data Quality -->
+        <rect x="815" y="715" width="180" height="70" rx="6" fill="rgba(251, 191, 36, 0.3)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="905" y="737" fill="white" font-size="9" font-weight="600" text-anchor="middle">Data Quality Framework</text>
+        <text x="905" y="752" fill="#fbbf24" font-size="7" text-anchor="middle">Completeness: >99.9%</text>
+        <text x="905" y="764" fill="#fbbf24" font-size="7" text-anchor="middle">Accuracy: >99.5%</text>
+        <text x="905" y="776" fill="#fbbf24" font-size="7" text-anchor="middle">Uniqueness: <0.1% dup</text>
+
+        <!-- ================================================================
+             CONNECTIONS — Source → NiFi
+             ================================================================ -->
+        <line x1="165" y1="87" x2="213" y2="87" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="165" y1="157" x2="213" y2="157" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="165" y1="227" x2="213" y2="227" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="165" y1="297" x2="213" y2="297" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="165" y1="367" x2="213" y2="367" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+        <!-- ================================================================
+             CONNECTIONS — NiFi → Kafka raw
+             ================================================================ -->
+        <line x1="385" y1="95" x2="433" y2="87" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrowhead-orange)"/>
+        <text x="410" y="78" fill="#fb923c" font-size="7">publish</text>
+
+        <!-- ================================================================
+             CONNECTIONS — Kafka pipeline flow
+             ================================================================ -->
+        <!-- raw → validation -->
+        <line x1="530" y1="115" x2="530" y2="133" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrowhead-orange)"/>
+
+        <!-- validation → validated (pass) -->
+        <line x1="510" y1="195" x2="510" y2="228" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-emerald)"/>
+
+        <!-- validation → DLQ (fail) -->
+        <line x1="625" y1="165" x2="658" y2="165" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrowhead-rose)"/>
+        <text x="642" y="158" fill="#fb7185" font-size="7">reject</text>
+
+        <!-- validated → enrichment -->
+        <line x1="530" y1="285" x2="530" y2="303" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrowhead-orange)"/>
+
+        <!-- enrichment → enriched -->
+        <line x1="530" y1="365" x2="530" y2="383" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrowhead-orange)"/>
+
+        <!-- enriched → router -->
+        <line x1="530" y1="440" x2="530" y2="458" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrowhead-orange)"/>
+
+        <!-- ================================================================
+             CONNECTIONS — Router → Target Stores
+             ================================================================ -->
+        <line x1="625" y1="475" x2="833" y2="92" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead-violet)"/>
+        <line x1="625" y1="480" x2="833" y2="172" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead-violet)"/>
+        <line x1="625" y1="485" x2="833" y2="252" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead-violet)"/>
+        <line x1="625" y1="490" x2="833" y2="332" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead-violet)"/>
+        <line x1="625" y1="495" x2="833" y2="412" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead-violet)"/>
+
+        <!-- ================================================================
+             CONNECTIONS — Lineage tracking (dashed)
+             ================================================================ -->
+        <line x1="300" y1="130" x2="300" y2="558" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4,4"/>
+        <line x1="530" y1="195" x2="530" y2="558" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4,4"/>
+        <line x1="530" y1="365" x2="530" y2="558" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4,4"/>
+
+        <!-- ================================================================
+             LEGEND
+             ================================================================ -->
+        <rect x="820" y="820" width="360" height="140" rx="8" fill="rgba(15, 23, 42, 0.8)" stroke="#1e293b" stroke-width="1"/>
+        <text x="832" y="840" fill="white" font-size="10" font-weight="600">Legend</text>
+
+        <rect x="832" y="852" width="16" height="10" rx="2" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1"/>
+        <text x="854" y="860" fill="#94a3b8" font-size="8">Source System</text>
+
+        <rect x="832" y="870" width="16" height="10" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"/>
+        <text x="854" y="878" fill="#94a3b8" font-size="8">NiFi Flow / Processing</text>
+
+        <rect x="832" y="888" width="16" height="10" rx="2" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1"/>
+        <text x="854" y="896" fill="#94a3b8" font-size="8">Kafka Topic</text>
+
+        <rect x="832" y="906" width="16" height="10" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="854" y="914" fill="#94a3b8" font-size="8">Target Store / CMDB</text>
+
+        <rect x="832" y="924" width="16" height="10" rx="2" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1"/>
+        <text x="854" y="932" fill="#94a3b8" font-size="8">Validation / DLQ / Security</text>
+
+        <line x1="1010" y1="857" x2="1026" y2="857" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrowhead-orange)"/>
+        <text x="1032" y="860" fill="#94a3b8" font-size="8">Data Flow</text>
+
+        <line x1="1010" y1="875" x2="1026" y2="875" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="1032" y="878" fill="#94a3b8" font-size="8">Lineage Tracking</text>
+
+        <line x1="1010" y1="893" x2="1026" y2="893" stroke="#fb7185" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="1032" y="896" fill="#94a3b8" font-size="8">Reject / DLQ</text>
+
+        <rect x="1010" y="910" width="16" height="10" rx="4" fill="transparent" stroke="#94a3b8" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="1032" y="918" fill="#94a3b8" font-size="8">Zone Boundary</text>
+      </svg>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot orange"></div>
+          <h3>Kafka Pipeline</h3>
+        </div>
+        <ul>
+          <li>• 10 topics across pipeline stages</li>
+          <li>• dcim.events.raw → validated → enriched</li>
+          <li>• dcim.events.dlq for failed events</li>
+          <li>• RF=3, min.insync.replicas=2</li>
+          <li>• Consumer groups per processing stage</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot emerald"></div>
+          <h3>NiFi Flows (5 pipelines)</h3>
+        </div>
+        <ul>
+          <li>• BMS/EPMS — REST/SNMP ingestion</li>
+          <li>• NMS — SNMP v2c/v3 interface polling</li>
+          <li>• Server/Storage — SSH metrics collection</li>
+          <li>• Cloud/VM — vSphere/AWS API</li>
+          <li>• Access Control — Badge file drops</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot rose"></div>
+          <h3>Validation & DLQ</h3>
+        </div>
+        <ul>
+          <li>• JSON Schema validation (mandatory)</li>
+          <li>• Type, range, format checks</li>
+          <li>• Duplicate detection (Redis, 5min window)</li>
+          <li>• DLQ with retry (exponential backoff)</li>
+          <li>• Archive to S3 after max retries</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot violet"></div>
+          <h3>Enrichment</h3>
+        </div>
+        <ul>
+          <li>• CI lookup from CMDB (5min cache)</li>
+          <li>• Location from Asset Repository</li>
+          <li>• Priority assignment (P1-P4 rules)</li>
+          <li>• Impact scoring (0-10)</li>
+          <li>• p99 latency < 50ms</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot amber"></div>
+          <h3>Data Lineage</h3>
+        </div>
+        <ul>
+          <li>• 5-stage tracking (ingest → store)</li>
+          <li>• PostgreSQL storage (partitioned monthly)</li>
+          <li>• Error stage + message capture</li>
+          <li>• Processing duration metrics</li>
+          <li>• Daily quality scorecard view</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot cyan"></div>
+          <h3>Connectors & Security</h3>
+        </div>
+        <ul>
+          <li>• ServiceNow/Jira (ITSM) — bidirectional</li>
+          <li>• SAP/Oracle (ERP) — asset financial</li>
+          <li>• Custom DMS — documents</li>
+          <li>• Circuit breaker per connector</li>
+          <li>• TLS 1.2+ • OAuth2 • Kafka ACLs</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="footer">
+      DCIM Core Platform • Block 2 Data Ingestion & Integration • Reference Architecture • Generated 2026-06-23
+    </p>
+  </div>
+</body>
+</html>

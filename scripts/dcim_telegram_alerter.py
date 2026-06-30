@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-DCIM Pipeline Health Alerter via Telegram (ST-017-02 & ST-017-05)
+DCIM Pipeline Health Alerter via Telegram
 Replaces Kibana Actions (requires Gold license) with a standalone Python script.
 
 Checks:
-  1. ST-017-02a: Pipeline mati — tidak ada data baru di ES > 2 jam
-  2. ST-017-02b: Enrichment failure tinggi — banyak NOT_IN_CMDB dalam 1 jam
-  3. ST-017-02c: CMDB Drift — hostname != name dalam enriched events
-  4. ST-017-02d: DLQ spike — terlalu banyak pesan error dalam 30 menit
+  1. Pipeline mati — tidak ada data baru di ES > 2 jam
+  2. Enrichment failure tinggi — banyak NOT_IN_CMDB dalam 1 jam
+  3. CMDB Drift — hostname != name dalam enriched events
+  4. DLQ spike — terlalu banyak pesan error dalam 30 menit
 
 Runs every 5 minutes via systemd timer: dcim-telegram-alerter.timer
 """

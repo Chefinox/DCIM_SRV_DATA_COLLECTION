@@ -3,7 +3,13 @@
 DCIM PostgreSQL Consumer — Hybrid Schema (V2) - Wrapped in V4 Structure
 """
 import json, logging, os, uuid, time
-from kafka import KafkaConsumer
+from confluent_kafka import Consumer
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroDeserializer
+from confluent_kafka.serialization import SerializationContext, MessageField
+import sys
+sys.path.append("/home/infra/dcim_metrics_project")
+from src.schemas.avro_schemas import ENRICHED_EVENT_SCHEMA
 import psycopg2
 from psycopg2.extras import Json
 
@@ -280,32 +286,58 @@ def run():
     conn = psycopg2.connect(**DB_CONFIG)
     conn.autocommit = False
     cur = conn.cursor()
-    consumer = KafkaConsumer(
-        "dcim.enriched.events",
-        bootstrap_servers=["localhost:9092"],
-        group_id="dcim-postgres-consumer-v2",
-        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-        auto_offset_reset="latest",
-        enable_auto_commit=False,
-        max_poll_records=100
-    )
+    
+    schema_registry_conf = {'url': 'http://localhost:8081'}
+    schema_registry_client = SchemaRegistryClient(schema_registry_conf)
+    avro_deserializer = AvroDeserializer(schema_registry_client, ENRICHED_EVENT_SCHEMA)
+    
+    consumer_conf = {
+        'bootstrap.servers': 'localhost:9094',
+        'group.id': 'dcim-postgres-consumer-v2',
+        'auto.offset.reset': 'latest',
+        'enable.auto.commit': False,
+        'security.protocol': 'SSL',
+        'ssl.ca.location': '/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem',
+        'enable.ssl.certificate.verification': False
+    }
+    consumer = Consumer(consumer_conf)
+    consumer.subscribe(["dcim.enriched.events"])
+    
     log.info(json.dumps({"event": "consumer_started_v2_rollback", "topic": "dcim.enriched.events"}))
     batch_size = 50
     batch = []
-    for msg in consumer:
+    
+    while True:
+        msg = consumer.poll(1.0)
+        if msg is None:
+            continue
+        if msg.error():
+            log.error(f"Consumer error: {msg.error()}")
+            continue
+            
         try:
-            row = map_event(msg.value)
+            ctx = SerializationContext("dcim.enriched.events", MessageField.VALUE)
+            msg_val = avro_deserializer(msg.value(), ctx)
+            if not msg_val: continue
+            
+            # Parse raw JSON strings back to dict for the legacy logic
+            if isinstance(msg_val.get('raw_fields'), str):
+                msg_val['raw_fields'] = json.loads(msg_val['raw_fields'])
+            if isinstance(msg_val.get('raw_tags'), str):
+                msg_val['raw_tags'] = json.loads(msg_val['raw_tags'])
+                
+            row = map_event(msg_val)
             if not row.get("event_time"):
                 log.warning(f"Skipping event_id {row.get('event_id')} due to missing event_time")
                 continue
-            batch.append((row, msg.value.get("raw_fields", {})))
+            batch.append((row, msg_val.get("raw_fields", {})))
             if len(batch) >= batch_size:
                 for r, rf in batch:
                     upsert(cur, r)
                     if r.get("metric_name") == "inventory_snapshot" or r.get("measurement") == "server_inventory":
                         update_relational_tables(cur, r, rf)
                 conn.commit()
-                consumer.commit()
+                consumer.commit(asynchronous=False)
                 log.info(json.dumps({"event": "batch_committed", "count": len(batch)}))
                 batch.clear()
         except Exception as e:
@@ -313,7 +345,7 @@ def run():
             log.error(json.dumps({
                 "event": "insert_error",
                 "error": str(e),
-                "event_id": msg.value.get("event_id","?")
+                "event_id": msg_val.get("event_id","?") if 'msg_val' in locals() and msg_val else "?"
             }))
 
 if __name__ == "__main__":

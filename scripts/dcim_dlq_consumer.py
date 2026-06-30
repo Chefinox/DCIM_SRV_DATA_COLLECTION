@@ -1,10 +1,17 @@
 import json
+import sys
+if "/home/infra/dcim_metrics_project" not in sys.path:
+    sys.path.append("/home/infra/dcim_metrics_project")
+from src.observability.logging.dcim_logger import setup_logger
+logger = setup_logger("dcim_dlq_consumer", "/home/infra/dcim_metrics_project/logs/dcim_dlq_consumer.log")
+
 import os
 import psycopg2
 from kafka import KafkaConsumer
 from dotenv import load_dotenv
 import datetime
 import time
+from src.utils.lineage import track_lineage
 
 # Load configuration (optional fallback)
 load_dotenv('/home/infra/dcim_metrics_project/configs/.env')
@@ -17,7 +24,14 @@ def read_secret(name: str, fallback: str = None) -> str:
     except FileNotFoundError:
         return os.getenv(name, fallback)
 
-KAFKA_BROKER = os.getenv("KAFKA_BROKER", "127.0.0.1:9092")
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "127.0.0.1:9094")
+ssl_kwargs = {}
+if "9094" in KAFKA_BROKER:
+    ssl_kwargs = {
+        "security_protocol": "SSL",
+        "ssl_cafile": "/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem",
+        "ssl_check_hostname": False
+    }
 DLQ_TOPICS = [
     "dcim.dlq.parse-failure",
     "dcim.dlq.enrichment-failure",
@@ -25,7 +39,7 @@ DLQ_TOPICS = [
 ]
 
 DB_CONFIG = {
-    "host":     read_secret("SOT_DB_HOST", "192.168.101.73"),
+    "host":     read_secret("SOT_DB_HOST", "localhost"),  # Migrated: was 192.168.101.73, now dcim_sot_postgres container
     "database": read_secret("SOT_DB_NAME", "dcim_sot"),
     "user":     read_secret("SOT_DB_USER", "sot_admin"),
     "password": read_secret("SOT_DB_PASS", "Inovasi@0918")
@@ -52,7 +66,7 @@ def log_to_db(topic, payload, reason):
             "status": "LOGGED_TO_DB",
             "reason": reason
         }
-        print(json.dumps(log_entry))
+        logger.info(json.dumps(log_entry))
         
     except Exception as e:
         error_entry = {
@@ -61,10 +75,10 @@ def log_to_db(topic, payload, reason):
             "message": f"DB Logging Error: {e}",
             "topic": topic
         }
-        print(json.dumps(error_entry))
+        logger.info(json.dumps(error_entry))
 
 def main():
-    print(f"Starting DCIM DLQ Consumer for topics: {DLQ_TOPICS}")
+    logger.info(f"Starting DCIM DLQ Consumer for topics: {DLQ_TOPICS}")
     
     while True:
         try:
@@ -74,7 +88,8 @@ def main():
                 auto_offset_reset='earliest',
                 enable_auto_commit=True,
                 group_id='dcim_dlq_persistence_group',
-                value_deserializer=lambda x: x.decode('utf-8') if x else None
+                value_deserializer=lambda x: x.decode('utf-8') if x else None,
+                **ssl_kwargs
             )
 
             for message in consumer:
@@ -90,13 +105,27 @@ def main():
                             
                 log_to_db(topic, payload, reason)
                 
+                try:
+                    payload_dict = json.loads(payload)
+                    event_id = payload_dict.get("event_id")
+                    if event_id:
+                        track_lineage(
+                            event_id=event_id,
+                            stage="stored",
+                            status="dlq",
+                            target_topic=topic,
+                            error_message=reason
+                        )
+                except Exception:
+                    pass
+                
         except Exception as e:
             error_entry = {
                 "timestamp": str(datetime.datetime.now()),
                 "level": "CRITICAL",
                 "message": f"Kafka Consumer Error: {e}. Reconnecting in 5s..."
             }
-            print(json.dumps(error_entry))
+            logger.info(json.dumps(error_entry))
             time.sleep(5)
 
 if __name__ == "__main__":

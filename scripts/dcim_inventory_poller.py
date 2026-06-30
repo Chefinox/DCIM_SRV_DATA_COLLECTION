@@ -99,7 +99,7 @@ def get_historical_data(ip):
             dbname=os.getenv("SOT_DB_NAME", "dcim_sot"),
             user=os.getenv("SOT_DB_USER", "sot_admin"),
             password=os.getenv("SOT_DB_PASS", "Inovasi@0918"),
-            host=os.getenv("SOT_DB_HOST", "192.168.101.73"),
+            host=os.getenv("SOT_DB_HOST", "localhost"),
             port=os.getenv("SOT_DB_PORT", "5432")
         )
         cur = conn.cursor()
@@ -160,7 +160,7 @@ def poll_server(ip):
             dbname=os.getenv("SOT_DB_NAME", "dcim_sot"),
             user=os.getenv("SOT_DB_USER", "sot_admin"),
             password=os.getenv("SOT_DB_PASS", "Inovasi@0918"),
-            host=os.getenv("SOT_DB_HOST", "192.168.101.73"),
+            host=os.getenv("SOT_DB_HOST", "localhost"),
             port=os.getenv("SOT_DB_PORT", "5432")
         )
         cur = conn.cursor()
@@ -436,7 +436,7 @@ def poll_hikvision(ip, user, password, device_type):
 def save_to_db(results):
     try:
         conn = psycopg2.connect(
-            host=os.getenv("SOT_DB_HOST", "192.168.101.73"),
+            host=os.getenv("SOT_DB_HOST", "localhost"),
             port=os.getenv("SOT_DB_PORT", "5432"),
             dbname=os.getenv("SOT_DB_NAME", "dcim_sot"),
             user=os.getenv("SOT_DB_USER", "sot_admin"),
@@ -532,37 +532,37 @@ def build_location_map():
     # Base: Static Map khusus (Source of Truth Manual jika DB kosong/salah)
     location_map = {
         # SYNOLOGY NAS
-        "10.50.0.105": {"site": "FIT-Head-Office", "rack": "Rack Server 2", "category": "Storage"},
-        "10.50.0.106": {"site": "FIT-Head-Office", "rack": "Rack Server 2", "category": "Storage"},
-        "10.50.0.107": {"site": "FIT-Head-Office", "rack": "Rack Server 2", "category": "Storage"},
-        "10.50.0.108": {"site": "FIT-Head-Office", "rack": "Rack Server 2", "category": "Storage"},
-        "10.50.0.109": {"site": "FIT-Head-Office", "rack": "Rack Server 2", "category": "Storage"},
-        "10.50.0.110": {"site": "FIT-Head-Office", "rack": "Rack Server 2", "category": "Storage"},
+        "10.50.0.105": {"site": "Unknown", "rack": "Unknown", "category": "Storage"},
+        "10.50.0.106": {"site": "Unknown", "rack": "Unknown", "category": "Storage"},
+        "10.50.0.107": {"site": "Unknown", "rack": "Unknown", "category": "Storage"},
+        "10.50.0.108": {"site": "Unknown", "rack": "Unknown", "category": "Storage"},
+        "10.50.0.109": {"site": "Unknown", "rack": "Unknown", "category": "Storage"},
+        "10.50.0.110": {"site": "Unknown", "rack": "Unknown", "category": "Storage"},
         
         # SERVERS (HCI in Rack 2, Render in Rack 2 based on DB)
-        "10.50.0.2": {"site": "FIT-Head-Office", "rack": "Rack Server 2", "category": "Infrastructure"},
-        "10.50.0.3": {"site": "FIT-Head-Office", "rack": "Rack Server 2", "category": "Infrastructure"},
-        "10.50.0.4": {"site": "FIT-Head-Office", "rack": "Rack Server 2", "category": "Infrastructure"},
-        "10.50.0.5": {"site": "FIT-Head-Office", "rack": "Rack Server 2", "category": "Infrastructure"},
-        "10.50.0.6": {"site": "FIT-Head-Office", "rack": "Rack Server 2", "category": "Infrastructure"},
+        "10.50.0.2": {"site": "Unknown", "rack": "Unknown", "category": "Infrastructure"},
+        "10.50.0.3": {"site": "Unknown", "rack": "Unknown", "category": "Infrastructure"},
+        "10.50.0.4": {"site": "Unknown", "rack": "Unknown", "category": "Infrastructure"},
+        "10.50.0.5": {"site": "Unknown", "rack": "Unknown", "category": "Infrastructure"},
+        "10.50.0.6": {"site": "Unknown", "rack": "Unknown", "category": "Infrastructure"},
 
         # UPS (Manual mapping due to SN mismatch with NetBox)
-        "192.168.100.140": {"site": "FIT-Head-Office", "rack": "Ruang server", "category": "Infrastructure"},
+        "192.168.100.140": {"site": "Unknown", "rack": "Unknown", "category": "Infrastructure"},
 
         # SECURITY (NVR in Rack 1)
-        "192.168.1.254": {"site": "FIT-Head-Office", "rack": "Rack Server 1", "category": "Security"},
+        "192.168.1.254": {"site": "Unknown", "rack": "Unknown", "category": "Security"},
     }
     
     # Isi sisa kamera dengan "Wall Mount CCTV Room"
     cam_ips = [f"192.168.1.{i}" for i in list(range(3, 32)) + [33]]
     for ip in cam_ips:
         if ip not in location_map:
-            location_map[ip] = {"site": "FIT-Head-Office", "rack": "Wall Mount CCTV Room", "category": "Security"}
+            location_map[ip] = {"site": "Unknown", "rack": "Unknown", "category": "Security"}
 
     # Override dgn SoT PostgreSQL (Dynamic Mapping)
     try:
         conn = psycopg2.connect(
-            host=os.getenv("SOT_DB_HOST", "192.168.101.73"),
+            host=os.getenv("SOT_DB_HOST", "localhost"),
             port=os.getenv("SOT_DB_PORT", "5432"),
             dbname=os.getenv("SOT_DB_NAME", "dcim_sot"),
             user=os.getenv("SOT_DB_USER", "sot_admin"),
@@ -579,7 +579,7 @@ def build_location_map():
             if host:
                 norm_host = host.replace("FALAH01-", "").strip()
                 location_map[norm_host] = {
-                    "site": site or "FIT-Head-Office",
+                    "site": site or "Unknown",
                     "rack": rack or "Unknown"
                 }
 
@@ -592,7 +592,7 @@ def build_location_map():
             if ip_raw:
                 ip = ip_raw.split('/')[0]
                 location_map[ip] = {
-                    "site": site or "FIT-Head-Office",
+                    "site": site or "Unknown",
                     "rack": rack or "Unknown"
                 }
         
@@ -604,7 +604,7 @@ def build_location_map():
         for sn, site, rack in cur.fetchall():
             if sn:
                 location_map[sn.strip()] = {
-                    "site": site or "FIT-Head-Office",
+                    "site": site or "Unknown",
                     "rack": rack or "Unknown"
                 }
                     
@@ -684,13 +684,13 @@ for res in results:
             loc_info = loc_map.get(sn_match.group(1))
 
     if loc_info:
-        res["site"]              = loc_info.get("site", "FIT-Head-Office").strip()
+        res["site"]              = loc_info.get("site", "").strip()
         res["rack_name"]         = loc_info.get("rack", "Unknown").strip()
         res["location"]          = res["rack_name"] # Align with Telegraf tag 'location'
         res["enrichment_status"] = "FULL"
     else:
         # FIT041 Req 2.2.3: Enrichment gagal → field diberi status, data tidak di-drop
-        res["site"]              = "FIT-Head-Office"
+        res["site"]              = "Unknown"
         res["rack_name"]         = "Unknown"
         res["location"]          = "Unknown" # Align with Telegraf tag 'location'
         res["enrichment_status"] = "PARTIAL"

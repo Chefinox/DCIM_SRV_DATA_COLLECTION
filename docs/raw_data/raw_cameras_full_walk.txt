@@ -1,0 +1,36 @@
+--- CAMERA DISCOVERY (VIA NVR PROXY) ---
+<id>1</id>
+<ipAddress>192.168.1.2</ipAddress>
+<online>true</online>
+<managePortNo>8000</managePortNo>
+<userName>admin</userName>
+<chanDetectResult>connect</chanDetectResult>
+<PasswordStatus>strong</PasswordStatus>
+
+--- CAMERA SYSTEM INFO (SPEC) ---
+<DeviceInfo>
+<deviceName>Front Entry</deviceName>
+<deviceID>574b-e851-87ac-4d2c</deviceID>
+<model>DS-2CD2143G0-I</model>
+<serialNumber>DS-2CD2143G0-I20210515AAWRJ12345678WCVU</serialNumber>
+<macAddress>24:0f:9b:2d:4c:a1</macAddress>
+<firmwareVersion>V5.5.80 build 180911</firmwareVersion>
+<deviceType>IPCamera</deviceType>
+</DeviceInfo>
+
+--- CAMERA STATUS (SPEC) ---
+<DeviceStatus>
+<deviceUpTime>154200</deviceUpTime>
+<cpuUtilization>12</cpuUtilization>
+<memoryUsage>45.5</memoryUsage>
+</DeviceStatus>
+
+--- STREAMING STATUS (SPEC) ---
+<StreamingChannel>
+<id>101</id>
+<channelName>MainStream</channelName>
+<videoCodecType>H.265</videoCodecType>
+<videoResolutionWidth>2560</videoResolutionWidth>
+<videoResolutionHeight>1440</videoResolutionHeight>
+<outputBitrate>4096</outputBitrate>
+</StreamingChannel>

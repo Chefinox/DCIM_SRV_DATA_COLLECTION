@@ -89,6 +89,10 @@ ITOP_CLASSES = [
         "fields": "name,serialnumber,location_name,rack_name,brand_name,model_name,status,business_criticity,org_id_friendlyname",
     },
     {
+        "class": "NAS",
+        "fields": "name,serialnumber,location_name,rack_name,brand_name,model_name,status,business_criticity,org_id_friendlyname",
+    },
+    {
         "class": "Peripheral",
         "fields": "name,serialnumber,location_name,brand_name,model_name,status,business_criticity,org_id_friendlyname",
     },

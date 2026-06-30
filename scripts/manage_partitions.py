@@ -1,13 +1,13 @@
 import psycopg2
 from datetime import datetime, timedelta
 import logging
+import sys
+if "/home/infra/dcim_metrics_project" not in sys.path:
+    sys.path.append("/home/infra/dcim_metrics_project")
+from src.observability.logging.dcim_logger import setup_logger
 
 # Konfigurasi Log
-logging.basicConfig(
-    filename='/home/infra/dcim_metrics_project/logs/partition_management.log',
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s: %(message)s'
-)
+logger = setup_logger("manage_partitions", "/home/infra/dcim_metrics_project/logs/partition_management.log")
 
 import sys
 sys.path.append("/home/infra/dcim_metrics_project")
@@ -32,7 +32,7 @@ def manage_partitions():
             
             cur.execute(f"SELECT 1 FROM pg_tables WHERE tablename = '{table_name}';")
             if not cur.fetchone():
-                logging.info(f"Creating new partition: {table_name}")
+                logger.info(f"Creating new partition: {table_name}")
                 sql = f"""
                 CREATE TABLE IF NOT EXISTS {table_name} PARTITION OF dcim_events
                 FOR VALUES FROM ('{start_date.isoformat()}') TO ('{end_date.isoformat()}');
@@ -66,16 +66,16 @@ def manage_partitions():
                 
                 table_date = datetime(year, month, day)
                 if table_date < cutoff_date:
-                    logging.info(f"Dropping old partition: {table}")
+                    logger.info(f"Dropping old partition: {table}")
                     cur.execute(f"DROP TABLE {schema}.{table} CASCADE;")
             except (IndexError, ValueError):
                 continue # Bukan tabel partisi yang kita kelola
                 
         conn.commit()
-        logging.info("Partition management completed successfully.")
+        logger.info("Partition management completed successfully.")
     except Exception as e:
         conn.rollback()
-        logging.error(f"Partition management failed: {e}")
+        logger.error(f"Partition management failed: {e}")
     finally:
         cur.close()
         conn.close()

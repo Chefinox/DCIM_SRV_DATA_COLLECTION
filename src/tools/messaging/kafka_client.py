@@ -5,7 +5,14 @@ import logging
 
 class KafkaClient:
     def __init__(self):
-        self.bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+        self.bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9094") # Updated default port to 9094 for SSL
+        self.ssl_kwargs = {}
+        if "9094" in self.bootstrap_servers:
+            self.ssl_kwargs = {
+                "security_protocol": "SSL",
+                "ssl_cafile": "/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem",
+                "ssl_check_hostname": False
+            }
 
     def get_producer(self):
         try:
@@ -13,7 +20,8 @@ class KafkaClient:
                 bootstrap_servers=self.bootstrap_servers,
                 value_serializer=lambda v: json.dumps(v).encode('utf-8'),
                 acks='all',
-                retries=3
+                retries=3,
+                **self.ssl_kwargs
             )
         except Exception as e:
             logging.error(f"Kafka Producer Error: {e}")
@@ -27,7 +35,8 @@ class KafkaClient:
                 group_id=group_id,
                 auto_offset_reset='earliest',
                 enable_auto_commit=True,
-                value_deserializer=lambda x: json.loads(x.decode('utf-8'))
+                value_deserializer=lambda x: json.loads(x.decode('utf-8')),
+                **self.ssl_kwargs
             )
         except Exception as e:
             logging.error(f"Kafka Consumer Error: {e}")

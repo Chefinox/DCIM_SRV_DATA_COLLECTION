@@ -2,7 +2,7 @@
 
 **Versi**: v3.5.6 → v4.0.0  
 **Tanggal pembuatan**: 2026-06-11  
-**Status**: Pre-cutover (parallel run phase)
+**Status**: Cutover Complete (v4.0.0 Active)
 
 ---
 
@@ -15,43 +15,43 @@
 - [x] Enrichment API dimodifikasi — PG fallback dihapus, cache-miss return `NOT_IN_CMDB`
 
 ### Parallel run
-- [ ] `itop_to_cache_sync.py` berjalan paralel dengan `cmdb_to_cache_sync.py`
+- [x] `itop_to_cache_sync.py` berjalan paralel dengan `cmdb_to_cache_sync.py`
   - Deploy: `sudo systemctl enable --now dcim-itop-redis-sync.service` (file: `configs/systemd/dcim-itop-redis-sync.service`)
   - Monitor: `tail -f /home/infra/dcim_metrics_project/logs/itop_cache_sync.log`
   - Bandingkan Redis key count antara keduanya: harus dalam ±5% selisih
   - Cek: `redis-cli keys "asset:sn:*" | wc -l`
-- [ ] `itop_to_ralph_sync.py` berjalan paralel dengan `ralph_cmdb_sync.py`
+- [x] `itop_to_ralph_sync.py` berjalan paralel dengan `ralph_cmdb_sync.py`
   - Jalankan manual: `python3 scripts/itop_to_ralph_sync.py`
   - Monitor: `tail -f /home/infra/dcim_metrics_project/logs/itop_to_ralph_sync_$(date +%Y%m%d).log`
   - Bandingkan jumlah device di Ralph sebelum dan sesudah
-- [ ] Verifikasi tidak ada cache miss meningkat di Enrichment API log
+- [x] Verifikasi tidak ada cache miss meningkat di Enrichment API log
   - Monitor: `tail -f /home/infra/dcim_metrics_project/logs/enrichment.log | grep cache_miss`
 
 ### Kriteria lolos pre-cutover
-- [ ] Redis key count antara kedua sync source dalam ±5% selisih selama 3 hari berturut-turut
-- [ ] Tidak ada spike cache miss di enrichment API
-- [ ] `itop_to_ralph_sync.py` menghasilkan 0 failures selama 3 run berturut-turut
+- [x] Redis key count antara kedua sync source dalam ±5% selisih selama 3 hari berturut-turut
+- [x] Tidak ada spike cache miss di enrichment API
+- [x] `itop_to_ralph_sync.py` menghasilkan 0 failures selama 3 run berturut-turut
 
 ---
 
 ## Cutover day
 
 ### Step 1: Stop old services
-- [ ] Stop `cmdb_to_cache_sync.py` / disable systemd unit lama:
+- [x] Stop `cmdb_to_cache_sync.py` / disable systemd unit lama:
   ```bash
   sudo systemctl disable --now dcim-redis-sync.service
   ```
-- [ ] Stop `ralph_cmdb_sync.py` / disable cron/timer lama:
+- [x] Stop `ralph_cmdb_sync.py` / disable cron/timer lama:
   ```bash
   sudo systemctl disable --now dcim-ralph-sync.timer
   ```
 
 ### Step 2: Verify critical services still running
-- [ ] Konfirmasi `dcim-itop-inventory-sync.service` masih berjalan (JANGAN disable ini):
+- [x] Konfirmasi `dcim-itop-inventory-sync.service` masih berjalan (JANGAN disable ini):
   ```bash
   systemctl is-active dcim-itop-inventory-sync.service
   ```
-- [ ] Konfirmasi `dcim-itop-redis-sync.service` berjalan (service baru):
+- [x] Konfirmasi `dcim-itop-redis-sync.service` berjalan (service baru):
   ```bash
   systemctl is-active dcim-itop-redis-sync.service
   ```
