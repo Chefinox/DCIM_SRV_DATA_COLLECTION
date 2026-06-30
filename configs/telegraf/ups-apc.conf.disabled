@@ -7,7 +7,7 @@
   auth_password = "F!tech0918"
   priv_protocol = "AES"
   priv_password = "F!tech0918"
-  interval = "60s"
+  interval = "15s"
   name = "ups_apc"
 
   [[inputs.snmp.field]]
