@@ -1,0 +1,10 @@
+[Unit]
+Description=DCIM iTop to Ralph Sync
+After=network.target
+
+[Service]
+Type=oneshot
+User=infra
+Group=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+ExecStart=/usr/bin/python3 /home/infra/dcim_metrics_project/scripts/itop_to_ralph_sync.py

@@ -7,7 +7,7 @@ def get_db_config() -> dict:
     forcing the DB client to fail fast rather than using an unsafe default.
     """
     return {
-        "host":     read_secret("SOT_DB_HOST", "192.168.101.73"),
+        "host":     read_secret("SOT_DB_HOST", "localhost"),  # Migrated: was 192.168.101.73, now dcim_sot_postgres container
         "dbname":   read_secret("SOT_DB_NAME", "dcim_sot"),
         "user":     read_secret("SOT_DB_USER", "sot_admin"),
         "password": read_secret("SOT_DB_PASS") # Mandatory, no default fallback

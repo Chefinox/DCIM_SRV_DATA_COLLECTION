@@ -1,7 +1,9 @@
 # Energy Baseline & PUE Reference
 
-**Date Generated**: 2026-06-11
+**Date Generated**: 2026-06-17
 **Purpose**: Reference data for AI Use Case UC-AI-3 (Energy Anomaly / PUE Drift)
+
+> **Catatan AI Readiness v4.1**: Saat ini (Juni 2026), PUE *tidak* dikoleksi langsung dari sensor hardware dan sengaja dihilangkan dari materialized view `v_train_server` maupun `v_train_ups`. Jika tim AI perlu melatih model PUE, data PUE harus dikalkulasi secara mandiri menggunakan referensi baseline ini.
 
 ## 1. PUE Calculation Methodology
 

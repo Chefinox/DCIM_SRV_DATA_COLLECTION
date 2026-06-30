@@ -7,6 +7,10 @@ import sys
 import os
 import time
 import logging
+import sys
+if "/home/infra/dcim_metrics_project" not in sys.path:
+    sys.path.append("/home/infra/dcim_metrics_project")
+from src.observability.logging.dcim_logger import setup_logger
 import json
 from datetime import datetime
 from dotenv import load_dotenv
@@ -40,14 +44,7 @@ NVR_USER = os.getenv("HIKVISION_NVR_USER", "admin")
 NVR_PASS = os.getenv("HIKVISION_NVR_PASS", "qRvbi883=Zk[Q)@5")
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stderr)
-    ]
-)
-logger = logging.getLogger(__name__)
+logger = setup_logger("hikvision_poller_daemon", None)
 
 # Initialize Kafka producer
 kafka_client = KafkaClient()
@@ -62,6 +59,7 @@ def format_to_influx_json(metrics, category):
     model = metrics.get("model") or "DS-2CD"
     manufacturer = metrics.get("manufacturer") or "Hikvision"
     device_type = category.lower()  # "nvr" or "cctv"
+    firmware = metrics.get("firmware") or ""
     
     tags = {
         "hostname": hostname,
@@ -69,7 +67,8 @@ def format_to_influx_json(metrics, category):
         "ip": ip,
         "model": model,
         "manufacturer": manufacturer,
-        "device_type": device_type
+        "device_type": device_type,
+        "firmware": firmware
     }
     
     status_val = 1 if metrics.get("status") == "Online" else 0
@@ -82,6 +81,11 @@ def format_to_influx_json(metrics, category):
     if util.get("cpu") is not None: fields["cpuUtilization"] = util["cpu"]
     if util.get("memory") is not None: fields["memoryUsage"] = util["memory"]
     if util.get("memory_available") is not None: fields["memoryAvailable"] = util["memory_available"]
+    
+    storage = metrics.get("storage", {})
+    if storage.get("capacity") is not None: fields["capacity"] = storage["capacity"]
+    if storage.get("freeSpace") is not None: fields["freeSpace"] = storage["freeSpace"]
+    if storage.get("status") is not None: fields["Status"] = storage["status"]
     
     ts_ns = int(time.time() * 1e9)
     
@@ -139,6 +143,8 @@ def poll_once():
                     cam_metrics["firmware"] = cam_info["firmware"]
                 if cam_info.get("hostname"):
                     cam_metrics["hostname"] = cam_info["hostname"]
+                if "online" in cam_info:
+                    cam_metrics["status"] = "Online" if cam_info["online"] else "Offline"
             
             if cam_metrics.get("status") == "Online":
                 online_count += 1

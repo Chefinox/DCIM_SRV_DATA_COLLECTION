@@ -27,7 +27,14 @@ import requests
 import time
 import os
 from confluent_kafka import Consumer, KafkaError, Producer
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroDeserializer
+from confluent_kafka.serialization import SerializationContext, MessageField
+import sys
+sys.path.append("/home/infra/dcim_metrics_project")
+from src.schemas.avro_schemas import NORMALIZED_EVENT_SCHEMA
 import redis
+from src.utils.lineage import track_lineage
 
 # Custom utils for Postgres / Ralph hardware fallback
 from itop_sync_utils import get_server_hardware, get_network_hardware
@@ -860,6 +867,10 @@ def process_message(msg_val: str, itop_client: ITopClient, auto_org_id: str) -> 
     if not hostname:
         return True  # Skip — tidak ada hostname
 
+    if hostname in ("Unknown_Host", "unknown", ""):
+        logger.debug(f"Skipped invalid hostname: '{hostname}' (serial={data.get('serial_number')})")
+        return True
+
     ip            = data.get("ip")
     raw_fields    = data.get("raw_fields") or {}
     serial_number = data.get("serial_number") or raw_fields.get("serial_number")
@@ -881,7 +892,7 @@ def process_message(msg_val: str, itop_client: ITopClient, auto_org_id: str) -> 
     # Format generic camera hostnames — expand check to cover more variants
     if device_type in ("camera", "cctv"):
         hostname_upper = hostname.strip().upper()
-        if hostname_upper in ("IP CAMERA", "CAMERA", "") and ip:
+        if hostname_upper in ("IP CAMERA", "CAMERA", "IP_CAMERA", "") and ip:
             ci_name = f"CAMERA-{ip.split('.')[-1]}"
 
     # Ensure SRV- is converted to SERVER- to match DB and Ralph
@@ -1253,6 +1264,10 @@ def produce_dlq(producer, topic: str, event_data: dict, error_msg: str):
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 def main():
+    schema_registry_conf = {'url': 'http://localhost:8081'}
+    schema_registry_client = SchemaRegistryClient(schema_registry_conf)
+    avro_deserializer = AvroDeserializer(schema_registry_client, NORMALIZED_EVENT_SCHEMA)
+
     conf = {
         'bootstrap.servers':      KAFKA_BROKERS,
         'group.id':               'dcim_itop_group_v8',
@@ -1287,15 +1302,52 @@ def main():
                 logger.error(f"Kafka error: {msg.error()}")
                 break
 
-            msg_val = msg.value().decode('utf-8')
+            ctx = SerializationContext(TOPIC_IN, MessageField.VALUE)
             try:
-                success = process_message(msg_val, itop_client, auto_org_id)
+                msg_val_obj = avro_deserializer(msg.value(), ctx)
+                if not msg_val_obj: continue
+                
+                msg_val_str = json.dumps(msg_val_obj)
+                
+                start_time = time.time()
+                success = process_message(msg_val_str, itop_client, auto_org_id)
+                processing_ms = int((time.time() - start_time) * 1000)
+                event_id = msg_val_obj.get("event_id")
+                
                 if not success:
-                    produce_dlq(producer, TOPIC_DLQ, json.loads(msg_val), "iTop update/create failed")
+                    if event_id:
+                        track_lineage(
+                            event_id=event_id,
+                            stage="stored",
+                            status="error",
+                            target_topic="itop_cmdb",
+                            error_message="iTop update/create failed",
+                            processing_ms=processing_ms
+                        )
+                    produce_dlq(producer, TOPIC_DLQ, msg_val_obj, "iTop update/create failed")
+                else:
+                    if event_id:
+                        track_lineage(
+                            event_id=event_id,
+                            stage="stored",
+                            status="success",
+                            target_topic="itop_cmdb",
+                            processing_ms=processing_ms
+                        )
             except Exception as e:
                 logger.error(f"Exception processing message: {e}", exc_info=True)
                 try:
-                    produce_dlq(producer, TOPIC_DLQ, json.loads(msg_val), str(e))
+                    if 'msg_val_obj' in locals() and msg_val_obj and isinstance(msg_val_obj, dict):
+                        event_id = msg_val_obj.get("event_id")
+                        if event_id:
+                            track_lineage(
+                                event_id=event_id,
+                                stage="stored",
+                                status="error",
+                                target_topic="itop_cmdb",
+                                error_message=str(e)
+                            )
+                    produce_dlq(producer, TOPIC_DLQ, msg_val_obj if 'msg_val_obj' in locals() and msg_val_obj else {}, str(e))
                 except Exception:
                     pass
 

@@ -40,8 +40,8 @@ Untuk AI Agent berikutnya atau pengembang skrip:
 | Kategori | Field (Manual List) | Status | Implementasi (PostgreSQL -> Ralph) | Sumber PostgreSQL (`dcim_events`) |
 | :--- | :--- | :---: | :--- | :--- |
 | **1. Basic Info** | Hostname | 🟢 YA | Diambil dari kolom system name | `srv_system_name` / `hostname` |
-| | Firmware version | 🟢 YA | Diupdate aktual | `srv_firmware` |
-| | Bios version | 🟢 YA | Diupdate aktual | `srv_bios_version` |
+| | Firmware version | 🟢 YA | Diupdate aktual dari snapshot inventory Redfish | `metric_name='inventory_snapshot'`, `srv_firmware` |
+| | Bios version | 🟢 YA | Diupdate aktual dari snapshot inventory Redfish | `metric_name='inventory_snapshot'`, `srv_bios_version` |
 | | Management IP | 🟢 YA | Update via objek `IPAddress` tertaut | `ip` |
 | | Management hostname | 🟢 YA | Update via objek `IPAddress` tertaut | Sama dengan Hostname |
 | **2. Components** | **Ethernets (NIC):** | | | Array JSONB: `srv_nic_components` |
@@ -58,6 +58,8 @@ Untuk AI Agent berikutnya atau pengembang skrip:
 | | - Speed (MHz) | 🟢 YA | Diupdate aktual | `speed` di dalam JSONB |
 | | - Physical cores | 🟢 YA | Diupdate aktual | `cores` di dalam JSONB |
 | | - Logical cores | 🟢 YA | Diupdate aktual | `threads` di dalam JSONB |
+| | - CPU count | 🟢 YA | Dihitung dari jumlah item processor snapshot | `jsonb_array_length(srv_cpu_components)` |
+| | - Total memory | 🟢 YA | Dihitung dari total module RAM snapshot | `SUM((srv_memory_components->>'size')::int)` |
 | | **Disks:** | | **(Hanya yang Terpasang)** | Array JSONB: `srv_disk_components` |
 | | - Model name | 🟢 YA | Nama deskriptif disk | `model_name` di dalam JSONB |
 | | - Size (GiB) | 🟢 YA | Diupdate aktual | `size` di dalam JSONB |

@@ -41,7 +41,8 @@ logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 from src.observability.logging.dcim_logger import setup_logger
-logger = setup_logger("itop-ralph-sync", "/home/infra/dcim_metrics_project/logs/itop_to_ralph_sync.log")
+LOG_FILE = "/home/infra/dcim_metrics_project/logs/itop_to_ralph_sync.log"
+logger = setup_logger("itop-ralph-sync", LOG_FILE)
 
 # ---------------------------------------------------------------------------
 # Secrets / Config

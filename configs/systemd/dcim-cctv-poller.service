@@ -1,0 +1,41 @@
+[Unit]
+Description=DCIM CCTV Poller (Hikvision ISAPI)
+Documentation=https://github.com/fit-dcim/dcim-metrics-project
+After=network-online.target kafka-broker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=infra
+Group=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+
+# Main execution
+ExecStart=/usr/bin/python3 /home/infra/dcim_metrics_project/scripts/hikvision_poller_daemon.py
+
+# Restart policy
+Restart=always
+RestartSec=30
+StartLimitInterval=300
+StartLimitBurst=5
+
+# Logging
+StandardOutput=append:/home/infra/dcim_metrics_project/logs/cctv_poller.log
+StandardError=append:/home/infra/dcim_metrics_project/logs/cctv_poller_error.log
+SyslogIdentifier=dcim-cctv-poller
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/infra/dcim_metrics_project/logs
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

@@ -45,7 +45,7 @@ THRESHOLDS = [
         "id": "server-temp-critical",
         "description": "Server Temperature >75°C",
         "device_type": "server",
-        "field": "raw_fields.srv_reading_celsius",
+        "field": "dcim_metrics.raw_fields_srv_reading_celsius",
         "comparator": "gt",
         "threshold": 75,
         "severity": "critical",
@@ -55,7 +55,7 @@ THRESHOLDS = [
         "id": "ups-battery-low",
         "description": "UPS Battery <50%",
         "device_type": "ups",
-        "field": "raw_fields.battery_capacity",
+        "field": "dcim_metrics.raw_fields_battery_capacity",
         "comparator": "lt",
         "threshold": 50,
         "severity": "warning",
@@ -65,7 +65,7 @@ THRESHOLDS = [
         "id": "ups-load-high",
         "description": "UPS Load >80%",
         "device_type": "ups",
-        "field": "raw_fields.output_load",
+        "field": "dcim_metrics.raw_fields_output_load",
         "comparator": "gt",
         "threshold": 80,
         "severity": "warning",
@@ -75,7 +75,7 @@ THRESHOLDS = [
         "id": "nas-disk-temp-high",
         "description": "NAS Disk Temp >55°C",
         "device_type": "nas",
-        "field": "raw_fields.diskTemp",
+        "field": "dcim_metrics.raw_fields_diskTemp",
         "comparator": "gt",
         "threshold": 55,
         "severity": "warning",
@@ -85,7 +85,7 @@ THRESHOLDS = [
         "id": "nvr-memory-high",
         "description": "NVR Memory >90%",
         "device_type": "nvr",
-        "field": "raw_fields.memoryUsagePct",
+        "field": "dcim_metrics.raw_fields_memoryUsagePct",
         "comparator": "gt",
         "threshold": 90,
         "severity": "warning",
@@ -94,8 +94,8 @@ THRESHOLDS = [
     {
         "id": "network-cpu-high",
         "description": "Network Switch CPU >85%",
-        "device_type": "network_switch",
-        "field": "raw_fields.cpu_load",
+        "device_type": "network",
+        "field": "dcim_metrics.raw_fields_cpu_load",
         "comparator": "gt",
         "threshold": 85,
         "severity": "warning",
@@ -111,7 +111,7 @@ def check_threshold(rule):
         "query": {
             "bool": {
                 "must": [
-                    {"term": {"device_type.keyword": rule["device_type"]}},
+                    {"term": {"tag.device_type.keyword": rule["device_type"]}},
                     {"exists": {"field": rule["field"]}},
                     {"range": {"@timestamp": {"gte": f"now-{LOOKBACK}"}}}
                 ]
@@ -120,7 +120,7 @@ def check_threshold(rule):
         "aggs": {
             "check": {rule["agg"]: {"field": rule["field"]}},
             "per_host": {
-                "terms": {"field": "hostname.keyword", "size": 10},
+                "terms": {"field": "tag.hostname.keyword", "size": 10},
                 "aggs": {
                     "val": {rule["agg"]: {"field": rule["field"]}}
                 }
@@ -192,7 +192,7 @@ KNOWN_DEVICES = {
     "server": ["SRV-Render-01", "SRV-Render-02", "SRV-HCI-01", "SRV-HCI-02", "SRV-HCI-03"],
     "ups": ["UPS-FIT"],
     "nas": ["NAS-FIT", "NAS-INFRA", "NAS-FAT", "NAS-SD01", "NAS-CD01", "NAS-CD02"],
-    "network_switch": ["FIT-Core-SW", "FIT-Core-RTR", "FIT-DIST-SW-SERVER1", "FIT-DIST-SW-SERVER2", "FIT-DIST-SW-LAN1"],
+    "network": ["FIT-Core-SW", "FIT-Core-RTR", "FIT-DIST-SW-SERVER1", "FIT-DIST-SW-SERVER2", "FIT-DIST-SW-LAN1"],
     "nvr": ["NVR-FIT"],
 }
 STALE_THRESHOLD_MINUTES = 30  # Alert if no data for 30 min
@@ -209,12 +209,12 @@ def check_stale_devices():
                              json={
                                  "size": 0,
                                  "query": {"bool": {"must": [
-                                     {"term": {"device_type.keyword": device_type}},
+                                     {"term": {"tag.device_type.keyword": device_type}},
                                      {"range": {"@timestamp": {"gte": f"now-{STALE_THRESHOLD_MINUTES}m"}}}
                                  ]}},
                                  "aggs": {
                                      "active_hosts": {
-                                         "terms": {"field": "hostname.keyword", "size": 50}
+                                         "terms": {"field": "tag.hostname.keyword", "size": 50}
                                      }
                                  }
                              })

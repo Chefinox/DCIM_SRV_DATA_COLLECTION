@@ -16,6 +16,10 @@ Version : 1.0.0
 import json
 import logging
 import sys
+if "/home/infra/dcim_metrics_project" not in sys.path:
+    sys.path.append("/home/infra/dcim_metrics_project")
+from src.observability.logging.dcim_logger import setup_logger
+import sys
 import urllib.request
 import urllib.parse
 import ssl
@@ -50,8 +54,8 @@ NAS_PORT     = 5001   # DSM HTTPS port
 TIMEOUT      = 15     # seconds
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
-logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
-log = logging.getLogger("nas_poller")
+logger = setup_logger("nas_inventory_poller", None)
+log = logger
 
 # Disable SSL verification globally (self-signed certs)
 SSL_CTX = ssl.create_default_context()

@@ -1,0 +1,119 @@
+defaults:
+  organization: NetBox
+  organization_id: "1"
+  network_device_type: Generic
+  external_id_prefix: netbox
+  status: production
+  datacenter_name: NetBox Infrastructure
+
+sync:
+  virtual_machines: true
+  vm_cluster_hosts: true
+  clusters: false
+  interfaces: false
+  ip_addresses: false
+
+endpoints:
+  sites: /api/dcim/sites/
+  racks: /api/dcim/racks/
+  manufacturers: /api/dcim/manufacturers/
+  device_roles: /api/dcim/device-roles/
+  device_types: /api/dcim/device-types/
+  devices: /api/dcim/devices/
+  interfaces: /api/dcim/interfaces/
+  ip_addresses: /api/ipam/ip-addresses/
+  virtual_machines: /api/virtualization/virtual-machines/
+  vm_interfaces: /api/virtualization/interfaces/
+  clusters: /api/virtualization/clusters/
+  platforms: /api/dcim/platforms/
+  tenants: /api/tenancy/tenants/
+  vlans: /api/ipam/vlans/
+  cables: /api/dcim/cables/
+
+role_to_itop_class:
+  access point: NetworkDevice
+  access switch: NetworkDevice
+  server: Server
+  hypervisor: Hypervisor
+  switch: NetworkDevice
+  firewall: NetworkDevice
+  ups: PowerSource
+  pdu: PowerSource
+  storage: NAS
+  router: NetworkDevice
+  printer: Printer
+  cable management: Peripheral
+  fiber otb: Peripheral
+  nvr: NetworkDevice
+  pc render: PC
+  patch panel: Peripheral
+  rack shelf: Peripheral
+  link-balancer: NetworkDevice
+  default: Peripheral
+
+itop_classes:
+  datacenter: Datacenter
+  site: Location
+  rack: Rack
+  device: PhysicalDevice
+  server: Server
+  hypervisor: Hypervisor
+  vm: VirtualMachine
+  switch: NetworkDevice
+  firewall: Firewall
+  ups: PowerSource
+  pdu: PowerSource
+  cluster: LogicalVolume
+  application_service: ApplicationSolution
+  interface: NetworkInterface
+  ip: IPAddress
+  manufacturer: Brand
+
+uniqueness:
+  Datacenter: name
+  Location: name
+  Rack: name
+  PhysicalDevice: name
+  Server: name
+  Hypervisor: name
+  NAS: name
+  Printer: name
+  PC: name
+  Peripheral: name
+  VirtualMachine: name
+  NetworkDevice: name
+  Firewall: name
+  PowerSource: name
+  NetworkInterface: name
+  IPAddress: ip
+  Brand: name
+
+relationships:
+  rack_to_site:
+    source: rack
+    target: site
+    field: location_id
+  device_to_rack:
+    source: device
+    target: rack
+    field: rack_id
+  interface_to_device:
+    source: interface
+    target: device
+    field: connectableci_id
+  ip_to_interface:
+    source: ip
+    target: interface
+    field: ipinterface_id
+  vm_to_hypervisor:
+    source: vm
+    target: hypervisor
+    field: virtualhost_id
+  cluster_to_nodes:
+    relation_class: lnkClusterToServer
+    left_field: cluster_id
+    right_field: server_id
+  device_to_manufacturer:
+    source: device
+    target: manufacturer
+    field: brand_id

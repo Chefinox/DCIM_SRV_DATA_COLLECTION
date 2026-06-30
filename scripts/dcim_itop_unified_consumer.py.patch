@@ -1,0 +1,50 @@
+--- /home/infra/dcim_metrics_project/scripts/dcim_itop_unified_consumer.py
++++ /home/infra/dcim_metrics_project/scripts/dcim_itop_unified_consumer.py
+@@ -27,7 +27,11 @@
+ import os
+ from confluent_kafka import Consumer, KafkaError, Producer
++from confluent_kafka.schema_registry import SchemaRegistryClient
++from confluent_kafka.schema_registry.avro import AvroDeserializer
++from confluent_kafka.serialization import SerializationContext, MessageField
++import sys
++sys.path.append("/home/infra/dcim_metrics_project")
++from src.schemas.avro_schemas import NORMALIZED_EVENT_SCHEMA
+ import redis
+ 
+ # Custom utils for Postgres / Ralph hardware fallback
+@@ -588,6 +592,10 @@
+ # ─── Main ─────────────────────────────────────────────────────────────────────
+ def main():
++    schema_registry_conf = {'url': 'http://localhost:8081'}
++    schema_registry_client = SchemaRegistryClient(schema_registry_conf)
++    avro_deserializer = AvroDeserializer(schema_registry_client, NORMALIZED_EVENT_SCHEMA)
++
+     conf = {
+         'bootstrap.servers':      KAFKA_BROKERS,
+         'group.id':               'dcim_itop_group_v8',
+@@ -623,15 +631,21 @@
+                 logger.error(f"Kafka error: {msg.error()}")
+                 break
+ 
+-            msg_val = msg.value().decode('utf-8')
++            ctx = SerializationContext(TOPIC_IN, MessageField.VALUE)
+             try:
+-                success = process_message(msg_val, itop_client, auto_org_id)
++                msg_val = avro_deserializer(msg.value(), ctx)
++                if not msg_val: continue
++                
++                # Convert back to JSON string because process_message expects a string!
++                msg_val_str = json.dumps(msg_val)
++                
++                success = process_message(msg_val_str, itop_client, auto_org_id)
+                 if not success:
+-                    produce_dlq(producer, TOPIC_DLQ, json.loads(msg_val), "iTop update/create failed")
++                    produce_dlq(producer, TOPIC_DLQ, msg_val, "iTop update/create failed")
+             except Exception as e:
+                 logger.error(f"Exception processing message: {e}", exc_info=True)
+                 try:
+-                    produce_dlq(producer, TOPIC_DLQ, json.loads(msg_val), str(e))
++                    produce_dlq(producer, TOPIC_DLQ, msg_val, str(e))
+                 except Exception:
+                     pass
+ 

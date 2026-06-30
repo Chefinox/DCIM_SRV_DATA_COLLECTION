@@ -1,0 +1,270 @@
+#!/usr/bin/env python3
+"""
+Server Inventory to PostgreSQL — Unified Pipeline Compliant
+Mengumpulkan inventory lengkap dari Redfish API dan menulis ke PostgreSQL dcim_events.
+
+Alur:
+  1. Poll Redfish API untuk setiap server (firmware, BIOS, processors, memory, disks, NICs)
+  2. Transform ke format dcim_events schema (JSONB components)
+  3. Insert ke PostgreSQL dcim_events table
+  4. ralph_cmdb_sync.py akan membaca dari PostgreSQL dan sync ke Ralph
+
+Schedule: Daily 01:00 WIB (via cron)
+"""
+
+import requests
+import json
+import os
+import urllib3
+import logging
+import sys
+import time
+from confluent_kafka import Producer
+
+if "/home/infra/dcim_metrics_project" not in sys.path:
+    sys.path.append("/home/infra/dcim_metrics_project")
+from src.observability.logging.dcim_logger import setup_logger
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# --- CONFIGURATION ---
+REDFISH_SERVERS = [
+    {"ip": "10.50.0.2", "hostname": "SERVER-HCI-01"},
+    {"ip": "10.50.0.3", "hostname": "SERVER-HCI-02"},
+    {"ip": "10.50.0.4", "hostname": "SERVER-HCI-03"},
+    {"ip": "10.50.0.5", "hostname": "SERVER-RENDER-01"},
+    {"ip": "10.50.0.6", "hostname": "SERVER-RENDER-02"}
+]
+REDFISH_USER = "hndept"
+REDFISH_PASS = "F!tech@0918"
+
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "127.0.0.1:9092")
+KAFKA_TOPIC = "dcim.raw.hardware.server.inventory"
+
+LOG_FILE = "/home/infra/dcim_metrics_project/logs/server_inventory_to_pg.log"
+logger = setup_logger("server_inventory_to_pg", LOG_FILE)
+
+
+# --- REDFISH UTILITIES ---
+
+def get_redfish_data(url, auth):
+    """Fetch data from Redfish API endpoint."""
+    try:
+        resp = requests.get(url, auth=auth, verify=False, timeout=10)
+        if resp.status_code == 200:
+            return resp.json()
+        else:
+            logging.warning(f"Redfish {url} returned {resp.status_code}")
+    except Exception as e:
+        logging.error(f"Redfish error on {url}: {e}")
+    return None
+
+def collect_server_inventory(ip, hostname):
+    """Collect complete server inventory from Redfish API."""
+    auth = (REDFISH_USER, REDFISH_PASS)
+    base_url = f"https://{ip}/redfish/v1"
+    
+    inventory = {
+        "ip": ip,
+        "hostname": hostname,
+        "serial_number": None,
+        "bios_version": None,
+        "firmware_version": None,
+        "processors": [],
+        "memory": [],
+        "disks": [],
+        "nics": []
+    }
+    
+    # 1. System Info (Serial Number, BIOS)
+    sys_url = f"{base_url}/Systems/1"
+    sys_data = get_redfish_data(sys_url, auth)
+    if sys_data:
+        inventory["serial_number"] = sys_data.get("SerialNumber")
+        inventory["bios_version"] = sys_data.get("BiosVersion")
+        logging.info(f"  {ip}: SN={inventory['serial_number']}, BIOS={inventory['bios_version']}")
+    
+    # 2. Manager Info (Firmware Version)
+    mgr_url = f"{base_url}/Managers/1"
+    mgr_data = get_redfish_data(mgr_url, auth)
+    if mgr_data:
+        inventory["firmware_version"] = mgr_data.get("FirmwareVersion")
+        logging.info(f"  {ip}: Firmware={inventory['firmware_version']}")
+    
+    # 3. Processors
+    proc_coll = get_redfish_data(f"{sys_url}/Processors", auth)
+    if proc_coll:
+        for member in proc_coll.get("Members", []):
+            p = get_redfish_data(f"https://{ip}{member['@odata.id']}", auth)
+            if p and p.get("Status", {}).get("State") != "Absent":
+                inventory["processors"].append({
+                    "model_name": p.get("Model"),
+                    "cores": p.get("TotalCores"),
+                    "threads": p.get("TotalThreads"),
+                    "speed": p.get("MaxSpeedMHz")
+                })
+        logging.info(f"  {ip}: Found {len(inventory['processors'])} processors")
+    
+    # 4. Memory
+    mem_coll = get_redfish_data(f"{sys_url}/Memory", auth)
+    if mem_coll:
+        for member in mem_coll.get("Members", []):
+            m = get_redfish_data(f"https://{ip}{member['@odata.id']}", auth)
+            if m:
+                capacity = m.get("CapacityMiB") or 0
+                if capacity > 0 and m.get("Status", {}).get("State") != "Absent":
+                    inventory["memory"].append({
+                        "model_name": m.get("VendorID") or m.get("Manufacturer") or m.get("PartNumber"),
+                        "size": capacity,
+                        "speed": m.get("OperatingSpeedMhz")
+                    })
+        logging.info(f"  {ip}: Found {len(inventory['memory'])} memory modules")
+    
+    # 5. Disks & Volumes (RAID)
+    storage_coll = get_redfish_data(f"{sys_url}/Storage", auth)
+    if storage_coll:
+        for controller in storage_coll.get("Members", []):
+            c_data = get_redfish_data(f"https://{ip}{controller['@odata.id']}", auth)
+            if c_data:
+                # Build Drive to RAID mapping
+                drive_raid_map = {}
+                volumes_link = c_data.get("Volumes", {}).get("@odata.id")
+                if volumes_link:
+                    vols_data = get_redfish_data(f"https://{ip}{volumes_link}", auth)
+                    if vols_data:
+                        for vol_member in vols_data.get("Members", []):
+                            vol = get_redfish_data(f"https://{ip}{vol_member['@odata.id']}", auth)
+                            if vol:
+                                raid_type = vol.get("RAIDType", "Unknown")
+                                for drive_link in vol.get("Links", {}).get("Drives", []):
+                                    drive_raid_map[drive_link.get("@odata.id")] = raid_type
+
+                for drive in c_data.get("Drives", []):
+                    drive_id = drive.get("@odata.id")
+                    d = get_redfish_data(f"https://{ip}{drive_id}", auth)
+                    if d and d.get("SerialNumber") and d.get("Status", {}).get("State") != "Absent":
+                        # Extract slot number
+                        slot = d.get("Id")
+                        phys_loc = d.get("PhysicalLocation", {})
+                        part_loc = phys_loc.get("PartLocation", {})
+                        if part_loc.get("LocationOrdinalValue") is not None:
+                            slot = str(part_loc.get("LocationOrdinalValue"))
+                            
+                        # Default to Non-RAID if not in a volume
+                        raid_level = drive_raid_map.get(drive_id, "Non-RAID")
+                        
+                        inventory["disks"].append({
+                            "model_name": d.get("Name") or d.get("Model"),
+                            "serial_number": d.get("SerialNumber"),
+                            "size": int(d.get("CapacityBytes", 0) / (1024**3)),  # Convert to GiB
+                            "firmware_version": d.get("Revision"),
+                            "slot": slot,
+                            "raid_level": raid_level
+                        })
+        logging.info(f"  {ip}: Found {len(inventory['disks'])} disks")
+    
+    # 6. NICs
+    eth_coll = get_redfish_data(f"{sys_url}/EthernetInterfaces", auth)
+    if eth_coll:
+        for member in eth_coll.get("Members", []):
+            e = get_redfish_data(f"https://{ip}{member['@odata.id']}", auth)
+            if e and e.get("MACAddress") and e.get("Id") != "ToManager":
+                # Map speed to Ralph enum (1=10M, 2=100M, 3=1G, 4=10G, 5=40G, 6=100G, 7=25G, 11=unknown)
+                speed_mbps = e.get("SpeedMbps", 0)
+                speed_map = {10: 1, 100: 2, 1000: 3, 10000: 4, 25000: 7, 40000: 5, 100000: 6}
+                speed_enum = speed_map.get(speed_mbps, 11)
+                nic_data = {
+                    "label": e.get("Id"),
+                    "mac": e.get("MACAddress"),
+                    "speed": speed_enum,
+                    "raw_speed_mbps": speed_mbps,
+                    "model_name": e.get("Description", "External Ethernet Interface")
+                }
+                
+                ipv4s = e.get("IPv4Addresses", [])
+                if ipv4s:
+                    for ip_obj in ipv4s:
+                        if ip_obj.get("Address") and ip_obj.get("Address") != "0.0.0.0":
+                            nic_data["ip_address"] = ip_obj.get("Address")
+                            nic_data["ip_mask"] = ip_obj.get("SubnetMask")
+                            nic_data["ip_gateway"] = ip_obj.get("Gateway")
+                            break
+                            
+                inventory["nics"].append(nic_data)
+        logging.info(f"  {ip}: Found {len(inventory['nics'])} NICs")
+    
+    return inventory
+
+def write_to_kafka(producer, inventory):
+    """Write server inventory to Kafka topic."""
+    try:
+        timestamp_ns = int(time.time() * 1e9)
+        payload = {
+            "name": "server_inventory",
+            "timestamp": timestamp_ns,
+            "tags": {
+                "device_type": "server",
+                "hostname": inventory["hostname"],
+                "ip": inventory["ip"],
+                "serial_number": inventory["serial_number"]
+            },
+            "fields": {
+                "bios_version": inventory["bios_version"],
+                "firmware_version": inventory["firmware_version"],
+                "processors": inventory["processors"],
+                "memory": inventory["memory"],
+                "disks": inventory["disks"],
+                "nics": inventory["nics"]
+            }
+        }
+        producer.produce(
+            KAFKA_TOPIC,
+            value=json.dumps(payload).encode('utf-8')
+        )
+        producer.poll(0)
+        logging.info(f"  {inventory['ip']}: Written to Kafka topic {KAFKA_TOPIC}")
+        return True
+    except Exception as e:
+        logging.error(f"  {inventory['ip']}: Kafka write failed — {e}")
+        return False
+
+# --- MAIN ---
+
+def run():
+    logging.info("=== SERVER INVENTORY TO KAFKA: START ===")
+    
+    success_count = 0
+    fail_count = 0
+    
+    producer = Producer({'bootstrap.servers': KAFKA_BROKER})
+    
+    for server in REDFISH_SERVERS:
+        ip = server["ip"]
+        hostname = server["hostname"]
+        
+        logging.info(f"Processing {hostname} ({ip})...")
+        
+        try:
+            # Step 1: Collect inventory from Redfish
+            inventory = collect_server_inventory(ip, hostname)
+            
+            if not inventory["serial_number"]:
+                logging.warning(f"  {ip}: No serial number found, skipping")
+                fail_count += 1
+                continue
+            
+            # Step 2: Write to Kafka
+            if write_to_kafka(producer, inventory):
+                success_count += 1
+            else:
+                fail_count += 1
+                
+        except Exception as e:
+            logging.error(f"  {ip}: Pipeline crash — {e}")
+            fail_count += 1
+            
+    producer.flush()
+    logging.info(f"=== SERVER INVENTORY TO KAFKA: DONE (Success: {success_count}, Failed: {fail_count}) ===")
+
+if __name__ == "__main__":
+    run()

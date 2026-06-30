@@ -27,7 +27,11 @@ class CCTVPollerExecutor:
         status_xml = client.get_isapi("/System/status")
         sys_status = parse_isapi_xml(status_xml) if status_xml else None
         
-        metrics = transform_to_cctv_metrics(ip, device_info, sys_status)
+        # 4. Storage Fetch (for HDD metrics)
+        storage_xml = client.get_isapi("/ContentMgmt/Storage/hdd")
+        storage_status = parse_isapi_xml(storage_xml) if storage_xml else None
+        
+        metrics = transform_to_cctv_metrics(ip, device_info, sys_status, storage_status)
         metrics["device_category"] = device_category
         return metrics
 
@@ -36,7 +40,7 @@ class CCTVPollerExecutor:
         Capability: NVR Proxy Discovery.
         Returns a mapping of {camera_ip: {serial_number, model, firmware, hostname}}.
         """
-        client = HikvisionClient(nvr_ip, user, password)
+        client = HikvisionClient(nvr_ip, user, password, timeout=15)
         xml_data = client.get_isapi("/ContentMgmt/InputProxy/channels")
         if not xml_data:
             return {}
@@ -58,8 +62,22 @@ class CCTVPollerExecutor:
                     "serial_number": sn,
                     "model": model,
                     "firmware": fw,
-                    "hostname": name
+                    "hostname": name,
+                    "online": False
                 }
+        
+        # Merge status
+        status_xml = client.get_isapi("/ContentMgmt/InputProxy/channels/status")
+        if status_xml:
+            statuses = parse_isapi_xml(status_xml).get("InputProxyChannelStatus", [])
+            if isinstance(statuses, dict): statuses = [statuses]
+            for st in statuses:
+                desc = st.get("sourceInputPortDescriptor") or {}
+                ip = desc.get("ipAddress")
+                online = st.get("online")
+                if ip and ip in mapping:
+                    mapping[ip]["online"] = (str(online).lower() == "true")
+                    
         return mapping
 
     def _offline_state(self, ip, category):

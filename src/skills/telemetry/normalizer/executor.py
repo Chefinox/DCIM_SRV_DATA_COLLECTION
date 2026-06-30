@@ -1,8 +1,16 @@
 import os
+import sys
+sys.path.append('/home/infra/dcim_metrics_project')
 import json
 import uuid
 from datetime import datetime, timezone
 from confluent_kafka import Consumer, Producer
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroSerializer
+from confluent_kafka.serialization import SerializationContext, MessageField
+from src.schemas.avro_schemas import NORMALIZED_EVENT_SCHEMA
+from src.utils.lineage import track_lineage
+import time
 
 # Lokasi config tetap merujuk ke folder config utama
 CONFIG_PATH = "/home/infra/dcim_metrics_project/configs/metric_mapping.json"
@@ -45,15 +53,27 @@ def resolve_metric(raw_message):
     return metric_name, metric_value, metric_unit, severity
 
 def process_message(raw_message, source_topic):
+    device_type = resolve_device_type(raw_message, source_topic)
     tags = raw_message.get("tags", {})
     fields = raw_message.get("fields", {})
+    host_tag = tags.get("host")
+    if host_tag == "srv-rnd-dcim":
+        host_tag = None
+        
     hostname_raw = (
         tags.get("hostname") or 
         fields.get("system_name") or 
         fields.get("sysName") or 
+        host_tag or
         "Unknown_Host"
     )
     hostname = str(hostname_raw).strip()
+    if device_type in ("camera", "cctv"):
+        hostname_upper = hostname.upper()
+        if hostname_upper in ("IP CAMERA", "CAMERA", "IP_CAMERA", ""):
+            ip_val = tags.get("ip") or tags.get("address")
+            if ip_val:
+                hostname = f"CAMERA-{ip_val.split('.')[-1]}"
     serial_number = (
         tags.get("serial_number") or
         fields.get("serial_number") or
@@ -61,8 +81,16 @@ def process_message(raw_message, source_topic):
         fields.get("sysSerial") or
         "NO_IDENTIFIER"
     )
+    if serial_number == "NO_IDENTIFIER":
+        source_tag = tags.get("source", "")
+        if source_tag.startswith("XCC-"):
+            parts = source_tag.split("-")
+            if len(parts) >= 3:
+                serial_number = parts[-1]
     metric_name, metric_value, metric_unit, severity = resolve_metric(raw_message)
-    device_type = resolve_device_type(raw_message, source_topic)
+    
+    if metric_name == "general_metric" and metric_value is None:
+        return None
 
     if device_type in ("cctv", "nvr"):
         tag_model = tags.get("model")
@@ -154,7 +182,7 @@ def process_message(raw_message, source_topic):
         "measurement": raw_message.get("name"),
         "device_type": device_type,
         "hostname": hostname,
-        "ip": tags.get("ip"),
+        "ip": tags.get("ip") or tags.get("address"),
         "serial_number": serial_number,
         "metric_name": metric_name,
         "metric_value": metric_value,
@@ -163,20 +191,31 @@ def process_message(raw_message, source_topic):
         "manufacturer": fields.get("manufacturer") or tags.get("manufacturer"),
         "model": fields.get("model") or tags.get("model"),
         "firmware": fields.get("firmware") or fields.get("firmwareVersion") or tags.get("firmware") or tags.get("firmwareVersion"),
-        "raw_fields": fields,
-        "raw_tags": clean_tags
+        "raw_fields": json.dumps(fields) if fields else None,
+        "raw_tags": json.dumps(clean_tags) if clean_tags else None
     }
     return normalized_event
 
 def run():
     consumer_conf = {
-        'bootstrap.servers': '127.0.0.1:9092',
+        'bootstrap.servers': 'localhost:9094',
         'group.id': 'dcim_python_normalizer_group',
-        'auto.offset.reset': 'latest'
+        'auto.offset.reset': 'latest',
+        'security.protocol': 'SSL',
+        'ssl.ca.location': '/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem',
+        'enable.ssl.certificate.verification': False
     }
     producer_conf = {
-        'bootstrap.servers': '127.0.0.1:9092'
+        'bootstrap.servers': 'localhost:9094',
+        'security.protocol': 'SSL',
+        'ssl.ca.location': '/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem',
+        'enable.ssl.certificate.verification': False
     }
+    
+    schema_registry_conf = {'url': 'http://localhost:8081'}
+    schema_registry_client = SchemaRegistryClient(schema_registry_conf)
+    avro_serializer = AvroSerializer(schema_registry_client, NORMALIZED_EVENT_SCHEMA)
+    
     consumer = Consumer(consumer_conf)
     producer = Producer(producer_conf)
     consumer.subscribe(['^dcim\.raw\..*'])
@@ -190,17 +229,47 @@ def run():
                 print(f"Consumer error: {msg.error()}")
                 continue
             try:
+                start_time = time.time()
                 raw_data = json.loads(msg.value().decode('utf-8'))
                 topic = msg.topic()
                 normalized = process_message(raw_data, topic)
+                if normalized is None:
+                    continue
+                
                 producer.produce(
                     "dcim.normalized.events",
-                    value=json.dumps(normalized).encode('utf-8')
+                    value=avro_serializer(normalized, SerializationContext("dcim.normalized.events", MessageField.VALUE))
+                )
+                processing_ms = int((time.time() - start_time) * 1000)
+                track_lineage(
+                    event_id=normalized["event_id"],
+                    stage="normalized",
+                    status="success",
+                    source_system=normalized["hostname"],
+                    source_topic=topic,
+                    target_topic="dcim.normalized.events",
+                    processing_ms=processing_ms
                 )
                 print(f"Processed: {topic} -> {normalized['hostname']} [{normalized['device_type']}]")
                 producer.poll(0)
             except Exception as e:
                 print(f"Error processing message: {e}")
+                # Kirim original payload ke DLQ parse-failure
+                producer.produce(
+                    "dcim.dlq.parse-failure",
+                    value=msg.value()
+                )
+                # Track lineage for DLQ
+                # Generate a dummy event_id since it might not have parsed
+                track_lineage(
+                    event_id=str(uuid.uuid4()),
+                    stage="normalized",
+                    status="dlq",
+                    source_topic=msg.topic(),
+                    target_topic="dcim.dlq.parse-failure",
+                    error_message=str(e)
+                )
+                producer.poll(0)
     except KeyboardInterrupt:
         pass
     finally:

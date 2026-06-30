@@ -72,7 +72,7 @@
 | 4 | **Enrichment**: Tambah konteks dari threat intelligence | Belum ada integrasi threat intelligence feed | ❌ **Belum Terpenuhi** |
 | 5 | **Output**: Forward ke sistem SIEM | Log tersimpan di Elasticsearch; belum ada dedicated SIEM | ⚠️ **Parsial** — Elasticsearch berperan sebagai log store, bukan SIEM penuh |
 
-> **Catatan**: SIEM sebagai sistem tersendiri belum diimplementasikan. Elasticsearch + Kibana berfungsi sebagai pengganti sementara untuk log centralization dan alerting operasional, namun tidak memiliki kemampuan korelasi keamanan (UEBA, rule engine) layaknya SIEM.
+> **Catatan**: SIEM sebagai sistem tersendiri belum diimplementasikan. Elasticsearch + Kibana berfungsi sebagai pengganti sementara untuk log centralization dan alerting operasional. Dashboard Kibana Log Terpusat (`dcim-log-dashboard`) kini telah beroperasi penuh dengan parser JSON (`decode_json_fields`) untuk melacak event error/warning secara realtime.
 
 ---
 
@@ -219,8 +219,8 @@
 
 ### Prioritas Gap yang Perlu Ditangani
 
-1. **[Tinggi]** Aktivasi `dcim-data-quality-check.timer` agar kualitas data untuk AI terpantau otomatis
-2. **[Tinggi]** Jadwalkan `import_financial_data_to_itop.py` secara berkala agar data keuangan aset tersinkronisasi
-3. **[Sedang]** Implementasi SIEM terpisah atau integrasi Elasticsearch dengan security correlation rules
+1. **[SELESAI]** Aktivasi `dcim-data-quality-check.timer` (Sudah diaktifkan dan berjalan otomatis setiap pukul 06:00).
+2. **[Tinggi]** Jadwalkan `import_financial_data_to_itop.py` secara berkala agar data keuangan aset tersinkronisasi.
+3. **[Sedang]** Implementasi SIEM terpisah atau integrasi Elasticsearch dengan security correlation rules.
 4. **[Sedang]** Integrasi Change Management System dengan iTop untuk audit trail perubahan konfigurasi
 5. **[Rendah]** Otomasi scanning/reservasi rack slot di Ralph untuk workflow provisioning aset baru
