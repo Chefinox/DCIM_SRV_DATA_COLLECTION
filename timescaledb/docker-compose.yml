@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: dcim-timescaledb
+    environment:
+      POSTGRES_DB: dcim_analytics
+      POSTGRES_USER: analytics_user
+      POSTGRES_PASSWORD: ${TIMESCALE_DB_PASS:-changeme}
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analytics_user -d dcim_analytics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  timescaledb_data:

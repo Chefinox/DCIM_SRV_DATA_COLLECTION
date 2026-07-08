@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: dcim_node_exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: dcim_postgres_exporter
+    restart: unless-stopped
+    ports:
+      - "9187:9187"
+    environment:
+      # Assume connection to the existing postgres container in the default network or host
+      # We use host IP or container name if in the same network
+      - DATA_SOURCE_NAME=postgresql://sot_admin:Inovasi%400918@10.70.0.56:5432/postgres?sslmode=disable
+
+  redis_exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: dcim_redis_exporter
+    restart: unless-stopped
+    ports:
+      - "9121:9121"
+    environment:
+      # Use redis connection via host IP or password if necessary
+      - REDIS_ADDR=redis://10.70.0.56:6379
+      - REDIS_PASSWORD_FILE=/run/secrets/sot_db_pass
+    volumes:
+      - /run/secrets/dcim/sot_db_pass:/run/secrets/sot_db_pass:ro
+
+  kafka_exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: dcim_kafka_exporter
+    restart: unless-stopped
+    ports:
+      - "9308:9308"
+    command:
+      - '--kafka.server=10.70.0.56:9092'
+      - '--kafka.server=10.70.0.56:9095'
+      - '--kafka.server=10.70.0.56:9097'
+
+  elasticsearch_exporter:
+    image: prometheuscommunity/elasticsearch-exporter:latest
+    container_name: dcim_elasticsearch_exporter
+    restart: unless-stopped
+    ports:
+      - "9114:9114"
+    command:
+      - '--es.uri=https://10.70.0.56:9200'
+      - '--es.all'
+      - '--es.indices'
+      - '--es.shards'
+      - '--es.ssl-skip-verify'
+    environment:
+      # Need Basic auth if ES requires it
+      - ES_USERNAME=elastic
+      - ES_PASSWORD=C+H+pFb*aIAqWcOo-X8q

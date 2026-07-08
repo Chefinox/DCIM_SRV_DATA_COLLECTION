@@ -2,17 +2,16 @@
 
 Berdasarkan analisis *environment* `srv-rnd-dcim`, pipeline end-to-end (Arsitektur v4.2), dan struktur proyek `dcim_metrics_project`, berikut adalah daftar konfigurasi untuk fase pengumpulan data (L2 - Collection), fungsinya, serta letak path lokasinya.
 
-## 1. Konfigurasi Agen Telegraf (Telemetri Real-time)
-Telegraf bertugas menarik (polling) data metrik secara berkala dari perangkat (interval standar 120 detik) dan mengirimkannya ke Apache Kafka sebagai produser.
+## 1. Konfigurasi Apache NiFi (Telemetri Real-time)
+Apache NiFi kini bertugas 100% sebagai pengumpul data (polling) secara tersentralisasi. NiFi menjalankan berbagai skrip poller eksternal dan mengirimkan hasilnya ke Apache Kafka.
 
 | Nama / Target | Path Lokasi | Deskripsi Fungsi |
 |---|---|---|
-| **Telegraf Producer / Router (Utama)** | `configs/telegraf/telegraf_producer.conf` | Merupakan file konfigurasi master (agen). Fungsinya menangani pemilahan data (routing/namepass) dan mengatur pembuangan metrik (outputs) ke berbagai spesifik topik *Raw* Kafka (mis. `dcim.raw.hardware.server`, `dcim.raw.power.ups`, dll) berdasarkan kategori perangkatnya. |
-| **Server Redfish Poller** | `configs/telegraf/servers-redfish.conf` | Konfigurasi ini menggunakan `inputs.redfish` untuk menarik metrik operasional dan *health* server Lenovo (suhu, fan, power, komponen) langsung melalui jalur BMC/HTTPS (Redfish API) setiap 120 detik. |
-| **UPS SNMP Poller** | `configs/telegraf/ups-apc.conf` | Menggunakan `inputs.snmp` (Protokol SNMP v3 yang terenkripsi) untuk mengekstrak informasi load daya, status baterai, voltase, dan runtime estimasi dari UPS APC Smart-UPS. |
-| **CCTV & NVR Poller** | `configs/telegraf/cctv-hikvision.conf` | Konfigurasi pembungkus yang menggunakan plugin `inputs.exec`. Fungsinya menjalankan skrip Python eksternal untuk berkomunikasi dengan kamera dan NVR Hikvision menggunakan protokol ISAPI HTTP/XML, dan hasilnya diterjemahkan kembali agar bisa dicerna oleh Telegraf. |
+| **NiFi Server Poller** | `configs/telegraf/servers-redfish.conf.disabled` | Telah bermigrasi penuh ke NiFi (`ExecuteProcess` via `redfish_poller.py`). Konfigurasi Telegraf telah dimatikan. |
+| **NiFi UPS Poller** | `configs/telegraf/ups-apc.conf.disabled` | Telah bermigrasi penuh ke NiFi (`ExecuteProcess` via `snmp_ups_poller.py`). Konfigurasi Telegraf telah dimatikan. |
+| **NiFi CCTV Poller** | `configs/telegraf/cctv-hikvision.conf.disabled` | Telah bermigrasi penuh ke NiFi. Standalone daemon dan konfigurasi Telegraf telah dimatikan. |
+| **Infra Self-Monitoring** | `configs/telegraf/infra-monitoring.conf` | Satu-satunya konfigurasi Telegraf yang masih hidup, ditujukan murni untuk *self-monitoring* server DCIM itu sendiri (L15), tidak melempar data ke Kafka DCIM. |
 
-*(Catatan Repositori: Konfigurasi pengumpulan untuk NAS dan MikroTik didokumentasikan di arsitektur (`nas-snmp.conf`, `mikrotik-snmp.conf`) namun file *source*-nya tidak ter-*track* secara langsung di dalam repositori `configs/telegraf/` git saat ini.)*
 
 ## 2. Skrip Python Kustom (Inventory & Integrasi)
 Selain plugin bawaan Telegraf, environment ini menggunakan skrip Python yang dieksekusi secara periodik (lewat cron job/daemon) untuk data yang lebih kompleks dan struktural:
@@ -24,5 +23,5 @@ Selain plugin bawaan Telegraf, environment ini menggunakan skrip Python yang die
 | **NAS Inventory Poller** | `scripts/nas_inventory_poller.py` | Skrip pengumpulan data spesifik NAS untuk memetakan volume logical dan susunan drive secara berkala. |
 
 ## Kesimpulan Pemahaman Pipeline DCIM
-- **Siklus End-to-End:** Perangkat Fisik (L1) -> Diambil oleh Config Telegraf/Skrip di atas (L2) -> Dilempar mentah ke *Kafka Raw* (L3) -> *Normalizer* Python (L4) -> Pengayaan Metadata/NiFi (L5) -> Disimpan ke Elasticsearch dan PostgreSQL (L7) -> Alerting dan CMDB Ralph/iTop.
-- **Git Versioning:** Repositori saat ini berada pada branch `main` dengan modifikasi aktif untuk "AI Readiness Phase" dan sinkronisasi CMDB, sehingga beberapa skrip Polling telah bertransisi menjadi modular (`dcim_inventory_poller.py`).
+- **Siklus End-to-End:** Perangkat Fisik (L1) -> Diambil 100% oleh Apache NiFi (L2) -> Dilempar mentah ke *Kafka Raw* (L3) -> *Normalizer* Python (L4) -> Pengayaan Metadata/NiFi (L5) -> Disimpan ke Elasticsearch dan PostgreSQL (L7) -> Alerting dan CMDB Ralph/iTop.
+- **Status Migrasi L2:** Telegraf dan *Standalone Daemon* resmi dinonaktifkan untuk pengumpulan data telemetri DCIM. Telegraf hanya difungsikan untuk pemantauan server itu sendiri (*self-monitoring*).

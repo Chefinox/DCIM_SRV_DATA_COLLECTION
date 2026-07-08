@@ -1,0 +1,23 @@
+[Unit]
+Description=DCIM Analytics Stream Processor (Kafka to TimescaleDB)
+After=network.target
+
+[Service]
+Type=simple
+User=infra
+Group=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+Environment="KAFKA_BOOTSTRAP_SERVERS=localhost:9092"
+Environment="TIMESCALE_DB_HOST=localhost"
+Environment="TIMESCALE_DB_PORT=5433"
+Environment="TIMESCALE_DB_NAME=dcim_analytics"
+Environment="TIMESCALE_DB_USER=analytics_user"
+Environment="TIMESCALE_DB_PASS=changeme"
+ExecStart=/usr/bin/python3 /home/infra/dcim_metrics_project/scripts/analytics_stream_processor.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

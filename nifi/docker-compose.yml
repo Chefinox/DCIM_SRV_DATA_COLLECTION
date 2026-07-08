@@ -53,7 +53,10 @@ services:
     network_mode: "host"
     environment:
       KAFKA_CLUSTERS_0_NAME: "DCIM-Production"
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "localhost:9092"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "10.70.0.56:9092"
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: "http://10.70.0.56:8081"
+      KAFKA_CLUSTERS_0_SERDES_0_NAME: "SchemaRegistry"
+      KAFKA_CLUSTERS_0_SERDES_0_PROPERTIES_URL: "http://10.70.0.56:8081"
       SERVER_PORT: 9000
       DYNAMIC_CONFIG_ENABLED: "true"
     depends_on:

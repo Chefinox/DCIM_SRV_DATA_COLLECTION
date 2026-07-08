@@ -16,7 +16,7 @@ def get_pool():
     global _pool
     if _pool is None:
         try:
-            db_pass = get_secret("dcim/postgres", "password")
+            db_pass = get_secret("postgres", "password")
             if not db_pass:
                 db_pass = os.environ.get("SOT_DB_PASS", "")
                 

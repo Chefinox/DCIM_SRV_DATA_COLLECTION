@@ -40,9 +40,9 @@ def run_audit(schema):
             # Build exists filters for all required fields
             exists_filters = [{"exists": {"field": field}} for field in required_fields]
 
-            # Base filter: device_type match (nested under `tag`) + rolling 24-hour window
+            # Base filter: device_type match + rolling 24-hour window
             base_filter = [
-                {"term": {"tag.device_type.keyword": device_type}},
+                {"term": {"device_type.keyword": device_type}},
                 {"range": {
                     "@timestamp": {
                         "gte": "now-24h",
