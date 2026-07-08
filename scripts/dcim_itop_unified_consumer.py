@@ -863,6 +863,17 @@ def process_message(msg_val: str, itop_client: ITopClient, auto_org_id: str) -> 
         logger.error("Invalid JSON in message")
         return False
 
+    if isinstance(data.get("raw_fields"), str):
+        try:
+            data["raw_fields"] = json.loads(data["raw_fields"])
+        except json.JSONDecodeError:
+            data["raw_fields"] = {}
+    if isinstance(data.get("raw_tags"), str):
+        try:
+            data["raw_tags"] = json.loads(data["raw_tags"])
+        except json.JSONDecodeError:
+            data["raw_tags"] = {}
+
     hostname = data.get("hostname")
     if not hostname:
         return True  # Skip — tidak ada hostname

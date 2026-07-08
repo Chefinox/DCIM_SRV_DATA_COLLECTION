@@ -3,26 +3,26 @@
 # device_type values must match EXACTLY what is stored in tag.device_type.keyword in ES.
 
 server:
-  - tag.serial_number
-  - tag.model
-  - dcim_metrics.raw_fields_cpuUtilization
-  - dcim_metrics.raw_fields_memoryUsage
-  - dcim_metrics.raw_fields_power_output_watts
-  - dcim_metrics.raw_fields_system_temp
+  - serial_number
+  - model
+  - raw_fields.cpuUtilization
+  - raw_fields.memoryUsage
+  - raw_fields.power_output_watts
+  - raw_fields.system_temp
 
 ups:
-  - tag.serial_number
-  - tag.model
-  - dcim_metrics.raw_fields_output_load
-  - dcim_metrics.raw_fields_battery_temp
-  - dcim_metrics.raw_fields_battery_runtime_remain
+  - serial_number
+  - model
+  - raw_fields.output_load
+  - raw_fields.battery_temp
+  - raw_fields.battery_runtime_remain
 
 network:
-  - tag.serial_number
-  - tag.model
-  - dcim_metrics.raw_fields_cpu_load
+  - serial_number
+  - model
+  - raw_fields.cpu_load
 
 nas:
-  - tag.serial_number
-  - tag.model
-  - dcim_metrics.raw_fields_diskTemp
+  - serial_number
+  - model
+  - raw_fields.diskTemp

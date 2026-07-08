@@ -89,8 +89,9 @@ def process_message(raw_message, source_topic):
                 serial_number = parts[-1]
     metric_name, metric_value, metric_unit, severity = resolve_metric(raw_message)
     
-    if metric_name == "general_metric" and metric_value is None:
-        return None
+    if metric_name == "general_metric":
+        if metric_value is None or str(metric_value).strip() == "" or str(metric_value).strip().lower() in ("null", "none", "nan"):
+            return None
 
     if device_type in ("cctv", "nvr"):
         tag_model = tags.get("model")
@@ -230,27 +231,45 @@ def run():
                 continue
             try:
                 start_time = time.time()
-                raw_data = json.loads(msg.value().decode('utf-8'))
+                text = msg.value().decode('utf-8').strip()
                 topic = msg.topic()
-                normalized = process_message(raw_data, topic)
-                if normalized is None:
-                    continue
                 
-                producer.produce(
-                    "dcim.normalized.events",
-                    value=avro_serializer(normalized, SerializationContext("dcim.normalized.events", MessageField.VALUE))
-                )
-                processing_ms = int((time.time() - start_time) * 1000)
-                track_lineage(
-                    event_id=normalized["event_id"],
-                    stage="normalized",
-                    status="success",
-                    source_system=normalized["hostname"],
-                    source_topic=topic,
-                    target_topic="dcim.normalized.events",
-                    processing_ms=processing_ms
-                )
-                print(f"Processed: {topic} -> {normalized['hostname']} [{normalized['device_type']}]")
+                try:
+                    parsed_data = json.loads(text)
+                    if isinstance(parsed_data, dict):
+                        messages_to_process = [parsed_data]
+                    elif isinstance(parsed_data, list):
+                        messages_to_process = parsed_data
+                    else:
+                        messages_to_process = []
+                except json.JSONDecodeError:
+                    # Fallback to JSON Lines if standard JSON load fails (Extra data error)
+                    messages_to_process = []
+                    for line in text.split('\n'):
+                        line = line.strip()
+                        if line:
+                            messages_to_process.append(json.loads(line))
+                            
+                for raw_data in messages_to_process:
+                    normalized = process_message(raw_data, topic)
+                    if normalized is None:
+                        continue
+                    
+                    producer.produce(
+                        "dcim.normalized.events",
+                        value=avro_serializer(normalized, SerializationContext("dcim.normalized.events", MessageField.VALUE))
+                    )
+                    processing_ms = int((time.time() - start_time) * 1000)
+                    track_lineage(
+                        event_id=normalized["event_id"],
+                        stage="normalized",
+                        status="success",
+                        source_system=normalized["hostname"],
+                        source_topic=topic,
+                        target_topic="dcim.normalized.events",
+                        processing_ms=processing_ms
+                    )
+                    print(f"Processed: {topic} -> {normalized['hostname']} [{normalized['device_type']}]")
                 producer.poll(0)
             except Exception as e:
                 print(f"Error processing message: {e}")
@@ -260,7 +279,6 @@ def run():
                     value=msg.value()
                 )
                 # Track lineage for DLQ
-                # Generate a dummy event_id since it might not have parsed
                 track_lineage(
                     event_id=str(uuid.uuid4()),
                     stage="normalized",

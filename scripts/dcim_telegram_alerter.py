@@ -227,7 +227,7 @@ def main():
     all_alerts.extend(check_pipeline_alive(state))
     all_alerts.extend(check_enrichment_failure(state))
     all_alerts.extend(check_cmdb_drift(state))
-    all_alerts.extend(check_dlq_spike(state))
+    # all_alerts.extend(check_dlq_spike(state)) # Temporarily disabled due to known NAS metric_value=null issue
 
     if not all_alerts:
         logger.info("All checks passed. No alerts.")

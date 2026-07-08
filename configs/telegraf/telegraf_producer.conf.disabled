@@ -1,0 +1,92 @@
+[global_tags]
+
+[agent]
+  logfile = "/var/log/telegraf/telegraf.log"
+  logfile_rotation_max_size = "10MB"
+  logfile_rotation_max_archives = 3
+  interval = "10s"
+  round_interval = true
+  metric_batch_size = 1000
+  metric_buffer_limit = 10000
+  collection_jitter = "0s"
+  flush_interval = "10s"
+  flush_jitter = "0s"
+  precision = ""
+  hostname = "srv-rnd-dcim"
+  omit_hostname = false
+  debug = true
+
+# --- System metrics: hanya untuk monitoring server DCIM sendiri ---
+[[inputs.cpu]]
+  percpu = true
+  totalcpu = true
+[[inputs.disk]]
+  ignore_fs = ["tmpfs", "devtmpfs", "devfs", "iso9660", "overlay", "aufs", "squashfs"]
+[[inputs.diskio]]
+[[inputs.kernel]]
+[[inputs.mem]]
+[[inputs.processes]]
+[[inputs.system]]
+
+# --- DROP system metrics: jangan kirim ke Kafka (bukan DCIM device) ---
+[[processors.topk]]
+  namepass = ["never_match_anything"]
+  # Placeholder: system metrics TIDAK masuk Kafka
+
+# --- LEGACY STREAM (Keep during migration) ---
+[[outputs.kafka]]
+  brokers = ["localhost:9094"]
+  tls_ca = "/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem"
+  topic = "dcim.metrics.raw"
+  data_format = "json"
+  namedrop = ["cpu", "disk", "diskio", "kernel", "mem", "processes", "system", "swap"]
+
+# --- NEW GRANULAR STREAMS ---
+[[outputs.kafka]]
+  brokers = ["localhost:9094"]
+  tls_ca = "/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem"
+  topic = "dcim.raw.hardware.server"
+  data_format = "json"
+  namepass = ["servers_redfish", "redfish_*", "server_redfish", "server_redfish_util"]
+
+[[outputs.kafka]]
+  brokers = ["localhost:9094"]
+  tls_ca = "/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem"
+  topic = "dcim.raw.power.ups"
+  data_format = "json"
+  namepass = ["ups_snmp", "ups_apc", "apc_ups"]
+
+[[outputs.kafka]]
+  brokers = ["localhost:9094"]
+  tls_ca = "/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem"
+  topic = "dcim.raw.storage.nas"
+  data_format = "json"
+  namepass = ["nas_snmp", "dcim_nas", "dcim_nas_volume", "synology_*", "nas_inventory", "nas_volume", "nas_disk"]
+
+[[outputs.kafka]]
+  brokers = ["localhost:9094"]
+  tls_ca = "/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem"
+  topic = "dcim.raw.network.snmp"
+  data_format = "json"
+  namepass = ["net_snmp", "dcim_network", "mikrotik", "dcim_network_storage"]
+
+[[outputs.kafka]]
+  brokers = ["localhost:9094"]
+  tls_ca = "/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem"
+  topic = "dcim.raw.network.interfaces"
+  data_format = "json"
+  namepass = ["net_snmp", "dcim_network_if", "snmp_trap", "interface"]
+
+[[outputs.kafka]]
+  brokers = ["localhost:9094"]
+  tls_ca = "/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem"
+  topic = "dcim.raw.device.isapi"
+  data_format = "json"
+  namepass = ["hikvision_*", "cctv_*"]
+
+[[outputs.kafka]]
+  brokers = ["localhost:9094"]
+  tls_ca = "/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem"
+  topic = "dcim.raw.remote.ssh"
+  data_format = "json"
+  namepass = ["ssh_poller", "ssh_*"]
