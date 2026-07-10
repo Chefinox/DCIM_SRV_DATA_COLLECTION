@@ -12,7 +12,10 @@ services:
       - sot_db_pass
 
   nifi:
-    image: apache/nifi:1.24.0
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    image: dcim-nifi-custom:1.0
     container_name: dcim-nifi
     network_mode: "host"
     environment:
@@ -24,6 +27,7 @@ services:
     volumes:
       - nifi_conf:/opt/nifi/nifi-current/conf
       - /etc/dcim/registry:/etc/dcim/registry:ro
+      - /home/infra/dcim_metrics_project/scripts:/opt/nifi/nifi-current/scripts:ro
     restart: unless-stopped
     mem_limit: 2g
     secrets:
