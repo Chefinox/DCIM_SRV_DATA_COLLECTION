@@ -1,0 +1,14 @@
+[Unit]
+Description=DCIM Analytics Bridge Service
+After=network.target kafka.service dcim-normalizer.service dcim-enrichment-api.service
+
+[Service]
+Type=simple
+User=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+ExecStart=/usr/bin/python3 -u /home/infra/dcim_metrics_project/scripts/dcim_analytics_bridge.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
