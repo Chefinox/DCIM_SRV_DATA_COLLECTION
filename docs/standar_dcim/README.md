@@ -56,10 +56,9 @@ for message in consumer:
 ## Arsitektur Overview
 
 ```
-Sources → Telegraf/NiFi → Kafka → Stream Processor → TimescaleDB → Tim AI
-                                              ↓
-                                        Kafka Topics
-                                        (dcim.analytics.*)
+Sources → NiFi (Pollers) → Kafka (Raw) → NiFi (Enrich) → Kafka (Avro) 
+                                                              ↓
+Tim AI ← TimescaleDB ← Stream Processor ← Kafka (JSON) ← Analytics Bridge
 ```
 
 ---

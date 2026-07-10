@@ -19,19 +19,12 @@ Dokumen ini menjelaskan cara akses Tim AI ke DCIM analytics pipeline untuk kebut
 
 ## Network Access
 
-### Dari Dalam (Internal)
+Karena Tim AI berada di dalam jaringan internal yang sama, Anda dapat langsung mengakses resource berikut dari mesin pengembangan (Jupyter Notebook / Server AI) Anda:
 
-| Parameter | Value |
-|-----------|-------|
-| Host | `10.70.0.56` |
-| Port | `5433` |
-| Protocol | PostgreSQL |
-
-### Dari Luar (External)
-
-Tim AI dari luar perlu:
-1. **VPN** - Connect ke VPN internal
-2. **Firewall** - Port 5433 perlu di-open untuk IP tertentu
+| Resource | Host | Port | Protocol | Keterangan |
+|----------|------|------|----------|------------|
+| TimescaleDB | `10.70.0.56` | `5433` | PostgreSQL | Untuk penarikan data historis & agregasi batch |
+| Kafka Broker | `10.70.0.56` | `9092` | PLAINTEXT | Untuk _real-time streaming_ data baru |
 
 ---
 
@@ -63,8 +56,31 @@ Tim AI dari luar perlu:
 
 Main metrics table dengan TimescaleDB.
 
-```sql
-SELECT * FROM metrics ORDER BY time DESC LIMIT 10;
+**Contoh Pengambilan Data dengan Python (Pandas):**
+```python
+import pandas as pd
+import psycopg2
+
+# Koneksi ke TimescaleDB
+conn = psycopg2.connect(
+    host="10.70.0.56",
+    port="5433",
+    dbname="dcim_analytics",
+    user="ai_team",
+    password="ai_team_access_pass"
+)
+
+# Ambil data metrik UPS dalam 24 jam terakhir
+query = """
+    SELECT time, source, value, tags->>'device_type' as device_type
+    FROM metrics 
+    WHERE metric_name = 'battery_temp' 
+      AND time > NOW() - INTERVAL '24 hours'
+    ORDER BY time ASC;
+"""
+
+df = pd.read_sql(query, conn)
+print(df.head())
 ```
 
 | Column | Type | Description |
@@ -147,17 +163,19 @@ for message in consumer:
 ```
 Source Devices (Server, CCTV, NAS, UPS, Network)
         ↓
-    Telegraf/NiFi
+    NiFi (Ingestion Pollers)
         ↓
-    Kafka (dcim.raw.*)
+    NiFi (Enrichment & Normalizer)
         ↓
-    Normalization + Enrichment
+    Kafka (dcim.enriched.events - Avro)
         ↓
-    Kafka (dcim.analytics.metrics) ← Tim AI bisa consume dari sini
+    Analytics Bridge (Python)
+        ↓
+    Kafka (dcim.analytics.metrics - JSON) ← Tim AI bisa consume dari sini
         ↓
     Stream Processor (analytics_stream_processor.py)
         ↓
-    TimescaleDB (metrics hypertable)
+    TimescaleDB (metrics hypertable) ← Tim AI bisa query ke sini
         ↓
     Continuous Aggregates (hourly, daily)
 ```
