@@ -130,7 +130,10 @@ class AnalyticsStreamProcessor:
             auto_offset_reset='latest',
             enable_auto_commit=True,
             value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-            consumer_timeout_ms=1000
+            consumer_timeout_ms=1000,
+            security_protocol='SSL',
+            ssl_cafile='/home/infra/dcim_metrics_project/kafka/certs/ca-cert.pem',
+            ssl_check_hostname=False
         )
     
     def _process_message(self, message):

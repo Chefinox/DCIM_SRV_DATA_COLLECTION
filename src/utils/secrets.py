@@ -56,7 +56,9 @@ def get_secret(name: str, fallback_env: str = None) -> str:
         pass
 
     # Fallback to Docker secret or Env Var
-    secret_path = f"/run/secrets/{name}"
+    secret_path = f"/run/secrets/dcim/{name}"
+    if not os.path.exists(secret_path):
+        secret_path = f"/run/secrets/{name}"
     if os.path.exists(secret_path):
         with open(secret_path, 'r') as f:
             return f.read().strip()
