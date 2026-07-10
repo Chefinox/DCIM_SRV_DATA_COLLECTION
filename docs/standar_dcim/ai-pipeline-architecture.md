@@ -20,30 +20,34 @@ Dokumen ini menjelaskan arsitektur pipeline AI/ML untuk Data Center Infrastructu
 ## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           DCIM AI Pipeline Architecture                       │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Sources    │     │  Ingestion   │     │   Kafka      │     │  Processing  │
-├──────────────┤     ├──────────────┤     ├──────────────┤     ├──────────────┤
-│ Server       │────▶│ NiFi         │────▶│ dcim.raw.*   │────▶│ NiFi         │
-│ CCTV/NVR     │     │ ExecuteProcess│   │              │     │ Normalizer   │
-│ NAS          │     │ (Python)     │     │              │     │              │
-│ UPS          │     │              │     │              │     │              │
-│ Network      │     │              │     │              │     │              │
-└──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
-                                                                    │
-                                                                    ▼
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Storage    │     │  TimescaleDB │     │  Analytics   │     │    AI       │
-├──────────────┤     ├──────────────┤     ├──────────────┤     ├──────────────┤
-│ PostgreSQL   │◀────│ metrics      │◀────│ Stream       │◀────│ Kafka        │
-│ Elasticsearch│     │ hypertable   │     │ Processor    │     │ Topics       │
-│ Redis        │     │              │     │              │     │              │
-│              │     │ hourly agg   │     │              │     │ dcim.        │
-│              │     │ daily agg    │     │              │     │ analytics.*  │
-└──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
+┌──────────────┐     ┌──────────────┐     ┌────────────────┐     ┌────────────────┐
+│   Sources    │     │  Ingestion   │     │   Kafka (Raw)  │     │  Processing    │
+├──────────────┤     ├──────────────┤     ├────────────────┤     ├────────────────┤
+│ Server       │────▶│ NiFi         │────▶│ dcim.raw.*     │────▶│ NiFi           │
+│ CCTV/NVR     │     │ ExecuteProcess│   │ (JSON)         │     │ (Normalizer &  │
+│ NAS          │     │ (Python)     │     │                │     │  Enrichment)   │
+│ UPS          │     │              │     │                │     │                │
+│ Network      │     │              │     │                │     │                │
+└──────────────┘     └──────────────┘     └────────────────┘     └────────────────┘
+                                                                        │
+                                                                        ▼
+                                          ┌────────────────┐     ┌────────────────┐
+                                          │ Kafka (Enrich) │     │ AI Integration │
+                                          ├────────────────┤     ├────────────────┤
+                                          │ dcim.enriched.*│────▶│ Analytics      │
+                                          │ (Avro via SR)  │     │ Bridge (Python)│
+                                          └────────────────┘     └────────────────┘
+                                                                        │
+                                                                        ▼
+┌──────────────┐     ┌──────────────┐     ┌────────────────┐     ┌────────────────┐
+│   Storage    │     │  TimescaleDB │     │  Analytics     │     │   Kafka (AI)   │
+├──────────────┤     ├──────────────┤     ├────────────────┤     ├────────────────┤
+│ PostgreSQL   │◀────│ metrics      │◀────│ Stream         │◀────│ dcim.          │
+│ Elasticsearch│     │ hypertable   │     │ Processor      │     │ analytics.*    │
+│ Redis        │     │              │     │ (Python)       │     │ (JSON)         │
+│              │     │ hourly agg   │     │                │     │                │
+│              │     │ daily agg    │     │                │     │                │
+└──────────────┘     └──────────────┘     └────────────────┘     └────────────────┘
 ```
 
 ---
