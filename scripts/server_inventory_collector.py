@@ -19,11 +19,15 @@ import urllib3
 import logging
 import sys
 import time
-from confluent_kafka import Producer
 
-if "/home/infra/dcim_metrics_project" not in sys.path:
-    sys.path.append("/home/infra/dcim_metrics_project")
-from src.observability.logging.dcim_logger import setup_logger
+import os
+
+def get_secret(name):
+    try:
+        with open(f"/run/secrets/{name}", "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return os.environ.get(name, "")
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -33,16 +37,15 @@ REDFISH_SERVERS = [
     {"ip": "10.50.0.3", "hostname": "SERVER-HCI-02"},
     {"ip": "10.50.0.4", "hostname": "SERVER-HCI-03"},
     {"ip": "10.50.0.5", "hostname": "SERVER-RENDER-01"},
-    {"ip": "10.50.0.6", "hostname": "SERVER-RENDER-02"}
+    {"ip": "10.50.0.6", "hostname": "SERVER-RENDER-02"},
+    {"ip": "192.168.100.152", "hostname": "SERVER-DUMMY"}
 ]
 REDFISH_USER = "hndept"
-REDFISH_PASS = "F!tech@0918"
+REDFISH_PASS = get_secret("redfish_pass")
 
-KAFKA_BROKER = os.getenv("KAFKA_BROKER", "127.0.0.1:9092")
-KAFKA_TOPIC = "dcim.raw.hardware.server.inventory"
-
-LOG_FILE = "/home/infra/dcim_metrics_project/logs/server_inventory_to_pg.log"
-logger = setup_logger("server_inventory_to_pg", LOG_FILE)
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("server_inventory_to_pg")
 
 
 # --- REDFISH UTILITIES ---
@@ -195,8 +198,8 @@ def collect_server_inventory(ip, hostname):
     
     return inventory
 
-def write_to_kafka(producer, inventory):
-    """Write server inventory to Kafka topic."""
+def print_to_stdout(inventory):
+    """Print server inventory as JSON to stdout for NiFi."""
     try:
         timestamp_ns = int(time.time() * 1e9)
         payload = {
@@ -217,26 +220,20 @@ def write_to_kafka(producer, inventory):
                 "nics": inventory["nics"]
             }
         }
-        producer.produce(
-            KAFKA_TOPIC,
-            value=json.dumps(payload).encode('utf-8')
-        )
-        producer.poll(0)
-        logging.info(f"  {inventory['ip']}: Written to Kafka topic {KAFKA_TOPIC}")
+        print(json.dumps(payload))
+        logging.info(f"  {inventory['ip']}: Printed JSON to stdout")
         return True
     except Exception as e:
-        logging.error(f"  {inventory['ip']}: Kafka write failed — {e}")
+        logging.error(f"  {inventory['ip']}: Failed to print JSON — {e}")
         return False
 
 # --- MAIN ---
 
 def run():
-    logging.info("=== SERVER INVENTORY TO KAFKA: START ===")
+    logging.info("=== SERVER INVENTORY TO NIFI: START ===")
     
     success_count = 0
     fail_count = 0
-    
-    producer = Producer({'bootstrap.servers': KAFKA_BROKER})
     
     for server in REDFISH_SERVERS:
         ip = server["ip"]
@@ -253,8 +250,8 @@ def run():
                 fail_count += 1
                 continue
             
-            # Step 2: Write to Kafka
-            if write_to_kafka(producer, inventory):
+            # Step 2: Print to stdout
+            if print_to_stdout(inventory):
                 success_count += 1
             else:
                 fail_count += 1
@@ -263,8 +260,7 @@ def run():
             logging.error(f"  {ip}: Pipeline crash — {e}")
             fail_count += 1
             
-    producer.flush()
-    logging.info(f"=== SERVER INVENTORY TO KAFKA: DONE (Success: {success_count}, Failed: {fail_count}) ===")
+    logging.info(f"=== SERVER INVENTORY TO NIFI: DONE (Success: {success_count}, Failed: {fail_count}) ===")
 
 if __name__ == "__main__":
     run()

@@ -25,12 +25,19 @@ except ImportError:
     sys.stderr.write("ERROR: 'requests' module not found. Install with: pip3 install requests\n")
     sys.exit(1)
 
+# Import secret util
+if "/home/infra/dcim_metrics_project" not in sys.path:
+    sys.path.append("/home/infra/dcim_metrics_project")
+from src.utils.secrets import get_secret
+
+REDFISH_PASS = get_secret("redfish_pass", "REDFISH_PASS")
+
 SERVERS = [
-    {"ip": "10.50.0.2", "host": "server-HCI-01",    "user": "hndept", "pass": "F!tech@0918"},
-    {"ip": "10.50.0.3", "host": "server-HCI-02",    "user": "hndept", "pass": "F!tech@0918"},
-    {"ip": "10.50.0.4", "host": "server-HCI-03",    "user": "hndept", "pass": "F!tech@0918"},
-    {"ip": "10.50.0.5", "host": "server-Render-01", "user": "hndept", "pass": "F!tech@0918"},
-    {"ip": "10.50.0.6", "host": "server-Render-02", "user": "root",   "pass": "F!tech@0918"},
+    {"ip": "10.50.0.2", "host": "server-HCI-01",    "user": "hndept", "pass": REDFISH_PASS},
+    {"ip": "10.50.0.3", "host": "server-HCI-02",    "user": "hndept", "pass": REDFISH_PASS},
+    {"ip": "10.50.0.4", "host": "server-HCI-03",    "user": "hndept", "pass": REDFISH_PASS},
+    {"ip": "10.50.0.5", "host": "server-Render-01", "user": "hndept", "pass": REDFISH_PASS},
+    {"ip": "10.50.0.6", "host": "server-Render-02", "user": "root",   "pass": REDFISH_PASS},
 ]
 
 TIMEOUT = 8  # seconds per HTTP request
