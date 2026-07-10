@@ -1,0 +1,50 @@
+2026-07-10 14:32:51,953 - INFO - === SERVER INVENTORY TO NIFI: START ===
+2026-07-10 14:32:51,953 - INFO - Processing SERVER-HCI-01 (10.50.0.2)...
+2026-07-10 14:32:53,075 - WARNING - Redfish https://10.50.0.2/redfish/v1/Systems/1 returned 401
+2026-07-10 14:32:54,210 - WARNING - Redfish https://10.50.0.2/redfish/v1/Managers/1 returned 401
+2026-07-10 14:32:55,418 - WARNING - Redfish https://10.50.0.2/redfish/v1/Systems/1/Processors returned 401
+2026-07-10 14:32:56,570 - WARNING - Redfish https://10.50.0.2/redfish/v1/Systems/1/Memory returned 401
+2026-07-10 14:32:57,810 - WARNING - Redfish https://10.50.0.2/redfish/v1/Systems/1/Storage returned 401
+2026-07-10 14:32:59,042 - WARNING - Redfish https://10.50.0.2/redfish/v1/Systems/1/EthernetInterfaces returned 401
+2026-07-10 14:32:59,042 - WARNING -   10.50.0.2: No serial number found, skipping
+2026-07-10 14:32:59,042 - INFO - Processing SERVER-HCI-02 (10.50.0.3)...
+2026-07-10 14:33:00,182 - WARNING - Redfish https://10.50.0.3/redfish/v1/Systems/1 returned 401
+2026-07-10 14:33:01,314 - WARNING - Redfish https://10.50.0.3/redfish/v1/Managers/1 returned 401
+2026-07-10 14:33:02,466 - WARNING - Redfish https://10.50.0.3/redfish/v1/Systems/1/Processors returned 401
+2026-07-10 14:33:03,618 - WARNING - Redfish https://10.50.0.3/redfish/v1/Systems/1/Memory returned 401
+2026-07-10 14:33:04,741 - WARNING - Redfish https://10.50.0.3/redfish/v1/Systems/1/Storage returned 401
+2026-07-10 14:33:05,910 - WARNING - Redfish https://10.50.0.3/redfish/v1/Systems/1/EthernetInterfaces returned 401
+2026-07-10 14:33:05,910 - WARNING -   10.50.0.3: No serial number found, skipping
+2026-07-10 14:33:05,910 - INFO - Processing SERVER-HCI-03 (10.50.0.4)...
+2026-07-10 14:33:07,074 - WARNING - Redfish https://10.50.0.4/redfish/v1/Systems/1 returned 401
+2026-07-10 14:33:08,270 - WARNING - Redfish https://10.50.0.4/redfish/v1/Managers/1 returned 401
+2026-07-10 14:33:09,450 - WARNING - Redfish https://10.50.0.4/redfish/v1/Systems/1/Processors returned 401
+2026-07-10 14:33:10,790 - WARNING - Redfish https://10.50.0.4/redfish/v1/Systems/1/Memory returned 401
+2026-07-10 14:33:12,022 - WARNING - Redfish https://10.50.0.4/redfish/v1/Systems/1/Storage returned 401
+2026-07-10 14:33:13,278 - WARNING - Redfish https://10.50.0.4/redfish/v1/Systems/1/EthernetInterfaces returned 401
+2026-07-10 14:33:13,278 - WARNING -   10.50.0.4: No serial number found, skipping
+2026-07-10 14:33:13,278 - INFO - Processing SERVER-RENDER-01 (10.50.0.5)...
+2026-07-10 14:33:14,434 - WARNING - Redfish https://10.50.0.5/redfish/v1/Systems/1 returned 401
+2026-07-10 14:33:15,542 - WARNING - Redfish https://10.50.0.5/redfish/v1/Managers/1 returned 401
+2026-07-10 14:33:16,700 - WARNING - Redfish https://10.50.0.5/redfish/v1/Systems/1/Processors returned 401
+2026-07-10 14:33:17,818 - WARNING - Redfish https://10.50.0.5/redfish/v1/Systems/1/Memory returned 401
+2026-07-10 14:33:19,106 - WARNING - Redfish https://10.50.0.5/redfish/v1/Systems/1/Storage returned 401
+2026-07-10 14:33:20,246 - WARNING - Redfish https://10.50.0.5/redfish/v1/Systems/1/EthernetInterfaces returned 401
+2026-07-10 14:33:20,246 - WARNING -   10.50.0.5: No serial number found, skipping
+2026-07-10 14:33:20,246 - INFO - Processing SERVER-RENDER-02 (10.50.0.6)...
+2026-07-10 14:33:21,342 - WARNING - Redfish https://10.50.0.6/redfish/v1/Systems/1 returned 401
+2026-07-10 14:33:22,494 - WARNING - Redfish https://10.50.0.6/redfish/v1/Managers/1 returned 401
+2026-07-10 14:33:23,622 - WARNING - Redfish https://10.50.0.6/redfish/v1/Systems/1/Processors returned 401
+2026-07-10 14:33:24,754 - WARNING - Redfish https://10.50.0.6/redfish/v1/Systems/1/Memory returned 401
+2026-07-10 14:33:25,850 - WARNING - Redfish https://10.50.0.6/redfish/v1/Systems/1/Storage returned 401
+2026-07-10 14:33:26,950 - WARNING - Redfish https://10.50.0.6/redfish/v1/Systems/1/EthernetInterfaces returned 401
+2026-07-10 14:33:26,950 - WARNING -   10.50.0.6: No serial number found, skipping
+2026-07-10 14:33:26,950 - INFO - Processing SERVER DUMMY (192.168.100.152)...
+2026-07-10 14:33:36,962 - ERROR - Redfish error on https://192.168.100.152/redfish/v1/Systems/1: HTTPSConnectionPool(host='192.168.100.152', port=443): Max retries exceeded with url: /redfish/v1/Systems/1 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fb706db9330>, 'Connection to 192.168.100.152 timed out. (connect timeout=10)'))
+2026-07-10 14:33:46,970 - ERROR - Redfish error on https://192.168.100.152/redfish/v1/Managers/1: HTTPSConnectionPool(host='192.168.100.152', port=443): Max retries exceeded with url: /redfish/v1/Managers/1 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fb706db97e0>, 'Connection to 192.168.100.152 timed out. (connect timeout=10)'))
+2026-07-10 14:33:56,982 - ERROR - Redfish error on https://192.168.100.152/redfish/v1/Systems/1/Processors: HTTPSConnectionPool(host='192.168.100.152', port=443): Max retries exceeded with url: /redfish/v1/Systems/1/Processors (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fb706db9ed0>, 'Connection to 192.168.100.152 timed out. (connect timeout=10)'))
+2026-07-10 14:34:06,991 - ERROR - Redfish error on https://192.168.100.152/redfish/v1/Systems/1/Memory: HTTPSConnectionPool(host='192.168.100.152', port=443): Max retries exceeded with url: /redfish/v1/Systems/1/Memory (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fb706dba5c0>, 'Connection to 192.168.100.152 timed out. (connect timeout=10)'))
+2026-07-10 14:34:17,002 - ERROR - Redfish error on https://192.168.100.152/redfish/v1/Systems/1/Storage: HTTPSConnectionPool(host='192.168.100.152', port=443): Max retries exceeded with url: /redfish/v1/Systems/1/Storage (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fb706dbacb0>, 'Connection to 192.168.100.152 timed out. (connect timeout=10)'))
+2026-07-10 14:34:27,013 - ERROR - Redfish error on https://192.168.100.152/redfish/v1/Systems/1/EthernetInterfaces: HTTPSConnectionPool(host='192.168.100.152', port=443): Max retries exceeded with url: /redfish/v1/Systems/1/EthernetInterfaces (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fb706dba8c0>, 'Connection to 192.168.100.152 timed out. (connect timeout=10)'))
+2026-07-10 14:34:27,013 - WARNING -   192.168.100.152: No serial number found, skipping
+2026-07-10 14:34:27,013 - INFO - === SERVER INVENTORY TO NIFI: DONE (Success: 0, Failed: 6) ===

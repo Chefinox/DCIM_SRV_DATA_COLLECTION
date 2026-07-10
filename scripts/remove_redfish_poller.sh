@@ -1,38 +1,37 @@
 #!/usr/bin/env bash
 #
-# remove-collect-data-server.sh
-# Menghapus satu entry server (berdasarkan IP) dari REDFISH_SERVERS
-# di dalam script collect data server (Python), lalu (opsional) copy
-# hasilnya ke dalam container docker.
+# remove-redfish-poller-server.sh
+# Menghapus satu entry server (berdasarkan IP) dari list SERVERS
+# di dalam redfish_poller.py, lalu (opsional) copy hasilnya ke container.
 #
 # Penggunaan:
-#   ./remove-collect-data-server.sh <IP>
+#   ./remove-redfish-poller-server.sh <IP>
 #
 # Contoh:
-#   ./remove-collect-data-server.sh 10.70.0.2
+#   ./remove-redfish-poller-server.sh 10.50.0.6
 #
 # Variabel yang bisa di-override lewat environment:
-#   TARGET_FILE       Path file python di host yang berisi REDFISH_SERVERS
-#                      (default: ./skript_collect_data_server.txt)
+#   TARGET_FILE       Path file redfish_poller.py di host
+#                      (default: ./redfish_poller.py)
 #   CONTAINER_NAME     Nama container docker (default: dcim-nifi)
-#   CONTAINER_PATH     Path file di dalam container (default: sama dengan TARGET_FILE basename,
-#                      di /opt/scripts/)
+#   CONTAINER_PATH     Path file di dalam container
+#                      (default: /home/infra/dcim_metrics_project/redfish_poller.py)
 #   COPY_TO_CONTAINER  Set ke "true" untuk otomatis docker cp hasil edit ke container (default: false)
 #   RESTART_CONTAINER  Set ke "true" untuk restart container setelah copy (default: false)
 
 set -euo pipefail
 
 # ---------- Konfigurasi default ----------
-TARGET_FILE="${TARGET_FILE:-./skript_collect_data_server.txt}"
+TARGET_FILE="${TARGET_FILE:-./redfish_poller.py}"
 CONTAINER_NAME="${CONTAINER_NAME:-dcim-nifi}"
-CONTAINER_PATH="${CONTAINER_PATH:-/opt/scripts/$(basename "$TARGET_FILE")}"
+CONTAINER_PATH="${CONTAINER_PATH:-/home/infra/dcim_metrics_project/redfish_poller.py}"
 COPY_TO_CONTAINER="${COPY_TO_CONTAINER:-false}"
 RESTART_CONTAINER="${RESTART_CONTAINER:-false}"
 
 # ---------- Validasi argumen ----------
 if [[ $# -ne 1 ]]; then
     echo "Usage: $0 <IP_ADDRESS>"
-    echo "Contoh: $0 10.70.0.2"
+    echo "Contoh: $0 10.50.0.6"
     exit 1
 fi
 
@@ -51,7 +50,7 @@ fi
 
 # ---------- Cek apakah IP ada di file ----------
 if ! grep -q "\"ip\": \"$TARGET_IP\"" "$TARGET_FILE"; then
-    echo "IP $TARGET_IP tidak ditemukan di dalam REDFISH_SERVERS ($TARGET_FILE)."
+    echo "IP $TARGET_IP tidak ditemukan di dalam SERVERS ($TARGET_FILE)."
     exit 1
 fi
 
@@ -71,12 +70,12 @@ target_ip = sys.argv[2]
 with open(target_file, "r", encoding="utf-8") as f:
     content = f.read()
 
-# Cari blok REDFISH_SERVERS = [ ... ]
-pattern = re.compile(r"(REDFISH_SERVERS\s*=\s*\[)(.*?)(\n\])", re.DOTALL)
+# Cari blok SERVERS = [ ... ]  (bukan REDFISH_SERVERS, dan bukan kata lain yang diakhiri "SERVERS")
+pattern = re.compile(r"(?<![A-Za-z_])(SERVERS\s*=\s*\[)(.*?)(\n\])", re.DOTALL)
 match = pattern.search(content)
 
 if not match:
-    print("Error: Tidak menemukan blok REDFISH_SERVERS = [ ... ] di file.")
+    print("Error: Tidak menemukan blok SERVERS = [ ... ] di file.")
     sys.exit(1)
 
 header, body, footer = match.groups()
