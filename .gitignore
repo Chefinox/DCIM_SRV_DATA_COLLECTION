@@ -9,3 +9,5 @@ scripts/tmp_*
 configs/ai_reader.credentials
 sql/*.local
 configs/.env
+__pycache__/
+*.pyc
