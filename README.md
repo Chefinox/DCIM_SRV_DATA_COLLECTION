@@ -1,8 +1,8 @@
 # DCIM Metrics Project
 
-**Version**: v3.5.6 (Unified Pipeline + CCTV CMDB Cleanup & Real SN Extraction)  
+**Version**: v4.4 (Full NiFi Migration, SIEM Consumer, AI Pipeline)  
 **Status**: ✅ Production Active  
-**Last Updated**: 2026-05-26
+**Last Updated**: 2026-07-10
 
 ## Project Overview
 
@@ -148,7 +148,8 @@ PostgreSQL dcim_events → ralph_cmdb_sync.py → Ralph Asset Repository
 
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
-| v3.5.6 | 2026-05-26 | CCTV Influx JSON format, NVR real SN fallback, CMDB placeholder cleanup, check_cctv_status.py regex fix | **CURRENT** |
+| v4.4.0 | 2026-07-10 | Full NiFi Migration, SIEM Consumer, AI Pipeline, Prometheus Exporters, TimescaleDB, Documentation Updates | **CURRENT** |
+| v3.5.6 | 2026-05-26 | CCTV Influx JSON format, NVR real SN fallback, CMDB placeholder cleanup, check_cctv_status.py regex fix | Active |
 | v3.5.5 | 2026-05-21 | Auto-register missing DC assets, stale-device alerting, Kafka health-check guidance, logging baseline fixes | Active |
 | v3.5.4 | 2026-05-20 | Threshold alerter service with 6 rules, alerts indexed to `dcim-alerts` | Active |
 | v3.5.3 | 2026-05-20 | Kibana dashboard field mapping fixes for NVR/UPS/NAS and device type cardinality | Active |
