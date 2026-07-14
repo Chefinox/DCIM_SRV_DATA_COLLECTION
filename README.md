@@ -10,9 +10,22 @@ Unified DCIM telemetry and inventory management system using 4-layer decoupled a
 
 ## Architecture
 
-```
-Device → Apache NiFi → Kafka Raw → Normalizer → Kafka Normalized (Avro) → 
-NiFi Enrichment → Kafka Enriched (Avro) → PostgreSQL/Elasticsearch/TimescaleDB → iTop CMDB / Ralph
+```mermaid
+flowchart LR
+    Device[DCIM Devices] --> NiFi[Apache NiFi]
+    NiFi --> KRaw[Kafka Raw]
+    KRaw --> Norm[dcim-normalizer]
+    Norm -- Avro --> KNorm[Kafka Normalized]
+    
+    KNorm --> Enrich[NiFi Enrichment + FastAPI]
+    Enrich -- Avro --> KEnriched[Kafka Enriched]
+    
+    KEnriched --> ES[(Elasticsearch)]
+    KEnriched --> PG[(PostgreSQL)]
+    KEnriched --> TSDB[(TimescaleDB)]
+    
+    PG -.-> iTop[(iTop CMDB)]
+    iTop -.-> Ralph[(Ralph)]
 ```
 
 ### Monitored Infrastructure
