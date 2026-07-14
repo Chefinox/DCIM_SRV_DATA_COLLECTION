@@ -184,14 +184,17 @@ PostgreSQL / iTop → itop_to_ralph_sync.py → Ralph Asset Repository
 
 ### Check System Status
 ```bash
-# Check services
-sudo systemctl status telegraf dcim-normalizer dcim-enrichment-api
+# Check core pipeline services
+sudo systemctl status telegraf dcim-normalizer dcim-enrichment-api dcim-sql-consumer dcim-itop-unified
 
-# Check containers
-docker ps | grep dcim
+# Check infrastructure containers (NiFi, Kafka, DBs)
+docker ps | grep -E "dcim|kafka|schema"
 
-# Check logs
-tail -f logs/dcim_normalizer.log
+# Check active service logs via journalctl
+sudo journalctl -u dcim-normalizer -f
+
+# Check specific component log files
+tail -f logs/dcim_itop_unified_consumer.log
 ```
 
 
