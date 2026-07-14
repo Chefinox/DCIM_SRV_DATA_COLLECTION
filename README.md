@@ -194,14 +194,6 @@ docker ps | grep dcim
 tail -f logs/dcim_normalizer.log
 ```
 
-### Manual Sync
-```bash
-# Collect server inventory
-python3 scripts/server_inventory_to_pg.py
-
-# Sync to Ralph CMDB
-python3 scripts/ralph_cmdb_sync.py
-```
 
 ## Documentation
 
