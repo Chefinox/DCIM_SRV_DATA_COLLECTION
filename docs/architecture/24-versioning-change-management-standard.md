@@ -1,11 +1,10 @@
-# Versioning & Change Management Standard (FIT041)
+# Versioning & Change Management Standard
 
 > [!IMPORTANT]
-> **Compliance**: Technical Requirements FIT041 Section 2.1.3
 > **Status**: Approved for Production
 > **Last Update**: 2026-07-14
 
-## 1. Definisi Standar (Ref: 2.1.3)
+## 1. Definisi Standar
 Sistem DCIM wajib mengelola siklus hidup workflow dengan kontrol versi yang ketat untuk mencegah kegagalan pipeline akibat perubahan tidak terencana.
 
 | Kode | Persyaratan | Mekanisme Implementasi |
@@ -16,29 +15,34 @@ Sistem DCIM wajib mengelola siklus hidup workflow dengan kontrol versi yang keta
 
 ## 2. Arsitektur Versioning
 
-### A. NiFi Enrichment Flow
+### A. Apache NiFi Data Flow
 Seluruh Process Group di NiFi terhubung ke **NiFi Registry**. Setiap perubahan flow (drag-and-drop processor, update config) akan memicu status *Modified*.
 - **Mencatat Versi**: User wajib melakukan `Commit Local Changes` sebelum perubahan dianggap permanen.
 - **Log Perubahan**: Dialog komit mewajibkan pengisian deskripsi perubahan utama.
 
-### B. Python Processing Scripts
-Skrip normalisasi dan sinkronisasi dikelola melalui repository lokal Git di `/home/infra/dcim_metrics_project/`.
+### B. Python Processing & Consumers
+Skrip normalisasi, consumer Kafka, dan pipeline analitik dikelola melalui repository lokal Git di `/home/infra/dcim_metrics_project/`.
 - **Command Audit**:
   ```bash
   git log --oneline --graph --all
   ```
 
+### C. Schema Registry (Avro)
+Skema telemetri yang berjalan di Kafka (Avro) dikelola secara terpusat. Perubahan struktur data (seperti penambahan field baru) wajib didaftarkan sebagai versi skema baru di Confluent Schema Registry agar kompatibilitas (*backward/forward compatibility*) seluruh *consumer* tetap terjaga.
+
 ## 3. Alur Kerja Perubahan (Change Management)
 Setiap perubahan wajib melalui tahapan berikut:
 
-1.  **Identifikasi**: Menentukan komponen yang akan diubah (misal: penambahan field baru).
-2.  **Modifikasi**: Melakukan perubahan pada level staging/draft.
-3.  **Documentation (Versioning)**:
-    - Melakukan tagging versi pada repository.
-    - Mencatat alasan perubahan pada log sistem.
-4.  **Re-deployment**:
+1.  **Identifikasi**: Menentukan komponen yang akan diubah (misal: penambahan field metrik baru, perubahan sinkronisasi CMDB).
+2.  **Modifikasi Skema (Opsional)**: Jika ada perubahan struktur data Avro, wajib melakukan pembaruan versi pada Schema Registry.
+3.  **Modifikasi Logika**: Melakukan perubahan pada level staging/draft (mengubah file Python atau konfigurasi NiFi).
+4.  **Documentation (Versioning)**:
+    - Melakukan *commit* dan pembuatan versi (*tag*) pada repository Git.
+    - Melakukan *Commit Local Changes* pada NiFi Registry jika mengubah *flow*.
+5.  **Re-deployment**:
     - **NiFi**: Restart Process Group / Update Version in Canvas.
-    - **Scripts**: `systemctl restart [service_name]`
+    - **Systemd Services**: `systemctl restart [service_name]`
+    - **Docker Containers**: `docker-compose restart [container_name]`
 
 ## 4. Log Perubahan Sistem
 
