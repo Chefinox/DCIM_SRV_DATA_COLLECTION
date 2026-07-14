@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > **Compliance**: Technical Requirements FIT041 Section 2.1.3
 > **Status**: Approved for Production
-> **Last Update**: 2026-05-21
+> **Last Update**: 2026-07-14
 
 ## 1. Definisi Standar (Ref: 2.1.3)
 Sistem DCIM wajib mengelola siklus hidup workflow dengan kontrol versi yang ketat untuk mencegah kegagalan pipeline akibat perubahan tidak terencana.
@@ -44,13 +44,18 @@ Setiap perubahan wajib melalui tahapan berikut:
 
 | Versi | Waktu (WIB) | Perubahan Utama | Status |
 | :--- | :--- | :--- | :--- |
-| **v3.5.6** | 2026-05-26 05:50 | **CCTV Pipeline & CMDB Integration Fixes**: Bungkus poller metrics dalam format Influx JSON standard untuk mencegah data drop di database. Perbaiki discovery channel NVR untuk mengambil real serial number, model, dan firmware dari proxy channel (untuk offline/unauthorized cameras). Bersihkan 13 placeholder assets dan register ke-31 CCTV dengan real serial number di Ralph CMDB. Perbaiki regex parser check_cctv_status.py. | **Active** |
-| **v3.5.5** | 2026-05-21 00:30 | **Commissioning/Decommissioning Automation**: `ralph_cmdb_sync.py` auto-register missing DC assets (`server`, `ups`, `nas`, `network_switch`, `nvr`) from PostgreSQL to Ralph. `dcim-threshold-alerter.py` adds stale-device detection (30m) and indexes alerts to `dcim-alerts`. Logging fixes: Telegraf file log `/var/log/telegraf/telegraf.log`, server inventory symlink `logs/server_inventory.log`. Kafka health check guidance updated: short 3s sampling can false-warn; use offsets + PG/ES counts. | **Active** |
-| **v3.5.4** | 2026-05-20 22:00 | **Threshold Alerter**: `dcim-threshold-alerter.service` — automated range-check 6 rules (server temp, UPS battery/load, NAS disk temp, NVR memory, network CPU). Alerts indexed ke `dcim-alerts`. | **Active** |
-| **v3.5.3** | 2026-05-20 17:00 | **Kibana Dashboard Fix**: Fix semua panel NVR/UPS/NAS di `dcim-monitoring` dashboard — update field references ke `raw_fields.*`, fix device_type filter, tambah NAS storage panels. Fix pie chart Device Types ke cardinality(hostname). | **Active** |
-| **v3.5.2** | 2026-05-20 10:00 | **ES Disk Recovery**: Hapus 11 old indices (05.03-05.14) untuk free disk space. Clear flood stage block. Adjust watermark thresholds (flood=95%, high=90%). Fix NAS volume collection (`dcim_nas_volume` ditambahkan ke Telegraf namepass). | **Active** |
-| **v3.5.1** | 2026-05-19 17:00 | **CCTV Registration**: Register 20 missing CCTV ke Ralph Back Office. Buat category CCTV + 5 model Hikvision. Update remarks dengan IP address. | **Active** |
-| **v3.5.0** | 2026-05-18 16:48 | **Ralph CMDB Sync Fix (3 Bugs)**: Bug A — Last Sync pakai `datetime.now()`. Bug B — Components baca dari JSONB (bukan tabel relational kosong). Bug C — Proteksi ethernet Management dari prune. Tambah `management_ip`/`management_hostname` ke PATCH. Update server query include JSONB columns. | **Active** |
+| **v4.4.0** | 2026-07-14 11:00 | **Full v4.4 Active Implementation**: Migrasi penuh polling ke Apache NiFi (termasuk CCTV), penambahan SIEM consumer (`dcim-siem-es-consumer.service`), penggantian arsip batch PostgreSQL menjadi TimescaleDB Streaming Analytics, dan implementasi L14 Event Lineage Tracking. | **Active** |
+| **v4.3.0** | 2026-06-25 10:00 | **AI Pipeline Refinement**: Konsolidasi arsitektur pipeline, merapikan dokumentasi. | Superseded |
+| **v4.2.0** | 2026-06-22 15:00 | **AI Integration Phase**: Integrasi sistem dengan kapabilitas AI (L14 Data Provider). Penambahan read-only iTop account untuk tim AI. | Superseded |
+| **v4.1.0** | 2026-06-16 11:00 | **AI Readiness Phase 1**: Penambahan fungsionalitas L13 Archival dan pengumpulan telemetri CPU Redfish (persiapan model ML). | Superseded |
+| **v4.0.0** | 2026-05-26 14:00 | **Migration to iTop CMDB**: Menggantikan Ralph CMDB dengan iTop sebagai *metadata authority* utama. Implementasi 4-Layer Decoupled Architecture dengan Schema Registry & Vault. | Superseded |
+| **v3.5.6** | 2026-05-26 05:50 | **CCTV Pipeline & CMDB Integration Fixes**: Bungkus poller metrics dalam format Influx JSON standard untuk mencegah data drop di database. Perbaiki discovery channel NVR untuk mengambil real serial number, model, dan firmware dari proxy channel (untuk offline/unauthorized cameras). Bersihkan 13 placeholder assets dan register ke-31 CCTV dengan real serial number di Ralph CMDB. Perbaiki regex parser check_cctv_status.py. | Superseded |
+| **v3.5.5** | 2026-05-21 00:30 | **Commissioning/Decommissioning Automation**: `ralph_cmdb_sync.py` auto-register missing DC assets (`server`, `ups`, `nas`, `network_switch`, `nvr`) from PostgreSQL to Ralph. `dcim-threshold-alerter.py` adds stale-device detection (30m) and indexes alerts to `dcim-alerts`. Logging fixes: Telegraf file log `/var/log/telegraf/telegraf.log`, server inventory symlink `logs/server_inventory.log`. Kafka health check guidance updated: short 3s sampling can false-warn; use offsets + PG/ES counts. | Superseded |
+| **v3.5.4** | 2026-05-20 22:00 | **Threshold Alerter**: `dcim-threshold-alerter.service` — automated range-check 6 rules (server temp, UPS battery/load, NAS disk temp, NVR memory, network CPU). Alerts indexed ke `dcim-alerts`. | Superseded |
+| **v3.5.3** | 2026-05-20 17:00 | **Kibana Dashboard Fix**: Fix semua panel NVR/UPS/NAS di `dcim-monitoring` dashboard — update field references ke `raw_fields.*`, fix device_type filter, tambah NAS storage panels. Fix pie chart Device Types ke cardinality(hostname). | Superseded |
+| **v3.5.2** | 2026-05-20 10:00 | **ES Disk Recovery**: Hapus 11 old indices (05.03-05.14) untuk free disk space. Clear flood stage block. Adjust watermark thresholds (flood=95%, high=90%). Fix NAS volume collection (`dcim_nas_volume` ditambahkan ke Telegraf namepass). | Superseded |
+| **v3.5.1** | 2026-05-19 17:00 | **CCTV Registration**: Register 20 missing CCTV ke Ralph Back Office. Buat category CCTV + 5 model Hikvision. Update remarks dengan IP address. | Superseded |
+| **v3.5.0** | 2026-05-18 16:48 | **Ralph CMDB Sync Fix (3 Bugs)**: Bug A — Last Sync pakai `datetime.now()`. Bug B — Components baca dari JSONB (bukan tabel relational kosong). Bug C — Proteksi ethernet Management dari prune. Tambah `management_ip`/`management_hostname` ke PATCH. Update server query include JSONB columns. | Superseded |
 | **v3.4.2** | 2026-05-18 09:30 | **UPS Sync Fix**: `sync_ups()` fallback ke `raw_fields` JSONB. UPS query pakai `serial_number` bukan `ip`. Fix `update_management_ip()` robust orphan handling. | Merged to v3.5.0 |
 | **v3.5.0-pre** | 2026-05-07 17:00 | **Hybrid Stabilization**: Rollback logika pemrosesan ke v3.4 (Proven Logic) namun tetap menggunakan struktur folder v4.0 (src/). | Superseded |
 | **v4.0.0** | 2026-05-06 22:55 | **Modular Agentic Architecture**: Restrukturisasi total ke 4-Layer (Tools, Schemas, Skills, Workflows). Decoupling SQL logic dari core processing. | Superseded |
@@ -67,27 +72,31 @@ Setiap perubahan wajib melalui tahapan berikut:
 
 ## 5. Crontab & Services Aktif
 
-### Cron Jobs
+### Cron Jobs & Timers (Terjadwal)
 
-| Schedule | Script | Log |
+| Timer / Cron | Script | Jadwal |
 | :--- | :--- | :--- |
-| `0 1 * * *` | `scripts/server_inventory_to_pg.py` | `logs/server_inventory.log` |
-| `0 2 * * *` | `scripts/ralph_cmdb_sync.py` | `logs/ralph_cmdb_sync.log` |
+| `dcim-itop-ralph-sync.timer` | `scripts/itop_to_ralph_sync.py` | Harian 02:00 WIB |
+| `dcim-data-quality-check.timer` | `scripts/audit_data_quality.py` | Harian 06:00 WIB |
+| `dcim-telegram-alerter.timer` | `scripts/dcim_telegram_alerter.py` | Setiap 5 menit |
+| `0 0 * * *` | `scripts/manage_partitions.py` | Harian 00:00 WIB |
 
 ### Systemd Services (DCIM Pipeline)
 
 | Service | Deskripsi | Status |
 | :--- | :--- | :--- |
-| `telegraf.service` | Telegraf Producer (SNMP/Redfish collection) | Active |
-| `telegraf-consumer.service` | Telegraf Consumer → Elasticsearch | Active |
+| `telegraf.service` | Telegraf Producer (Host metrics) | Active |
 | `dcim-normalizer.service` | Kafka Normalizer (raw → normalized) | Active |
-| `dcim-enrichment-api.service` | FastAPI Enrichment (CMDB metadata) | Active |
-| `dcim-sql-consumer.service` | Kafka → PostgreSQL writer | Active |
-| `dcim-kafka-es-sync.service` | Kafka → Elasticsearch sync | Active |
-| `dcim-cctv-poller.service` | Hikvision ISAPI Poller | Active |
-| `dcim-dlq-consumer.service` | Dead Letter Queue consumer | Active |
-| `dcim-redis-sync.service` | Redis cache sync | Active |
-| `dcim-threshold-alerter.service` | Threshold monitoring + stale-device detection (6 rules, 30m stale threshold, 2min interval) | Active (updated: 2026-05-21) |
+| `dcim-enrichment-api.service` | FastAPI Enrichment endpoint | Active |
+| `dcim-itop-redis-sync.service` | Sync iTop → Redis cache (60s) | Active |
+| `dcim-es-consumer.service` | Avro enriched → Elasticsearch | Active |
+| `dcim-siem-es-consumer.service` | SIEM alerts → Elasticsearch | Active |
+| `dcim-sql-consumer.service` | Avro enriched → PostgreSQL | Active |
+| `dcim-itop-unified.service` | iTop CMDB auto-registration | Active |
+| `dcim-dlq-consumer.service` | Dead Letter Queue consumer & Lineage | Active |
+| `dcim-threshold-alerter.service` | Threshold & stale device alerts | Active |
+| `dcim-analytics-bridge.service` | Avro → JSON for Analytics | Active |
+| `dcim-analytics-stream-processor.service` | Kafka JSON → TimescaleDB stream | Active |
 
 ### Logging Baseline (v3.5.5)
 
