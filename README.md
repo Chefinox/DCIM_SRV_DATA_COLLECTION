@@ -11,7 +11,7 @@ Unified DCIM telemetry and inventory management system using 4-layer decoupled a
 ## Architecture
 
 ```
-Device → Telegraf/NiFi → Kafka Raw → Normalizer → Kafka Normalized (Avro) → 
+Device → Apache NiFi → Kafka Raw → Normalizer → Kafka Normalized (Avro) → 
 NiFi Enrichment → Kafka Enriched (Avro) → PostgreSQL/Elasticsearch/TimescaleDB → iTop CMDB / Ralph
 ```
 
