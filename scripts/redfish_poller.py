@@ -37,7 +37,7 @@ SERVERS = [
     {"ip": "10.50.0.3", "host": "server-HCI-02",    "user": "hndept", "pass": REDFISH_PASS},
     {"ip": "10.50.0.4", "host": "server-HCI-03",    "user": "hndept", "pass": REDFISH_PASS},
     {"ip": "10.50.0.5", "host": "server-Render-01", "user": "hndept", "pass": REDFISH_PASS},
-    {"ip": "10.50.0.6", "host": "server-Render-02", "user": "root",   "pass": REDFISH_PASS},
+    {"ip": "10.50.0.6", "host": "server-Render-02", "user": "root",   "pass": REDFISH_PASS}
 ]
 
 TIMEOUT = 8  # seconds per HTTP request

@@ -11,3 +11,5 @@ sql/*.local
 configs/.env
 __pycache__/
 *.pyc
+logs/*.json
+itop/itop/log/*
