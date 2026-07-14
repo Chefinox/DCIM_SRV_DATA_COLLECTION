@@ -149,6 +149,9 @@ PostgreSQL dcim_events → ralph_cmdb_sync.py → Ralph Asset Repository
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
 | v4.4.0 | 2026-07-10 | Full NiFi Migration, SIEM Consumer, AI Pipeline, Prometheus Exporters, TimescaleDB, Documentation Updates | **CURRENT** |
+| v4.3.0 | 2026-06-25 | HashiCorp Vault Integration, Schema Registry (Avro), Redis CMDB Caching, Unified Consumers | Active |
+| v4.2.0 | 2026-06-15 | Dead Letter Queue (DLQ) mechanism and PostgreSQL Event Lineage tracking | Active |
+| v4.1.0 | 2026-06-05 | Service modularization (Normalizer, Enrichment API, Data Sink separated) | Active |
 | v3.5.6 | 2026-05-26 | CCTV Influx JSON format, NVR real SN fallback, CMDB placeholder cleanup, check_cctv_status.py regex fix | Active |
 | v3.5.5 | 2026-05-21 | Auto-register missing DC assets, stale-device alerting, Kafka health-check guidance, logging baseline fixes | Active |
 | v3.5.4 | 2026-05-20 | Threshold alerter service with 6 rules, alerts indexed to `dcim-alerts` | Active |
