@@ -41,58 +41,42 @@ flowchart LR
 
 ```
 dcim_metrics_project/
+├── ai_agent/                   # AI integration & analytics models
 ├── configs/                    # Configuration files
-│   ├── telegraf/              # Telegraf input configs (*.conf)
-│   ├── systemd/               # Systemd service files (*.service)
-│   ├── docker/                # Docker compose files
-│   ├── metric_mapping.json    # Normalization rules
-│   └── metric_mapping.yaml    # Alternative format
-│
-├── scripts/                    # Production scripts
-│   ├── dcim_normalizer.py              # Layer 2: Normalization
-│   ├── dcim_sql_consumer.py            # Layer 4: PostgreSQL sink
-│   ├── dcim_dlq_consumer.py            # Dead letter queue handler
-│   ├── kafka_to_es_sync.py             # Kafka to Elasticsearch
-│   ├── ralph_cmdb_sync.py              # Unified CMDB sync (all devices)
-│   ├── server_inventory_to_pg.py       # Server inventory collector
-│   ├── hikvision_poller.py             # CCTV/NVR data collector
-│   └── [other production scripts]
-│
-├── src/                        # Modular architecture (v4.0 structure)
-│   ├── tools/                 # Low-level drivers
-│   ├── schemas/               # Data models
-│   ├── skills/                # Business logic modules
-│   ├── workflows/             # Orchestration
-│   ├── agents/                # AI integration (future)
-│   └── services/              # Microservices
+│   ├── telegraf/               # Telegraf input configs
+│   ├── systemd/                # Systemd services and timers
+│   ├── docker/                 # Docker compose files
+│   └── metric_mapping.json     # Normalization rules
 │
 ├── docs/                       # Documentation
-│   ├── architecture/          # Architecture & design docs
-│   │   ├── 19-kafka-pipeline-architecture.md
-│   │   ├── 24-versioning-change-management-standard.md
-│   │   ├── 32-final-architecture-v3.4.md
-│   │   ├── 35-pipeline-version-comparison.md
-│   │   └── 36-complete-pipeline-diagram.md
-│   ├── operations/            # Operational reports
-│   ├── development/           # Development guides & metrics
-│   └── raw_data/              # Raw device data samples
+│   ├── architecture/           # Architecture & design docs (v4.4+)
+│   │   └── _archived/          # Obsolete architecture docs
+│   ├── operations/             # Operational/incident reports
+│   └── standar_dcim/           # Compliance and SOP docs
+│       └── _archived/          # Obsolete standards
 │
-├── tests/                      # Test suite
-│   ├── unit/                  # Unit tests
-│   ├── integration/           # Integration tests
-│   └── fixtures/              # Test fixtures
+├── itop/                       # iTop CMDB integration & auto-registration
+├── nifi/                       # Apache NiFi flows & templates
+├── schema-registry/            # Confluent Avro schemas
+├── scripts/                    # Utility scripts, cron jobs, pollers
+│   ├── dcim_dlq_consumer.py    # DLQ / lineage handler
+│   ├── dcim_itop_unified_consumer.py # iTop CMDB auto-registration
+│   ├── dcim_telegram_alerter.py # Alert notification service
+│   ├── manage_partitions.py    # PostgreSQL partition manager
+│   └── [other utilities]
 │
-├── logs/                       # Application logs
-├── kafka/                      # Kafka data directory
-├── ai_agent/                   # AI agent project (future)
+├── src/                        # 4-Layer Modular Architecture Core
+│   ├── schemas/                # Pydantic data models
+│   ├── skills/                 # Core processing logic (normalizer, etc.)
+│   └── utils/                  # Lineage tracking & Kafka producers
 │
-└── _archived/                  # Deprecated/legacy files
-    ├── phase2_legacy/         # Old phase2 implementation
-    ├── scratch_dev/           # Development scratch files
-    ├── test_scripts/          # Old test scripts
-    ├── deprecated_scripts/    # Superseded scripts
-    ├── old_configs/           # Obsolete configs
-    └── misc_files/            # Miscellaneous archived files
+├── tests/                      # Unit & integration tests
+├── timescaledb/                # TimescaleDB continuous aggregates schemas
+├── vault/                      # HashiCorp Vault secrets policies
+│
+├── logs/                       # Application & service logs
+├── kafka/                      # Kafka topic storage directory
+└── _archived/                  # Legacy/superseded code implementations
 ```
 
 ## Active Services
