@@ -11,8 +11,8 @@ Unified DCIM telemetry and inventory management system using 4-layer decoupled a
 ## Architecture
 
 ```
-Device → Telegraf/Script → Kafka Raw → Normalizer → Kafka Normalized → 
-NiFi Enrichment → Kafka Enriched → PostgreSQL/Elasticsearch → iTop CMDB (Primary) / Ralph (Asset Repo)
+Device → Telegraf/NiFi → Kafka Raw → Normalizer → Kafka Normalized (Avro) → 
+NiFi Enrichment → Kafka Enriched (Avro) → PostgreSQL/Elasticsearch/TimescaleDB → iTop CMDB / Ralph
 ```
 
 ### Monitored Infrastructure
@@ -20,9 +20,9 @@ NiFi Enrichment → Kafka Enriched → PostgreSQL/Elasticsearch → iTop CMDB (P
 - **UPS**: 1 unit (APC Smart-UPS) - SNMP v3
 - **NAS**: 6 units (Synology DS) - SNMP v3
 - **Network**: 5 units (MikroTik) - SNMP v2c
-- **CCTV/NVR**: 21 units (Hikvision) - ISAPI HTTP
+- **CCTV/NVR**: 32 units (Hikvision: 31 Cameras + 1 NVR) - ISAPI HTTP
 
-**Total**: 38 devices monitored
+**Total**: 49 devices monitored
 
 ## Directory Structure
 
@@ -84,65 +84,78 @@ dcim_metrics_project/
 
 ## Active Services
 
-### Systemd Services
-- `telegraf.service` - Data collection (120s interval)
-- `dcim-normalizer.service` - Schema standardization
+### Systemd Services (Pipeline)
+- `telegraf.service` - Data collection (Host metrics, some NAS limits)
+- `dcim-normalizer.service` - Schema standardization & field computation (Avro output)
 - `dcim-enrichment-api.service` - FastAPI enrichment endpoint
-- `dcim-redis-sync.service` - CMDB cache sync (60s)
-- `telegraf-consumer.service` - Elasticsearch sink
-- `dcim-sql-consumer.service` - PostgreSQL sink
-- `dcim-dlq-consumer.service` - Dead letter queue handler
-- `dcim-kafka-es-sync.service` - Kafka to ES bridge
-- `dcim-cctv-poller.service` - Hikvision ISAPI CCTV/NVR collector
+- `dcim-itop-redis-sync.service` - CMDB cache sync (60s)
+- `dcim-es-consumer.service` - Elasticsearch sink (Python Avro)
+- `dcim-sql-consumer.service` - PostgreSQL sink & local SQL enrichment (Python Avro)
+- `dcim-itop-unified.service` - iTop CMDB automated registration (Python Avro)
+- `dcim-siem-es-consumer.service` - SIEM alerts consumer
+- `dcim-dlq-consumer.service` - Dead letter queue handler & Lineage tracking
 - `dcim-threshold-alerter.service` - Threshold + stale-device alerting (120s interval)
 
-### Docker Containers
-- `kafka-broker` - Message broker (port 9092)
-- `dcim-kafka-ui` - Kafka management UI
-- `dcim-redis-cache` - Enrichment cache (port 6379)
-- `dcim-nifi` - Enrichment orchestration (port 8443)
+### Systemd Services (AI Analytics)
+- `dcim-analytics-bridge.service` - Analytics Bridge (Kafka Avro → JSON)
+- `dcim-analytics-stream-processor.service` - Analytics Stream Processor → TimescaleDB
 
-### Cron Jobs
-- `01:00 WIB` - `server_inventory_to_pg.py` (collect server inventory)
-- `02:00 WIB` - `ralph_cmdb_sync.py` (sync all devices to Ralph CMDB; auto-register missing DC assets)
+### Docker Containers
+- `kafka1`, `kafka2`, `kafka3` - Message broker 3-node SSL cluster
+- `schema-registry` - Confluent Schema Registry
+- `vault` - HashiCorp Vault (Secrets Management)
+- `dcim-nifi` - Enrichment orchestration & device polling
+- `dcim-redis-cache` - Enrichment cache
+- `dcim-timescaledb` - Analytics Time-series Database
+- `dcim-kafka-ui` - Kafka management UI
+
+### Systemd Timers & Cron Jobs
+- `dcim-data-quality-check.timer` - Daily pipeline data quality check (06:00 WIB)
+- `dcim-telegram-alerter.timer` - Pipeline health alerts via Telegram (every 5 min)
+- `dcim-itop-ralph-sync.timer` - Daily sync to Ralph CMDB (02:00 WIB)
+- `0 0 * * *` - Partition management for PostgreSQL `dcim_events`
 
 ## Data Flow
 
 ### Metrics Pipeline (Real-time)
 ```
-Device → Telegraf → Kafka Raw → Normalizer → Kafka Normalized → 
-NiFi Enrichment → Kafka Enriched → Elasticsearch/PostgreSQL → Kibana
+Device → Telegraf/NiFi → Kafka Raw → Normalizer → Kafka Normalized (Avro) → 
+NiFi Enrichment → Kafka Enriched (Avro) → Elasticsearch/PostgreSQL → Kibana
+```
+
+### AI Analytics Pipeline
+```
+Kafka Enriched (Avro) → dcim-analytics-bridge → Kafka Analytics (JSON) → 
+dcim-analytics-stream-processor → TimescaleDB (hypertable)
 ```
 
 ### Inventory Pipeline (Hybrid)
 ```
 1. Real-time CMDB:
-Kafka (dcim.normalized.events) → dcim_itop_unified_consumer.py → iTop CMDB (Auto-create CI)
+Kafka (dcim.normalized.events) → dcim-itop-unified.service → iTop CMDB (Auto-create CI)
 
 2. Batch Asset Sync (Daily):
-Server Redfish → server_inventory_to_pg.py → PostgreSQL dcim_events
-Device (NAS/Network/CCTV) → Telegraf → Kafka → ... → PostgreSQL dcim_events
-PostgreSQL dcim_events → ralph_cmdb_sync.py → Ralph Asset Repository
+Server Redfish → NiFi ExecuteProcess → Kafka Raw Inventory → Normalizer → ... → PostgreSQL
+PostgreSQL / iTop → itop_to_ralph_sync.py → Ralph Asset Repository
 ```
 
-### Commissioning / Decommissioning Automation (v3.5.5)
-- New DC assets (`server`, `ups`, `nas`, `network_switch`, `nvr`) auto-register in Ralph when serial number appears in PostgreSQL but asset is missing in Ralph.
-- CCTV remains a Back Office Asset flow; registration uses `scripts/register_cctv_to_ralph.py`.
-- Stale-device detection runs in `dcim-threshold-alerter.service`; alert triggers when known device has no event for 30 minutes.
+### Commissioning / Decommissioning Automation
+- New DC assets auto-register in iTop CMDB via the unified consumer when a serial number appears in Kafka.
+- Stale-device detection runs in `dcim-threshold-alerter.service`; alert triggers when a known device has no event for 30 minutes.
 - Alerts are indexed to Elasticsearch index `dcim-alerts`.
-- Kafka 3-second sampling warnings can be false positives because collectors run at 120s interval; prefer topic offsets + PostgreSQL/Elasticsearch counts.
 
 ## Key Technologies
 
-- **Message Broker**: Apache Kafka
-- **Orchestration**: Apache NiFi 1.24
-- **Cache**: Redis 6.x
-- **Time-series DB**: Elasticsearch 7.x
-- **Relational DB**: PostgreSQL 14
+- **Message Broker**: Apache Kafka (3-node cluster, SSL/TLS, Schema Registry)
+- **Orchestration & Polling**: Apache NiFi 1.24
+- **Cache**: Redis 7
+- **Time-series DB (Analytics)**: TimescaleDB (PostgreSQL 15)
+- **Time-series DB (Logs & Telemetry)**: Elasticsearch 9.x
+- **Relational DB**: PostgreSQL 15
 - **CMDB (Primary)**: iTop (10.70.0.56:8080)
 - **Asset Repository**: Ralph (10.70.0.56:8082)
-- **Visualization**: Kibana 7.x
-- **Data Collection**: Telegraf, Python
+- **Visualization**: Kibana 9.x
+- **Data Collection**: Telegraf, Python (via NiFi)
 
 ## Version History
 
@@ -192,7 +205,7 @@ python3 scripts/ralph_cmdb_sync.py
 
 ## Documentation
 
-- **Architecture**: See `docs/architecture/36-complete-pipeline-diagram.md`
+- **Architecture**: See `docs/architecture/v4.4-pipeline-architecture.md`
 - **Versioning**: See `docs/architecture/24-versioning-change-management-standard.md`
 - **Operations**: See `docs/operations/` for incident reports
 - **Development**: See `docs/development/` for guides and metrics
@@ -207,5 +220,5 @@ python3 scripts/ralph_cmdb_sync.py
 For issues or questions, refer to documentation in `docs/` directory or check logs in `logs/` directory.
 
 ---
-**Last Updated**: 2026-05-12  
+**Last Updated**: 2026-07-14  
 **Maintained By**: Infrastructure Team
