@@ -13,7 +13,7 @@
 #
 # Variabel yang bisa di-override lewat environment:
 #   TARGET_FILE       Path file python di host yang berisi REDFISH_SERVERS
-#                      (default: ./server_inventory_collector.py)
+#                      (default: /home/infra/dcim_metrics_project/scripts/server_inventory_collector.py)
 #   CONTAINER_NAME     Nama container docker (default: dcim-nifi)
 #   CONTAINER_PATH     Path file di dalam container (default: sama dengan TARGET_FILE basename,
 #                      di /opt/scripts/)
@@ -23,7 +23,7 @@
 set -euo pipefail
 
 # ---------- Konfigurasi default ----------
-TARGET_FILE="${TARGET_FILE:-./server_inventory_collector.py}"
+TARGET_FILE="${TARGET_FILE:-/home/infra/dcim_metrics_project/scripts/server_inventory_collector.py}"
 CONTAINER_NAME="${CONTAINER_NAME:-dcim-nifi}"
 CONTAINER_PATH="${CONTAINER_PATH:-/opt/scripts/$(basename "$TARGET_FILE")}"
 COPY_TO_CONTAINER="${COPY_TO_CONTAINER:-false}"

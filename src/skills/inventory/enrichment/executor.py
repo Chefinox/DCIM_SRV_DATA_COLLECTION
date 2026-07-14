@@ -80,6 +80,14 @@ def get_enrichment(identifier: str):
         if data:
             method = "cache_fallback"
 
+    # Fallback for IP Address lookup (SIEM Enrichment via agent.ip)
+    if not data:
+        data_str = redis_client.get(f"asset:ip:{ident_clean.lower()}")
+        data = json.loads(data_str) if data_str else None
+        if data:
+            method = "ip_address"
+            confidence = "high"
+
     # Cache miss — return empty enrichment (no SQL fallback, v4.0 iTop metadata authority)
     if not data:
         logger.warning(f"Cache miss for SN: {ident_clean} — returning empty enrichment")

@@ -12,19 +12,19 @@
 #
 # Variabel yang bisa di-override lewat environment:
 #   TARGET_FILE       Path file redfish_poller.py di host
-#                      (default: ./redfish_poller.py)
+#                      (default: /home/infra/dcim_metrics_project/scripts/redfish_poller.py)
 #   CONTAINER_NAME     Nama container docker (default: dcim-nifi)
 #   CONTAINER_PATH     Path file di dalam container
-#                      (default: /home/infra/dcim_metrics_project/redfish_poller.py)
+#                      (default: /home/infra/dcim_metrics_project/scripts/redfish_poller.py)
 #   COPY_TO_CONTAINER  Set ke "true" untuk otomatis docker cp hasil edit ke container (default: false)
 #   RESTART_CONTAINER  Set ke "true" untuk restart container setelah copy (default: false)
 
 set -euo pipefail
 
 # ---------- Konfigurasi default ----------
-TARGET_FILE="${TARGET_FILE:-./redfish_poller.py}"
+TARGET_FILE="${TARGET_FILE:-/home/infra/dcim_metrics_project/scripts/redfish_poller.py}"
 CONTAINER_NAME="${CONTAINER_NAME:-dcim-nifi}"
-CONTAINER_PATH="${CONTAINER_PATH:-/home/infra/dcim_metrics_project/redfish_poller.py}"
+CONTAINER_PATH="${CONTAINER_PATH:-/home/infra/dcim_metrics_project/scripts/redfish_poller.py}"
 COPY_TO_CONTAINER="${COPY_TO_CONTAINER:-false}"
 RESTART_CONTAINER="${RESTART_CONTAINER:-false}"
 

@@ -206,6 +206,13 @@ def sync_one_class(ci_class: str, output_fields: str, r: redis.Redis) -> tuple[i
             meta = build_metadata(ci_class, fields)
             sn_key = f"asset:sn:{serial_number.lower()}"
             r.setex(sn_key, CACHE_TTL, json.dumps(meta))
+            
+            # Add IP lookup support for SIEM Enrichment
+            management_ip = meta.get("managementip", "").strip()
+            if management_ip:
+                ip_key = f"asset:ip:{management_ip}"
+                r.setex(ip_key, CACHE_TTL, json.dumps(meta))
+                
             synced += 1
         except Exception as e:
             logger.error(f"Failed to write CI {key} (SN: {serial_number}) to Redis: {e}")
