@@ -31,26 +31,46 @@ ENRICHMENT_API_URL = os.getenv('ENRICHMENT_API_URL', 'http://127.0.0.1:8000')
 running = True
 fallback_enrich_cache = {}  # simple in-memory cache to avoid hammering API
 
-def enrich_fallback(sn):
-    """Fallback: call enrichment API directly when NiFi didn't populate ci_id/asset_id."""
-    if not sn or sn in ('NO_IDENTIFIER', 'NO_SN', 'Unknown_Host'):
-        return (None, None)
-    if sn in fallback_enrich_cache:
-        return fallback_enrich_cache[sn]
-    try:
-        url = f"{ENRICHMENT_API_URL}/enrich/{sn}"
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            data = json.loads(resp.read().decode())
-            ci = data.get('ci_id')
-            aid = data.get('asset_id')
-            fallback_enrich_cache[sn] = (ci, aid)
-            if ci:
-                log.info(f"Fallback enrichment: sn={sn} → ci_id={ci}, asset_id={aid}")
-            return (ci, aid)
-    except Exception as e:
-        log.debug(f"Fallback enrichment failed for {sn}: {e}")
-        return (None, None)
+def enrich_fallback(sn, hostname=None):
+    """Fallback: call enrichment API directly when NiFi didn't populate ci_id/asset_id.
+    Supports both serial_number and hostname-based lookup."""
+    if sn and sn not in ('NO_IDENTIFIER', 'NO_SN', 'Unknown_Host'):
+        if sn in fallback_enrich_cache:
+            return fallback_enrich_cache[sn]
+        try:
+            url = f"{ENRICHMENT_API_URL}/enrich/{sn}"
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                data = json.loads(resp.read().decode())
+                ci = data.get('ci_id')
+                aid = data.get('asset_id')
+                fallback_enrich_cache[sn] = (ci, aid)
+                if ci:
+                    log.info(f"Fallback enrichment (sn): sn={sn} → ci_id={ci}")
+                return (ci, aid)
+        except Exception as e:
+            log.debug(f"Fallback enrichment failed for sn={sn}: {e}")
+
+    # Hostname-based fallback for devices with NO_IDENTIFIER
+    if hostname and hostname not in ('Unknown_Host', 'NO_IDENTIFIER', ''):
+        cache_key = f"hn:{hostname}"
+        if cache_key in fallback_enrich_cache:
+            return fallback_enrich_cache[cache_key]
+        try:
+            url = f"{ENRICHMENT_API_URL}/enrich/{hostname}"
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                data = json.loads(resp.read().decode())
+                ci = data.get('ci_id')
+                aid = data.get('asset_id')
+                fallback_enrich_cache[cache_key] = (ci, aid)
+                if ci:
+                    log.info(f"Fallback enrichment (hostname): host={hostname} → ci_id={ci}")
+                return (ci, aid)
+        except Exception as e:
+            log.debug(f"Fallback enrichment failed for host={hostname}: {e}")
+
+    return (None, None)
 
 def signal_handler(signum, frame):
     global running
@@ -159,8 +179,9 @@ def run():
                 ci_id = msg_val.get("ci_id")
                 asset_id = msg_val.get("asset_id")
                 sn = msg_val.get("serial_number")
-                if not ci_id and sn:
-                    fallback_ci, fallback_ai = enrich_fallback(sn)
+                hostname = msg_val.get("hostname")
+                if not ci_id:
+                    fallback_ci, fallback_ai = enrich_fallback(sn, hostname)
                     if fallback_ci:
                         ci_id = fallback_ci
                         asset_id = fallback_ai

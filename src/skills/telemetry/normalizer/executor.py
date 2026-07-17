@@ -79,9 +79,18 @@ def process_message(raw_message, source_topic):
         fields.get("serial_number") or
         fields.get("upsSerial") or
         fields.get("sysSerial") or
+        fields.get("system_serial_number") or  # Redfish standard
         "NO_IDENTIFIER"
     )
     if serial_number == "NO_IDENTIFIER":
+        # Try Redfish chassis serial key variants
+        for key in ("system_serial_number", "chassis_serial_number", "serialNumber"):
+            sn = fields.get(key)
+            if sn and sn not in ("", "NotSpecified", "None"):
+                serial_number = sn
+                break
+    if serial_number == "NO_IDENTIFIER":
+        # Try Lenovo XCC source tag fallback
         source_tag = tags.get("source", "")
         if source_tag.startswith("XCC-"):
             parts = source_tag.split("-")
@@ -223,71 +232,74 @@ def run():
     print("Starting python normalizer service (V3 Logic in V4 Structure)...")
     try:
         while True:
-            msg = consumer.poll(1.0)
-            if msg is None:
+            msgs = consumer.consume(num_messages=500, timeout=1.0)
+            if not msgs:
                 continue
-            if msg.error():
-                print(f"Consumer error: {msg.error()}")
-                continue
-            try:
-                start_time = time.time()
-                text = msg.value().decode('utf-8').strip()
-                topic = msg.topic()
                 
+            for msg in msgs:
+                if msg.error():
+                    print(f"Consumer error: {msg.error()}")
+                    continue
                 try:
-                    parsed_data = json.loads(text)
-                    if isinstance(parsed_data, dict):
-                        messages_to_process = [parsed_data]
-                    elif isinstance(parsed_data, list):
-                        messages_to_process = parsed_data
-                    else:
-                        messages_to_process = []
-                except json.JSONDecodeError:
-                    # Fallback to JSON Lines if standard JSON load fails (Extra data error)
-                    messages_to_process = []
-                    for line in text.split('\n'):
-                        line = line.strip()
-                        if line:
-                            messages_to_process.append(json.loads(line))
-                            
-                for raw_data in messages_to_process:
-                    normalized = process_message(raw_data, topic)
-                    if normalized is None:
-                        continue
+                    start_time = time.time()
+                    text = msg.value().decode('utf-8').strip()
+                    topic = msg.topic()
                     
+                    try:
+                        parsed_data = json.loads(text)
+                        if isinstance(parsed_data, dict):
+                            messages_to_process = [parsed_data]
+                        elif isinstance(parsed_data, list):
+                            messages_to_process = parsed_data
+                        else:
+                            messages_to_process = []
+                    except json.JSONDecodeError:
+                        # Fallback to JSON Lines if standard JSON load fails (Extra data error)
+                        messages_to_process = []
+                        for line in text.split('\n'):
+                            line = line.strip()
+                            if line:
+                                messages_to_process.append(json.loads(line))
+                                
+                    for raw_data in messages_to_process:
+                        normalized = process_message(raw_data, topic)
+                        if normalized is None:
+                            continue
+                        
+                        producer.produce(
+                            "dcim.normalized.events",
+                            value=avro_serializer(normalized, SerializationContext("dcim.normalized.events", MessageField.VALUE))
+                        )
+                        processing_ms = int((time.time() - start_time) * 1000)
+                        track_lineage(
+                            event_id=normalized["event_id"],
+                            stage="normalized",
+                            status="success",
+                            source_system=normalized["hostname"],
+                            source_topic=topic,
+                            target_topic="dcim.normalized.events",
+                            processing_ms=processing_ms
+                        )
+                        print(f"Processed: {topic} -> {normalized['hostname']} [{normalized['device_type']}]")
+                except Exception as e:
+                    print(f"Error processing message: {e}")
+                    # Kirim original payload ke DLQ parse-failure
                     producer.produce(
-                        "dcim.normalized.events",
-                        value=avro_serializer(normalized, SerializationContext("dcim.normalized.events", MessageField.VALUE))
+                        "dcim.dlq.parse-failure",
+                        value=msg.value()
                     )
-                    processing_ms = int((time.time() - start_time) * 1000)
+                    # Track lineage for DLQ
                     track_lineage(
-                        event_id=normalized["event_id"],
+                        event_id=str(uuid.uuid4()),
                         stage="normalized",
-                        status="success",
-                        source_system=normalized["hostname"],
-                        source_topic=topic,
-                        target_topic="dcim.normalized.events",
-                        processing_ms=processing_ms
+                        status="dlq",
+                        source_topic=msg.topic(),
+                        target_topic="dcim.dlq.parse-failure",
+                        error_message=str(e)
                     )
-                    print(f"Processed: {topic} -> {normalized['hostname']} [{normalized['device_type']}]")
-                producer.poll(0)
-            except Exception as e:
-                print(f"Error processing message: {e}")
-                # Kirim original payload ke DLQ parse-failure
-                producer.produce(
-                    "dcim.dlq.parse-failure",
-                    value=msg.value()
-                )
-                # Track lineage for DLQ
-                track_lineage(
-                    event_id=str(uuid.uuid4()),
-                    stage="normalized",
-                    status="dlq",
-                    source_topic=msg.topic(),
-                    target_topic="dcim.dlq.parse-failure",
-                    error_message=str(e)
-                )
-                producer.poll(0)
+            
+            # Poll after processing the batch
+            producer.poll(0)
     except KeyboardInterrupt:
         pass
     finally:
