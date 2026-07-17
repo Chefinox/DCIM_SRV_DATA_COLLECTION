@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 DCIM Analytics Bridge — Read from dcim.enriched.events (Avro), push to dcim.analytics.metrics (JSON)
+Fallback enrichment: calls enrichment API when ci_id is None from NiFi.
 """
 import json
 import logging
@@ -8,6 +9,7 @@ import os
 import signal
 import sys
 import time
+import urllib.request
 
 from confluent_kafka import Consumer, Producer
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -24,8 +26,31 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9094')
 SCHEMA_REGISTRY_URL = os.getenv('SCHEMA_REGISTRY_URL', 'http://localhost:8081')
 SOURCE_TOPIC = 'dcim.enriched.events'
 TARGET_TOPIC = 'dcim.analytics.metrics'
+ENRICHMENT_API_URL = os.getenv('ENRICHMENT_API_URL', 'http://127.0.0.1:8000')
 
 running = True
+fallback_enrich_cache = {}  # simple in-memory cache to avoid hammering API
+
+def enrich_fallback(sn):
+    """Fallback: call enrichment API directly when NiFi didn't populate ci_id/asset_id."""
+    if not sn or sn in ('NO_IDENTIFIER', 'NO_SN', 'Unknown_Host'):
+        return (None, None)
+    if sn in fallback_enrich_cache:
+        return fallback_enrich_cache[sn]
+    try:
+        url = f"{ENRICHMENT_API_URL}/enrich/{sn}"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode())
+            ci = data.get('ci_id')
+            aid = data.get('asset_id')
+            fallback_enrich_cache[sn] = (ci, aid)
+            if ci:
+                log.info(f"Fallback enrichment: sn={sn} → ci_id={ci}, asset_id={aid}")
+            return (ci, aid)
+    except Exception as e:
+        log.debug(f"Fallback enrichment failed for {sn}: {e}")
+        return (None, None)
 
 def signal_handler(signum, frame):
     global running
@@ -68,7 +93,7 @@ def run():
     last_log_time = time.time()
     
     while running:
-        msg = consumer.poll(1.0)
+        msgs = consumer.consume(num_messages=500, timeout=1.0)
         
         now = time.time()
         if now - last_log_time >= 60.0:
@@ -77,58 +102,100 @@ def run():
             last_log_time = now
             producer.flush()
 
-        if msg is None:
-            continue
-        if msg.error():
-            log.error(f"Consumer error: {msg.error()}")
+        if not msgs:
             continue
             
-        try:
-            ctx = SerializationContext(SOURCE_TOPIC, MessageField.VALUE)
-            msg_val = avro_deserializer(msg.value(), ctx)
-            if not msg_val: 
+        for msg in msgs:
+            if msg.error():
+                log.error(f"Consumer error: {msg.error()}")
                 continue
-            
-            # Parse raw JSON strings back to dict if needed
-            if isinstance(msg_val.get('raw_fields'), str):
-                try:
-                    msg_val['raw_fields'] = json.loads(msg_val['raw_fields'])
-                except json.JSONDecodeError:
-                    pass
-            if isinstance(msg_val.get('raw_tags'), str):
-                try:
-                    msg_val['raw_tags'] = json.loads(msg_val['raw_tags'])
-                except json.JSONDecodeError:
-                    pass
-            
-            payload = {
-                "timestamp": msg_val.get("event_time"),
-                "metric_name": msg_val.get("metric_name"),
-                "ci_id": msg_val.get("ci_id"),
-                "asset_id": msg_val.get("asset_id"),
-                "source_system": msg_val.get("source_system"),
-                "device_type": msg_val.get("device_type"),
-                "payload": {
-                    "value": msg_val.get("field_value"),
-                    "value_txt": msg_val.get("field_value_txt")
-                },
-                "metadata": {
-                    "tags": msg_val.get("raw_tags", {})
+                
+            try:
+                ctx = SerializationContext(SOURCE_TOPIC, MessageField.VALUE)
+                msg_val = avro_deserializer(msg.value(), ctx)
+                if not msg_val: 
+                    continue
+                
+                # Parse raw JSON strings back to dict if needed
+                if isinstance(msg_val.get('raw_fields'), str):
+                    try:
+                        msg_val['raw_fields'] = json.loads(msg_val['raw_fields'])
+                    except json.JSONDecodeError:
+                        pass
+                if isinstance(msg_val.get('raw_tags'), str):
+                    try:
+                        msg_val['raw_tags'] = json.loads(msg_val['raw_tags'])
+                    except json.JSONDecodeError:
+                        pass
+                
+                # Extract value from metric_value or raw_fields
+                val = msg_val.get("metric_value")
+                metric_name = msg_val.get("metric_name", "")
+                
+                if val is None and isinstance(msg_val.get("raw_fields"), dict):
+                    raw_fields = msg_val["raw_fields"]
+                    if metric_name in raw_fields:
+                        val = raw_fields[metric_name]
+                    else:
+                        # Fallbacks for known NiFi mappings
+                        if metric_name == "interface_status" and "if_oper_status" in raw_fields:
+                            val = raw_fields["if_oper_status"]
+                        elif "temperature" in metric_name and "temperature_celsius" in raw_fields:
+                            val = raw_fields["temperature_celsius"]
+                        else:
+                            # Try to find a matching key
+                            for k, v in raw_fields.items():
+                                if k.replace('_', '') in metric_name.replace('_', '') or metric_name.replace('_', '') in k.replace('_', ''):
+                                    val = v
+                                    break
+                            # If still None, just take the first numeric value
+                            if val is None:
+                                for v in raw_fields.values():
+                                    if isinstance(v, (int, float)):
+                                        val = v
+                                        break
+
+                # Get ci_id/asset_id from NiFi enrichment, fallback to direct API call
+                ci_id = msg_val.get("ci_id")
+                asset_id = msg_val.get("asset_id")
+                sn = msg_val.get("serial_number")
+                if not ci_id and sn:
+                    fallback_ci, fallback_ai = enrich_fallback(sn)
+                    if fallback_ci:
+                        ci_id = fallback_ci
+                        asset_id = fallback_ai
+
+                payload = {
+                    "timestamp": msg_val.get("event_time"),
+                    "metric_name": msg_val.get("metric_name"),
+                    "ci_id": ci_id,
+                    "asset_id": asset_id,
+                    "source_system": msg_val.get("source_system"),
+                    "device_type": msg_val.get("device_type"),
+                    "metric_unit": msg_val.get("metric_unit"),
+                    "payload": {
+                        "value": val,
+                        "value_txt": msg_val.get("metric_value_txt")
+                    },
+                    "metadata": {
+                        "tags": msg_val.get("raw_tags", {})
+                    }
                 }
-            }
-            
-            if msg_val.get("hostname"):
-                payload["metadata"]["tags"]["hostname"] = msg_val["hostname"]
-            if msg_val.get("serial_number"):
-                payload["metadata"]["tags"]["serial_number"] = msg_val["serial_number"]
-            if msg_val.get("model"):
-                payload["metadata"]["tags"]["model"] = msg_val["model"]
-            
-            producer.produce(TARGET_TOPIC, value=json.dumps(payload).encode('utf-8'))
-            processed_count += 1
-            
-        except Exception as e:
-            log.error(f"Error bridging message: {e}")
+                
+                if msg_val.get("hostname"):
+                    payload["metadata"]["tags"]["hostname"] = msg_val["hostname"]
+                if msg_val.get("serial_number"):
+                    payload["metadata"]["tags"]["serial_number"] = msg_val["serial_number"]
+                if msg_val.get("model"):
+                    payload["metadata"]["tags"]["model"] = msg_val["model"]
+                
+                producer.produce(TARGET_TOPIC, value=json.dumps(payload).encode('utf-8'))
+                processed_count += 1
+                
+            except Exception as e:
+                log.error(f"Error bridging message: {e}")
+        
+        producer.poll(0)
             
     producer.flush()
     consumer.close()

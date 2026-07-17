@@ -94,6 +94,22 @@ class TimescaleDBWriter:
             return len(values)
         except Exception as e:
             logger.error(f"Failed to insert metrics: {e}")
+            try:
+                logger.info("Attempting to reconnect and retry...")
+                if self.conn:
+                    try:
+                        self.conn.close()
+                    except:
+                        pass
+                self.connect()
+                
+                with self.conn.cursor() as cur:
+                    execute_values(cur, query, values, page_size=1000)
+                logger.info("Successfully inserted metrics after reconnecting")
+                return len(values)
+            except Exception as ce:
+                logger.error(f"Failed to reconnect or retry insert: {ce}")
+            
             return 0
     
     def close(self):
@@ -141,6 +157,19 @@ class AnalyticsStreamProcessor:
         try:
             data = message.value
             
+            # Parse nested structures if they exist (from analytics bridge)
+            payload_dict = data.get('payload', {})
+            metadata_dict = data.get('metadata', {})
+            tags_dict = metadata_dict.get('tags', data.get('tags', {}))
+            
+            # Extract value
+            raw_val = payload_dict.get('value')
+            if raw_val is None:
+                raw_val = data.get('metric_value', data.get('value', 0))
+                
+            # Extract unit
+            unit_val = tags_dict.get('unit', data.get('metric_unit', data.get('unit')))
+
             # Transform to TimescaleDB format
             metric = {
                 'time': data.get('timestamp') or datetime.now(timezone.utc).isoformat(),
@@ -148,9 +177,9 @@ class AnalyticsStreamProcessor:
                 'ci_id': data.get('ci_id'),
                 'asset_id': data.get('asset_id'),
                 'source': data.get('source', data.get('device_type', 'unknown')),
-                'value': float(data.get('metric_value', data.get('value', 0))),
-                'unit': data.get('metric_unit', data.get('unit')),
-                'tags': data.get('tags', {})
+                'value': float(raw_val) if raw_val is not None else 0.0,
+                'unit': unit_val,
+                'tags': tags_dict
             }
             
             return metric
