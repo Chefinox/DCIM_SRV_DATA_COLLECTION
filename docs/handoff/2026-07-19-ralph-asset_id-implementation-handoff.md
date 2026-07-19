@@ -3,9 +3,10 @@
 > **Tanggal dibuat**: 2026-07-19  
 > **Server**: srv-rnd-dcim (10.70.0.56)  
 > **User**: infra  
-> **Status**: 📋 Ready for implementation  
+> **Status**: ✅ Implemented  
 > **Prioritas**: P1 (tim AI butuh join metrics ke data finansial)  
 > **Estimasi**: 4-6 jam kerja  
+> **Actual**: ~2 jam (termasuk recovery Ralph MySQL, Kafka, TimescaleDB, Redis, NiFi)  
 
 ---
 
@@ -348,7 +349,7 @@ git push origin main
 curl -u "admin:Inovasi@0918" "http://10.70.0.56:8080/webservices/rest.php?version=1.3&json_data=..."
 
 # Ralph REST  
-curl -H "Authorization: Token 60bcedc875ec7b03b983082655e473e9519d40d5" "http://10.70.0.56:8082/api/..."
+curl -H "Authorization: Token 1cd05b8d36e258399a52c59f1a4016addb2346a3" "http://10.70.0.56:8082/api/..."
 
 # Vault
 role_id=$(cat /home/infra/dcim_metrics_project/vault/config/role_id)
@@ -390,3 +391,62 @@ docker exec dcim-timescaledb psql -U analytics_user -d dcim_analytics \
 *Dokumen ini dibuat pada 2026-07-19 oleh agent infra.  
 Pipeline dalam kondisi stabil — semua device type 100% ci_id coverage.  
 Silakan lanjutkan ke Phase 1 (Research Ralph API).*
+
+---
+
+## 11. Resolution (2026-07-19, infra agent)
+
+### Changes Made
+
+**File: `scripts/itop_to_cache_sync.py`** (commit `cc833e3`)
+
+1. Added Ralph API configuration (token, endpoints, base URL)
+2. Added `get_ralph_asset_id(serial_number, hostname)` — lookup Ralph Asset ID by:
+   - Primary: `?sn={serial_number}` against data-center-assets then back-office-assets
+   - Fallback: `?hostname={hostname}` against both endpoints
+3. Modified `build_metadata()`:
+   - `ci_id` = from iTop CMDB (unchanged)
+   - `asset_id` = from Ralph Asset Repository (NEW, was previously = ci_id)
+   - If Ralph has no matching asset → `asset_id = None` (no fallback to ci_id)
+
+**Systemd: `/etc/systemd/system/dcim-itop-redis-sync.service`**
+- Added `Environment="RALPH_API_BASE=http://localhost:8082/api"`
+
+**Secrets:** Created `/run/secrets/dcim/ralph_api_token` with correct Ralph token
+
+### Correction to Handoff Doc
+
+- **Ralph API Token**: `1cd05b8d36e258399a52c59f1a4016addb2346a3` (NOT `60bcedc875ec7b03b983082655e473e9519d40d5`)
+
+### Verification Results
+
+```
+Server HCI-01:  ci_id=...0000c35  asset_id=...0003a  DIFFERENT ✓
+NAS-INFRA:      ci_id=...000c10  asset_id=...00025  DIFFERENT ✓  
+NAS-FIT:        ci_id=...000c0f  asset_id=None       NOT_IN_RALPH ✓
+UPS-FIT:        ci_id=...000c1a  asset_id=...00043  DIFFERENT ✓
+```
+
+### Downstream Pipeline
+
+- Enrichment API (`:8000/enrich/{sn}`) → serves corrected Redis data ✅
+- Analytics Bridge → fallback enrichment uses corrected API ✅
+- Stream Processor → passes ci_id/asset_id through unchanged ✅
+- TimescaleDB → new data will have correct asset_id values ✅
+
+### Infrastructure Recovery (during implementation)
+
+- Ralph MySQL (`docker-db-1`) — OOM killed, restarted ✅
+- Kafka cluster (kafka1-3) — OOM killed, restarted via `docker compose -f kafka/docker-compose-cluster.yml up -d` ✅
+- TimescaleDB (dcim-timescaledb) — stopped, restarted via `docker compose up -d` ✅
+- Redis cache (dcim-redis-cache) — secret mount issue, fixed ✅
+- NiFi (dcim-nifi) — stopped, secrets created, restarted ✅
+- `/run/secrets/dcim/*` — all required secrets recreated ✅
+- All systemd services: active/running ✅
+
+### Known Gap
+
+- **NAS-FIT** (SN: 2410V3RCZJ09K) has no matching record in Ralph → `asset_id = None`
+- Ralph currently has 62 data-center assets plus back-office assets
+- 43/85 iTop CIs were updated in Ralph during last daily sync (2026-07-19 02:00)
+
