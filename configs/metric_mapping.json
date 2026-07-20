@@ -175,11 +175,11 @@
   },
   "server_redfish_util": {
     "metric_name": "cpu_utilization",
-    "metric_field": "cpuUtilization",
+    "metric_field": "cpu_utilization",
     "metric_unit": "percent",
     "secondary_metrics": [
       {
-        "field": "memoryUsage",
+        "field": "memory_usage",
         "name": "memory_utilization",
         "unit": "percent"
       }
