@@ -2,15 +2,17 @@
 
 > **Purpose:** Dokumentasi akses untuk Tim AI ke DCIM analytics pipeline
 > **Created:** 2026-07-08
-> **Version:** 1.0
-> **Status:** Production Ready
+> **Updated:** 2026-07-20
+> **Version:** 1.1
+> **Status:** Production — 24 metric types, ~1,740 events/sec
 
 ---
 
 ## Overview
 
 Dokumen ini menjelaskan cara akses Tim AI ke DCIM analytics pipeline untuk kebutuhan training AI/ML. Pipeline ini menyediakan:
-- Real-time metrics dari seluruh device (server, CCTV, NAS, UPS, network)
+- Real-time metrics dari seluruh device (server, CCTV, NAS, UPS, network) — **24 metric types, ~1,740 events/sec**
+- **Energy metrics tersedia**: `total_facility_power`, `it_equipment_power` (dari UPS)
 - Historical data dengan TimescaleDB
 - Continuous aggregates (hourly, daily)
 - Kafka topics untuk streaming
@@ -74,7 +76,7 @@ conn = psycopg2.connect(
 query = """
     SELECT time, source, value, tags->>'device_type' as device_type
     FROM metrics 
-    WHERE metric_name = 'battery_temp' 
+    WHERE metric_name = 'battery_temperature' 
       AND time > NOW() - INTERVAL '24 hours'
     ORDER BY time ASC;
 """
@@ -119,6 +121,62 @@ Daily aggregated metrics.
 ```sql
 SELECT * FROM metrics_daily ORDER BY time DESC LIMIT 10;
 ```
+
+---
+
+## Available Metrics Catalog
+
+> **Diperbarui 2026-07-20** — 24 metric types dari 6 device types.
+
+### UPS (8 metrics)
+| Metric Name | Unit | Keterangan |
+|-------------|------|------------|
+| `battery_capacity` | percent | Kapasitas baterai saat ini |
+| `battery_temperature` | celsius | Temperatur baterai |
+| `battery_voltage` | volt | Tegangan baterai |
+| `battery_current` | ampere | Arus baterai |
+| `battery_runtime_remaining` | seconds | Estimasi runtime tersisa |
+| `output_voltage` | volt | Tegangan output |
+| `output_frequency` | hertz | Frekuensi output |
+| `output_load` | percent | Beban output |
+| `total_facility_power` | watts | **Computed**: total daya fasilitas |
+| `it_equipment_power` | watts | **Computed**: estimasi daya IT equipment |
+
+### CCTV / NVR (6 metrics)
+| Metric Name | Unit | Keterangan |
+|-------------|------|------------|
+| `status_online` | status_code | 1=online, 0=offline |
+| `cpu_utilization` | percent | Utilisasi CPU kamera |
+| `memory_usage` | gigabytes | Memori terpakai |
+| `memory_available` | gigabytes | Memori tersedia |
+| `memory_usage_pct` | percent | Persentase memori terpakai |
+
+### NAS (6 metrics)
+| Metric Name | Unit | Keterangan |
+|-------------|------|------------|
+| `disk_temperature` | celsius | Temperatur disk |
+| `system_temperature` | celsius | Temperatur sistem NAS |
+| `volume_usage_pct` | percent | Persentase volume terpakai |
+| `volume_used` | bytes | Volume terpakai |
+| `volume_total` | bytes | Total volume |
+| `volume_health` | status_code | Status kesehatan volume |
+
+### Network / Switch (4 metrics)
+| Metric Name | Unit | Keterangan |
+|-------------|------|------------|
+| `interface_status` | status_code | Status interface (1=up) |
+| `cpu_load` | percent | CPU load switch |
+| `memory_used` | kilobytes | Memori terpakai |
+| `memory_total` | kilobytes | Total memori |
+
+### Server (3 metrics)
+| Metric Name | Unit | Keterangan |
+|-------------|------|------------|
+| `cpu_utilization` | percent | Utilisasi CPU server |
+| `memory_utilization` | percent | Utilisasi memori server |
+| `power_state` | status_code | Status power server |
+
+> **Tip**: Gunakan query `SELECT DISTINCT metric_name, source FROM metrics WHERE time > NOW() - INTERVAL '1 hour' ORDER BY source, metric_name;` untuk melihat katalog metric terkini.
 
 ---
 
@@ -200,11 +258,14 @@ Harap perhatikan **Polling Interval** aktual untuk tiap jenis metrik, dan sesuai
 | Power & Battery | UPS | 60 detik | `INTERVAL '5 minutes'` | P1 Critical |
 | Network Interface | Switch / Router | 60 detik | `INTERVAL '5 minutes'` | P1 Critical |
 | Storage & Disk Temp | NAS | 120 detik | `INTERVAL '5 minutes'` | P1 Critical |
+| NAS Volume Usage | NAS | 120 detik | `INTERVAL '5 minutes'` | P2 High |
+| CPU & Memory (Switch) | Switch / Router | 60 detik | `INTERVAL '5 minutes'` | P2 High |
+| Energy (Power) | UPS | 60 detik | `INTERVAL '5 minutes'` | P1 Critical |
 | Inventory Snapshot | Server | 24 jam (Pukul 01:00) | `INTERVAL '24 hours'` | P3 Medium (Capacity) |
-| Energy (PUE) | Keseluruhan | Agregasi Harian | `INTERVAL '24 hours'` | P3 Medium (Energy) |
 
 > [!TIP]
-> Jika Anda mengembangkan endpoint untuk prediksi *Capacity* atau laporan energi yang mentolerir data harian, sangat disarankan menggunakan tabel Continuous Aggregates (`metrics_hourly` atau `metrics_daily`) dengan query window yang lebih lebar (mis. `INTERVAL '24 hours'`).
+> Jika Anda mengembangkan endpoint untuk *Capacity* atau laporan energi yang menggunakan data historis panjang, gunakan tabel Continuous Aggregates (`metrics_hourly` atau `metrics_daily`) dengan query window yang lebih lebar (mis. `INTERVAL '30 days'`).
+> Untuk anomaly detection & RCA real-time, gunakan tabel `metrics` langsung dengan `INTERVAL '5 minutes'` — **energy metrics (`total_facility_power`, `it_equipment_power`) sekarang tersedia real-time setiap 60 detik.**
 
 ---
 
@@ -252,12 +313,14 @@ ORDER BY time DESC;
 
 ## Performance
 
-| Metric | Target |
-|--------|--------|
-| Throughput | 430+ metrics/sec |
-| Latency | < 1s |
-| Retention | 90 days |
-| Compression | After 7 days |
+| Metric | Target | Actual (2026-07-20) |
+|--------|--------|----------------------|
+| Throughput | 430+ metrics/sec | **~1,740 events/sec** |
+| Latency | < 1s | < 500ms |
+| Metric Types | 5 | **24** |
+| Device Types | 6 | 6 |
+| Retention | 90 days | 90 days |
+| Compression | After 7 days | After 7 days |
 
 ---
 
@@ -348,3 +411,12 @@ Untuk pertanyaan atau masalah:
 - [dcim-wiki: block7-analytics-ai-engine](../reference-designs/block7-analytics-ai-engine.md)
 - [dcim-wiki: data-ingestion-architecture-comparison](../concepts/data-ingestion-architecture-comparison.md)
 - [TimescaleDB Documentation](https://docs.timescale.com/)
+
+---
+
+## Changelog
+
+| Date | Version | Changes |
+|------|---------|---------|
+| 2026-07-20 | 1.1 | **Metric gap fixed**: metric types 5→24. Added energy metrics (`total_facility_power`, `it_equipment_power`). Added NAS volume, Network CPU/memory, UPS extended battery metrics. Added metric catalog section. Updated throughput & polling intervals. |
+| 2026-07-08 | 1.0 | Initial version |

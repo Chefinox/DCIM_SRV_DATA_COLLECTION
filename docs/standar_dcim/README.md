@@ -1,6 +1,7 @@
 # Standar DCIM Documentation
 
 > Kumpulan dokumentasi standar DCIM Analytics Pipeline
+> **Last Updated: 2026-07-20** | Version 1.1 | 24 metrics, ~1,740 events/sec
 
 ---
 
@@ -8,8 +9,8 @@
 
 | # | Dokumen | Deskripsi |
 |---|---------|-----------|
-| 1 | [ai-team-access.md](ai-team-access.md) | Panduan akses untuk Tim AI |
-| 2 | [ai-pipeline-architecture.md](ai-pipeline-architecture.md) | Arsitektur pipeline AI/ML |
+| 1 | [ai-team-access.md](ai-team-access.md) | Panduan akses untuk Tim AI — **metric catalog, query examples, polling intervals** |
+| 2 | [ai-pipeline-architecture.md](ai-pipeline-architecture.md) | Arsitektur pipeline AI/ML — **end-to-end data flow** |
 
 ---
 
@@ -55,7 +56,6 @@ consumer = KafkaConsumer(
     ssl_cafile='ca-cert.pem', # Hubungi Tim Infra untuk mendapatkan CA Certificate
     value_deserializer=lambda m: json.loads(m.decode('utf-8'))
 )
-```
 
 for message in consumer:
     print(message.value)
@@ -66,10 +66,29 @@ for message in consumer:
 ## Arsitektur Overview
 
 ```
-Sources → NiFi (Pollers) → Kafka (Raw) → NiFi (Enrich) → Kafka (Avro) 
-                                                              ↓
+Sources → NiFi (Pollers) → Kafka (Raw JSON) → Normalizer (Python, Multi-Metric)
+                                                       ↓
+                                              Kafka (Normalized Avro)
+                                                       ↓
+                                              NiFi + FastAPI (Enrichment)
+                                                       ↓
+                                              Kafka (Enriched Avro)
+                                                       ↓
 Tim AI ← TimescaleDB ← Stream Processor ← Kafka (JSON) ← Analytics Bridge
+         (24 metrics, ~1,740/sec)
 ```
+
+### ✨ Update 2026-07-20: Metric Gap Fixed
+
+| Sebelum | Sesudah |
+|---------|---------|
+| 5 metric names | **24 metric names** |
+| Energy metrics missing | ✅ `total_facility_power`, `it_equipment_power` |
+| UPS hanya battery | ✅ 10 UPS metrics (battery, voltage, current, frequency, load, power) |
+| CCTV hanya status | ✅ 5 CCTV metrics (+cpu, +memory, +memory_pct, +memory_avail) |
+| NAS hanya disk temp | ✅ 6 NAS metrics (+system temp, +volume usage, +volume health) |
+| Network hanya interface | ✅ 4 Network metrics (+cpu_load, +memory) |
+| Server hanya cpu | ✅ 3 Server metrics (+memory_util, +power_state) |
 
 ---
 
@@ -103,4 +122,4 @@ Untuk pertanyaan atau masalah:
 
 ---
 
-> Last Updated: 2026-07-08
+> Last Updated: 2026-07-20 | v1.1
