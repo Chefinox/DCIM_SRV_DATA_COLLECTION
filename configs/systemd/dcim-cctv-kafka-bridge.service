@@ -1,0 +1,14 @@
+[Unit]
+Description=DCIM CCTV/NVR Kafka Bridge (cctv_poller → Kafka)
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+User=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+ExecStart=/usr/bin/python3 /home/infra/dcim_metrics_project/scripts/cctv_kafka_bridge.py
+StandardOutput=append:/home/infra/dcim_metrics_project/logs/cctv_kafka_bridge.log
+StandardError=append:/home/infra/dcim_metrics_project/logs/cctv_kafka_bridge.log
+
+[Install]
+WantedBy=multi-user.target

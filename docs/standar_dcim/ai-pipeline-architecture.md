@@ -70,7 +70,7 @@ Dokumen ini menjelaskan arsitektur pipeline AI/ML untuk Data Center Infrastructu
 |-----------|------------|---------|
 | NiFi ExecuteProcess | Python scripts | Ingestion utama: Server, CCTV/NVR, NAS, UPS, Network |
 | Telegraf | System metrics only | Self-monitoring server DCIM (CPU, disk, memory) |
-| Kafka | 3-node cluster | Message broker |
+| Kafka | 3-node cluster | Message broker (Port 9092 INTERNAL, 9094+SSL EXTERNAL) |
 
 ### 2.1 NiFi ExecuteProcess Python Pollers
 
@@ -105,9 +105,26 @@ Dokumen ini menjelaskan arsitektur pipeline AI/ML untuk Data Center Infrastructu
 
 | Component | Description |
 |-----------|-------------|
-| `metrics` | Raw hypertable |
-| `metrics_hourly` | Hourly continuous aggregate |
-| `metrics_daily` | Daily continuous aggregate |
+| `metrics` | Raw hypertable (Input) |
+| `metrics_hourly` | Hourly continuous aggregate (Input) |
+| `metrics_daily` | Daily continuous aggregate (Input) |
+| `anomaly_events` | Menyimpan hasil deteksi anomali (Output) |
+| `predictions` | Menyimpan hasil prediksi kegagalan (Output) |
+| `rca_reports` | Menyimpan laporan Root Cause Analysis (Output) |
+| `capacity_forecasts` | Menyimpan hasil forecasting kapasitas (Output) |
+| `energy_reports` | Menyimpan laporan optimasi energi (Output) |
+| `ml_models` | Registri model ML (Output) |
+| `model_drift_tracking` | Monitoring drift model ML (Internal) |
+| `audit_log` | Audit trail operasi analytics (Internal) |
+
+### 5.1 Data Flow Analytics Result
+
+```
+TimescaleDB (metrics) ──▶ API Analytics (Block 7) ──▶ Tabel-Tabel Output (anomaly_events, dsb.)
+                                                            │
+                                                            ▼
+                                                 Akses/Consume oleh Tim AI
+```
 
 ---
 

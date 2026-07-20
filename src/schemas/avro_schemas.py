@@ -57,7 +57,9 @@ ENRICHED_EVENT_SCHEMA = """
     {"name": "asset_tag", "type": ["null", "string"], "default": null},
     {"name": "owner", "type": ["null", "string"], "default": null},
     {"name": "department", "type": ["null", "string"], "default": null},
-    {"name": "cmdb_sync_time", "type": ["null", "string"], "default": null}
+    {"name": "cmdb_sync_time", "type": ["null", "string"], "default": null},
+    {"name": "ci_id", "type": ["null", "string"], "default": null},
+    {"name": "asset_id", "type": ["null", "string"], "default": null}
   ]
 }
 """
