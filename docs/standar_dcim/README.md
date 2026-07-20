@@ -11,6 +11,7 @@
 |---|---------|-----------|
 | 1 | [ai-team-access.md](ai-team-access.md) | Panduan akses untuk Tim AI — **metric catalog, query examples, polling intervals** |
 | 2 | [ai-pipeline-architecture.md](ai-pipeline-architecture.md) | Arsitektur pipeline AI/ML — **end-to-end data flow** |
+| 3 | [2026-07-20_feedback_to_ai_team_v1.2.md](2026-07-20_feedback_to_ai_team_v1.2.md) | 📋 **Feedback verifikasi API** — datacenter_id hardcoded, unit PUE salah, UPS idle |
 
 ---
 
