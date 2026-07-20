@@ -37,20 +37,36 @@ def resolve_device_type(raw_message, source_topic):
     measurement_map = config.get("measurement_to_device_type", {})
     return measurement_map.get(raw_message.get("name"), "unknown")
 
-def resolve_metric(raw_message):
+def resolve_metrics(raw_message):
+    """Return list of (metric_name, metric_value, metric_unit, severity) tuples.
+    Primary metric first, then all secondary_metrics from config."""
     measurement = raw_message.get("name")
     mapping = config.get(measurement, config.get("default", {}))
+    results = []
+    fields = raw_message.get("fields", {})
+
+    # Primary metric (existing logic)
     metric_name = mapping.get("metric_name", "general_metric")
     metric_field = mapping.get("metric_field")
     metric_unit = mapping.get("metric_unit")
     severity = "info"
-    fields = raw_message.get("fields", {})
     metric_value = fields.get(metric_field) if metric_field else None
     severity_field = mapping.get("severity_field")
     if severity_field and severity_field in fields:
         val = str(fields[severity_field])
         severity = mapping.get("severity_map", {}).get(val, "info")
-    return metric_name, metric_value, metric_unit, severity
+    results.append((metric_name, metric_value, metric_unit, severity))
+
+    # Secondary metrics (NEW)
+    for sec in mapping.get("secondary_metrics", []):
+        field = sec.get("field")
+        name = sec.get("name")
+        unit = sec.get("unit", "")
+        if field and name and field in fields:
+            value = fields[field]
+            if value is not None:
+                results.append((name, value, unit, "info"))
+    return results
 
 def process_message(raw_message, source_topic):
     device_type = resolve_device_type(raw_message, source_topic)
@@ -96,10 +112,12 @@ def process_message(raw_message, source_topic):
             parts = source_tag.split("-")
             if len(parts) >= 3:
                 serial_number = parts[-1]
-    metric_name, metric_value, metric_unit, severity = resolve_metric(raw_message)
-    
-    if metric_name == "general_metric":
-        if metric_value is None or str(metric_value).strip() == "" or str(metric_value).strip().lower() in ("null", "none", "nan"):
+    # Initial metric resolution for filtering (fields may be modified by computations below)
+    all_metrics = resolve_metrics(raw_message)
+    primary_name, primary_value, primary_unit, primary_severity = all_metrics[0]
+
+    if primary_name == "general_metric":
+        if primary_value is None or str(primary_value).strip() == "" or str(primary_value).strip().lower() in ("null", "none", "nan"):
             return None
 
     if device_type in ("cctv", "nvr"):
@@ -111,7 +129,7 @@ def process_message(raw_message, source_topic):
             fields.setdefault("firmware", tag_firmware)
         if tag_model and str(tag_model).strip().upper().startswith("DS-"):
             fields.setdefault("manufacturer", "Hikvision")
-    
+
     if device_type == "ups":
         try:
             curr_load = int(fields.get("output_load") or 0)
@@ -122,11 +140,9 @@ def process_message(raw_message, source_topic):
                 max_load = max(l1, l2, l3)
                 if max_load > 0:
                     fields["output_load"] = max_load
-                    if metric_name == "output_load":
-                        metric_value = max_load
         except Exception:
             pass
-            
+
     # Calculate Memory Usage Percentage for CCTV/NVR
     if "memoryUsage" in fields and "memoryAvailable" in fields:
         try:
@@ -140,7 +156,7 @@ def process_message(raw_message, source_topic):
                 fields["memoryAvailable"] = round(avail, 2)
         except Exception:
             pass
-            
+
     # Calculate Volume Usage Percentage for NAS
     vol_used = fields.get("volumeUsedBytes") or fields.get("volumes_used_bytes") or fields.get("used_bytes")
     vol_total = fields.get("volumeTotalBytes") or fields.get("volumes_total_bytes") or fields.get("total_bytes")
@@ -154,13 +170,13 @@ def process_message(raw_message, source_topic):
                 fields["volumeUsagePct"] = round((used_bytes / total_bytes) * 100, 2)
                 fields["volumeUsedGB"] = round(used_bytes / (1024 ** 3), 2)
                 fields["volumeTotalTB"] = round(total_bytes / (1024 ** 4), 2)
-                
+
             # Unify standard fields for Bar Chart
             fields["volumeTotalBytes"] = total_bytes
             fields["volumeUsedBytes"] = used_bytes
         except Exception:
             pass
-            
+
     # Unify Status if missing
     if "volumeStatus" not in fields and vol_status is not None:
         try:
@@ -171,7 +187,31 @@ def process_message(raw_message, source_topic):
                 fields["volumeStatus"] = int(vol_status)
         except Exception:
             pass
-            
+
+    # ---- Computed metrics ----
+    computed_metrics = []
+    if device_type == "ups":
+        try:
+            # UPS SNMP values are in decivolts (0.1V) and deciamps (0.1A)
+            v_out = float(fields.get("output_voltage") or 0) / 10.0  # decivolts → volts
+            i_1 = float(fields.get("output_current_L1") or 0) / 10.0
+            i_2 = float(fields.get("output_current_L2") or 0) / 10.0
+            i_3 = float(fields.get("output_current_L3") or 0) / 10.0
+            i_total = i_1 + i_2 + i_3
+            load_pct = float(fields.get("output_load") or 0)
+
+            if i_total <= 0 and v_out > 0 and load_pct > 0:
+                # Estimate from UPS rating: 30KVA @ rated voltage
+                i_total = (30000.0 / v_out) * (load_pct / 100.0) if v_out > 0 else 0
+
+            if v_out > 0 and i_total > 0:
+                power_watts = round(v_out * i_total, 2)
+                computed_metrics.append(("total_facility_power", power_watts, "watts", "info"))
+                it_power = round(power_watts * load_pct / 100.0, 2) if load_pct > 0 else round(power_watts, 2)
+                computed_metrics.append(("it_equipment_power", it_power, "watts", "info"))
+        except Exception:
+            pass
+
     ts = raw_message.get("timestamp")
     event_time = None
     if ts:
@@ -184,27 +224,43 @@ def process_message(raw_message, source_topic):
     clean_tags = dict(tags)
     if "host" in clean_tags:
         del clean_tags["host"]
-    normalized_event = {
-        "event_id": str(uuid.uuid4()),
-        "event_time": event_time,
-        "timestamp": int(parsed_ts) if 'parsed_ts' in locals() else ts,
-        "source_topic": source_topic,
-        "measurement": raw_message.get("name"),
-        "device_type": device_type,
-        "hostname": hostname,
-        "ip": tags.get("ip") or tags.get("address"),
-        "serial_number": serial_number,
-        "metric_name": metric_name,
-        "metric_value": metric_value,
-        "metric_unit": metric_unit,
-        "severity": severity,
-        "manufacturer": fields.get("manufacturer") or tags.get("manufacturer"),
-        "model": fields.get("model") or tags.get("model"),
-        "firmware": fields.get("firmware") or fields.get("firmwareVersion") or tags.get("firmware") or tags.get("firmwareVersion"),
-        "raw_fields": json.dumps(fields) if fields else None,
-        "raw_tags": json.dumps(clean_tags) if clean_tags else None
-    }
-    return normalized_event
+
+    # ---- Build all metrics including secondary + computed ----
+    # all_metrics already resolved above: [primary, sec1, sec2, ...]
+    secondary_metrics = all_metrics[1:] if len(all_metrics) > 1 else []
+
+    # Only keep primary if it passes the general_metric filter (should always pass at this point)
+    metrics_to_emit = [(primary_name, primary_value, primary_unit, primary_severity)]
+    metrics_to_emit.extend(secondary_metrics)
+    # Add computed metrics
+    metrics_to_emit.extend(computed_metrics)
+
+    events = []
+    for (m_name, m_value, m_unit, m_severity) in metrics_to_emit:
+        if m_value is None:
+            continue
+        normalized_event = {
+            "event_id": str(uuid.uuid4()),
+            "event_time": event_time,
+            "timestamp": int(parsed_ts) if 'parsed_ts' in locals() else ts,
+            "source_topic": source_topic,
+            "measurement": raw_message.get("name"),
+            "device_type": device_type,
+            "hostname": hostname,
+            "ip": tags.get("ip") or tags.get("address"),
+            "serial_number": serial_number,
+            "metric_name": m_name,
+            "metric_value": m_value,
+            "metric_unit": m_unit,
+            "severity": m_severity,
+            "manufacturer": fields.get("manufacturer") or tags.get("manufacturer"),
+            "model": fields.get("model") or tags.get("model"),
+            "firmware": fields.get("firmware") or fields.get("firmwareVersion") or tags.get("firmware") or tags.get("firmwareVersion"),
+            "raw_fields": json.dumps(fields) if fields else None,
+            "raw_tags": json.dumps(clean_tags) if clean_tags else None
+        }
+        events.append(normalized_event)
+    return events
 
 def run():
     consumer_conf = {
@@ -229,7 +285,7 @@ def run():
     consumer = Consumer(consumer_conf)
     producer = Producer(producer_conf)
     consumer.subscribe(['^dcim\.raw\..*'])
-    print("Starting python normalizer service (V3 Logic in V4 Structure)...")
+    print("Starting python normalizer service (V4.5 Multi-Metric with Secondary+Computed Metrics)...")
     try:
         while True:
             msgs = consumer.consume(num_messages=500, timeout=1.0)
@@ -262,25 +318,29 @@ def run():
                                 messages_to_process.append(json.loads(line))
                                 
                     for raw_data in messages_to_process:
-                        normalized = process_message(raw_data, topic)
-                        if normalized is None:
+                        events = process_message(raw_data, topic)
+                        if events is None or (isinstance(events, list) and len(events) == 0):
                             continue
-                        
-                        producer.produce(
-                            "dcim.normalized.events",
-                            value=avro_serializer(normalized, SerializationContext("dcim.normalized.events", MessageField.VALUE))
-                        )
-                        processing_ms = int((time.time() - start_time) * 1000)
-                        track_lineage(
-                            event_id=normalized["event_id"],
-                            stage="normalized",
-                            status="success",
-                            source_system=normalized["hostname"],
-                            source_topic=topic,
-                            target_topic="dcim.normalized.events",
-                            processing_ms=processing_ms
-                        )
-                        print(f"Processed: {topic} -> {normalized['hostname']} [{normalized['device_type']}]")
+                        # Support both single event (backward compat) and list
+                        if isinstance(events, dict):
+                            events = [events]
+
+                        for normalized in events:
+                            producer.produce(
+                                "dcim.normalized.events",
+                                value=avro_serializer(normalized, SerializationContext("dcim.normalized.events", MessageField.VALUE))
+                            )
+                            processing_ms = int((time.time() - start_time) * 1000)
+                            track_lineage(
+                                event_id=normalized["event_id"],
+                                stage="normalized",
+                                status="success",
+                                source_system=normalized["hostname"],
+                                source_topic=topic,
+                                target_topic="dcim.normalized.events",
+                                processing_ms=processing_ms
+                            )
+                            print(f"Processed: {topic} -> {normalized['hostname']} [{normalized['device_type']}] {normalized['metric_name']}={normalized['metric_value']}")
                 except Exception as e:
                     print(f"Error processing message: {e}")
                     # Kirim original payload ke DLQ parse-failure

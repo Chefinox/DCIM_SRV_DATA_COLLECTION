@@ -1,4 +1,7 @@
 # measurement_name → primary metric field mapping
+# NOTE: metric_mapping.json is the authoritative config used by the normalizer.
+# This YAML is kept for documentation reference only.
+
 dcim_nas:
   metric_name: disk_temperature
   metric_field: diskTemp
@@ -9,22 +12,58 @@ dcim_nas:
     2: warning  
     3: critical
 
+dcim_nas_volume:
+  metric_name: volume_usage_pct
+  metric_field: volumeUsagePct
+  metric_unit: percent
+
+nas_snmp:
+  metric_name: system_temperature
+  metric_field: system_temp
+  metric_unit: celsius
+
 ups_apc:
   metric_name: battery_capacity
-  metric_field: upsBatteryCapacity
+  metric_field: battery_capacity
   metric_unit: percent
   secondary_metrics:
-    - field: upsBatteryTemp
+    - field: battery_temp
       name: battery_temperature
       unit: celsius
-    - field: upsOutputVoltage
+    - field: output_voltage
       name: output_voltage
       unit: volt
+    - field: battery_runtime_remain
+      name: battery_runtime_remaining
+      unit: seconds
+    - field: output_load
+      name: output_load
+      unit: percent
 
 interface:
   metric_name: interface_status
   metric_field: ifOperStatus
   metric_unit: status_code
+
+cctv_metrics:
+  metric_name: status_online
+  metric_field: status_online
+  metric_unit: status_code
+
+mikrotik:
+  metric_name: cpu_load
+  metric_field: cpu_load
+  metric_unit: percent
+
+server_redfish:
+  metric_name: power_state
+  metric_field: power_state
+  metric_unit: status_code
+
+server_redfish_util:
+  metric_name: cpu_utilization
+  metric_field: cpuUtilization
+  metric_unit: percent
 
 # Default for unmapped measurements
 default:
