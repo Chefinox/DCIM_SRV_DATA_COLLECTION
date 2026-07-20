@@ -3,8 +3,8 @@
 > **Purpose:** Dokumentasi arsitektur pipeline AI/ML untuk DCIM
 > **Created:** 2026-07-08
 > **Updated:** 2026-07-20
-> **Version:** 1.1
-> **Status:** Production — 24 metrics, ~1,740 events/sec
+> **Version:** 1.2
+> **Status:** Production — 25 metrics, ~3,200 rows/5min
 
 ---
 
@@ -22,12 +22,13 @@ Dokumen ini menjelaskan arsitektur pipeline AI/ML untuk Data Center Infrastructu
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌────────────────┐     ┌────────────────┐
-│   Sources    │     │  Ingestion   │     │   Kafka (Raw)  │     │  Processing    │
+│  Sources     │     │  Ingestion   │     │   Kafka (Raw)  │     │  Processing    │
 ├──────────────┤     ├──────────────┤     ├────────────────┤     ├────────────────┤
 │ Server       │────▶│ NiFi         │────▶│ dcim.raw.*     │────▶│ Normalizer     │
-│ CCTV/NVR     │     │ ExecuteProcess│   │ (JSON)         │     │ (Python, Avro) │
-│ NAS          │     │ (Python)     │     │                │     │ Multi-Metric   │
-│ UPS          │     │              │     │                │     │ Output         │
+│ (Redfish)*   │     │ ExecuteProcess│     │ (JSON)         │     │ (Python, Avro) │
+│ CCTV/NVR     │     │ + Telegraf   │     │                │     │ Multi-Metric   │
+│ NAS          │     │ (Python)     │     │                │     │ + Computed     │
+│ UPS          │     │              │     │                │     │                │
 │ Network      │     │              │     │                │     │                │
 └──────────────┘     └──────────────┘     └────────────────┘     └────────────────┘
                                                                         │
@@ -45,7 +46,7 @@ Dokumen ini menjelaskan arsitektur pipeline AI/ML untuk Data Center Infrastructu
 ├──────────────┤     ├──────────────┤     ├────────────────┤     ├────────────────┤
 │ PostgreSQL   │◀────│ metrics      │◀────│ Stream         │◀────│ dcim.          │
 │ Elasticsearch│     │ hypertable   │     │ Processor      │     │ analytics.*    │
-│ Redis        │     │ (24 types)   │     │ (Python)       │     │ (JSON)         │
+│ Redis        │     │ **(25 types)** │     │ (Python)       │     │ (JSON)         │
 │              │     │ hourly agg   │     │                │     │                │
 │              │     │ daily agg    │     │                │     │                │
 └──────────────┘     └──────────────┘     └────────────────┘     └────────────────┘
@@ -59,11 +60,13 @@ Dokumen ini menjelaskan arsitektur pipeline AI/ML untuk Data Center Infrastructu
 
 | Source | Protocol | Metrics |
 |--------|----------|---------|
-| Server | Redfish, IPMI | CPU, memory, power_state, thermal |
+| Server | Redfish*, IPMI | CPU, memory (fixed!), power_state, thermal |
 | CCTV | Hikvision ISAPI | Status, CPU, memory, memory_pct |
 | NAS | SNMP | Disk temp, system temp, volume usage/health |
 | UPS | SNMP | Battery, voltage, current, frequency, load, **computed power** |
 | Network | SNMP | Interface stats, CPU load, memory |
+
+> \*Server CPU/memory metrics via Redfish OEM Lenovo XCC (Telegraf `inputs.exec` → `redfish_telemetry_poller.py`)
 
 ### 2. Ingestion Layer
 
@@ -331,5 +334,6 @@ GROUP BY time_bucket('1 day', time), metric_name, source;
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-07-20 | 1.2 | **Bug fix**: `memory_utilization` server metric now flowing. Field name mismatch fixed in metric_mapping.json (`memoryUsage`→`memory_usage`). Total metric types: 25. Note: server CPU/memory via Redfish OEM Lenovo XCC (Telegraf `inputs.exec`). |
 | 2026-07-20 | 1.1 | Normalizer upgraded: resolve_metric→resolve_metrics (multi-metric output). Added secondary_metrics processing + computed power metrics. Metric types 5→24. Fixed architecture diagram (normalizer is Python systemd, not NiFi). |
 | 2026-07-08 | 1.0 | Initial version |

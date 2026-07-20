@@ -3,8 +3,8 @@
 > **Purpose:** Dokumentasi akses untuk Tim AI ke DCIM analytics pipeline
 > **Created:** 2026-07-08
 > **Updated:** 2026-07-20
-> **Version:** 1.1
-> **Status:** Production — 24 metric types, ~1,740 events/sec
+> **Version:** 1.2
+> **Status:** Production — 25 metric types, ~3,200 rows/5min
 
 ---
 
@@ -169,11 +169,11 @@ SELECT * FROM metrics_daily ORDER BY time DESC LIMIT 10;
 | `memory_used` | kilobytes | Memori terpakai |
 | `memory_total` | kilobytes | Total memori |
 
-### Server (3 metrics)
+### Server (3 metrics) ✅ Memory Fixed
 | Metric Name | Unit | Keterangan |
 |-------------|------|------------|
 | `cpu_utilization` | percent | Utilisasi CPU server |
-| `memory_utilization` | percent | Utilisasi memori server |
+| `memory_utilization` | percent | Utilisasi memori server — **fixed 2026-07-20** |
 | `power_state` | status_code | Status power server |
 
 > **Tip**: Gunakan query `SELECT DISTINCT metric_name, source FROM metrics WHERE time > NOW() - INTERVAL '1 hour' ORDER BY source, metric_name;` untuk melihat katalog metric terkini.
@@ -418,5 +418,6 @@ Untuk pertanyaan atau masalah:
 
 | Date | Version | Changes |
 |------|---------|---------|
-| 2026-07-20 | 1.1 | **Metric gap fixed**: metric types 5→24. Added energy metrics (`total_facility_power`, `it_equipment_power`). Added NAS volume, Network CPU/memory, UPS extended battery metrics. Added metric catalog section. Updated throughput & polling intervals. |
+| 2026-07-20 | 1.2 | **Bug fix**: `memory_utilization` now flowing (field name mismatch fixed: `memoryUsage`→`memory_usage`). Server metrics complete: cpu + memory + power_state. Total metric types: 25. |
+| 2026-07-20 | 1.1 | Metric gap fixed: metric types 5→24. Added energy metrics (`total_facility_power`, `it_equipment_power`). Added NAS volume, Network CPU/memory, UPS extended battery metrics. Added metric catalog section. |
 | 2026-07-08 | 1.0 | Initial version |
