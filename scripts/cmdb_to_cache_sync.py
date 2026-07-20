@@ -31,7 +31,8 @@ except Exception as e:
     exit(1)
 
 def sync_cache():
-    logger.info("Starting CMDB to Redis Sync...")
+    logger.info("DEPRECATED: CMDB to Redis Sync is disabled. Use itop_to_cache_sync.py instead.")
+    return
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()

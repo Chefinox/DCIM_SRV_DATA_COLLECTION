@@ -1,5 +1,5 @@
 import psycopg2
-from psycopg2 import pool
+from psycopg2 import pool, extras
 import json
 import logging
 import os
@@ -7,6 +7,9 @@ import uuid
 from datetime import datetime, timezone
 from src.utils.secrets import get_secret
 import atexit
+import threading
+import queue
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -36,29 +39,61 @@ def close_pool():
     if _pool is not None:
         _pool.closeall()
 
-class LineageTracker:
-    def __init__(self):
-        self.pool = get_pool()
-        
-    def _execute_update(self, query: str, params: tuple):
-        if not self.pool:
-            return False
+_lineage_queue = queue.Queue()
+
+def _lineage_worker():
+    while True:
+        batch = []
+        try:
+            item = _lineage_queue.get(timeout=1.0)
+            batch.append(item)
+            while len(batch) < 500:
+                try:
+                    batch.append(_lineage_queue.get_nowait())
+                except queue.Empty:
+                    break
+        except queue.Empty:
+            continue
+            
+        p = get_pool()
+        if not batch or not p:
+            continue
+            
+        grouped_queries = {}
+        for query, params in batch:
+            if query not in grouped_queries:
+                grouped_queries[query] = []
+            grouped_queries[query].append(params)
+            
         conn = None
         try:
-            conn = self.pool.getconn()
+            conn = p.getconn()
             if conn:
                 with conn.cursor() as cur:
-                    cur.execute(query, params)
+                    for query, param_list in grouped_queries.items():
+                        extras.execute_batch(cur, query, param_list)
                 conn.commit()
-                return True
         except Exception as e:
-            logger.error(f"Failed to execute lineage update: {e}")
+            logger.error(f"Failed to execute batched lineage update: {e}")
             if conn:
                 conn.rollback()
-            return False
         finally:
             if conn:
-                self.pool.putconn(conn)
+                p.putconn(conn)
+        
+        for _ in batch:
+            _lineage_queue.task_done()
+
+_worker_thread = threading.Thread(target=_lineage_worker, daemon=True)
+_worker_thread.start()
+
+class LineageTracker:
+    def __init__(self):
+        pass
+        
+    def _execute_update(self, query: str, params: tuple):
+        _lineage_queue.put((query, params))
+        return True
                 
     def create_lineage(self, event_id: str, source_system: str = None):
         """Create new lineage record when event is first seen."""

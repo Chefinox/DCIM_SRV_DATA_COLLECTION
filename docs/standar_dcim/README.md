@@ -17,6 +17,9 @@
 
 ### 1. Connect ke Database
 
+> [!WARNING]
+> Karena Tim AI melakukan deploy API di server eksternal (`192.168.100.35`), pastikan *environment variables* (`.env`) pada aplikasi Anda menunjuk ke Host `10.70.0.56`! Jika dibiarkan *default* (`localhost`), API Anda akan membaca database di server lokal yang kosong.
+
 ```bash
 psql -h 10.70.0.56 -p 5433 -U ai_team -d dcim_analytics
 ```
@@ -36,16 +39,23 @@ SELECT * FROM metrics_daily ORDER BY time DESC LIMIT 10;
 
 ### 3. Consume Kafka Topic
 
+> [!IMPORTANT]
+> Untuk akses dari luar jaringan internal docker (seperti dari server Tim AI), **wajib** menggunakan port `9094` dengan koneksi `SSL`. Penggunaan port `9092` hanya berlaku untuk internal lokal dan akan mengembalikan _localhost_.
+
 ```python
 from kafka import KafkaConsumer
+import json
 
 consumer = KafkaConsumer(
     'dcim.analytics.metrics',
-    bootstrap_servers='10.70.0.56:9092',
+    bootstrap_servers='10.70.0.56:9094',
     group_id='ai-team-consumer',
     auto_offset_reset='earliest',
+    security_protocol='SSL',
+    ssl_cafile='ca-cert.pem', # Hubungi Tim Infra untuk mendapatkan CA Certificate
     value_deserializer=lambda m: json.loads(m.decode('utf-8'))
 )
+```
 
 for message in consumer:
     print(message.value)

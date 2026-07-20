@@ -23,8 +23,8 @@ Karena Tim AI berada di dalam jaringan internal yang sama, Anda dapat langsung m
 
 | Resource | Host | Port | Protocol | Keterangan |
 |----------|------|------|----------|------------|
-| TimescaleDB | `10.70.0.56` | `5433` | PostgreSQL | Untuk penarikan data historis & agregasi batch |
-| Kafka Broker | `10.70.0.56` | `9092` | PLAINTEXT | Untuk _real-time streaming_ data baru |
+| TimescaleDB | `10.70.0.56` | `5433` | PostgreSQL | Untuk penarikan data historis. Pastikan `.env` API Anda menunjuk ke sini! |
+| Kafka Broker | `10.70.0.56` | `9094` | SSL/TLS | Port 9092 hanya untuk internal. Koneksi eksternal wajib port 9094 + SSL |
 
 ---
 
@@ -36,7 +36,7 @@ Karena Tim AI berada di dalam jaringan internal yang sama, Anda dapat langsung m
 |-----------|-------|
 | Database | `dcim_analytics` |
 | Username | `ai_team` |
-| Password | `ai_team_access_pass` |
+| Password | `Inovasi@0918` |
 
 ### Alternative Roles
 
@@ -67,7 +67,7 @@ conn = psycopg2.connect(
     port="5433",
     dbname="dcim_analytics",
     user="ai_team",
-    password="ai_team_access_pass"
+    password="Inovasi@0918"
 )
 
 # Ambil data metrik UPS dalam 24 jam terakhir
@@ -136,19 +136,23 @@ SELECT * FROM metrics_daily ORDER BY time DESC LIMIT 10;
 
 | Parameter | Value |
 |-----------|-------|
-| Bootstrap Servers | `10.70.0.56:9092` |
-| Protocol | PLAINTEXT |
+| Bootstrap Servers | `10.70.0.56:9094` |
+| Protocol | SSL |
+| CA Certificate | `ca-cert.pem` (Hubungi Tim Infra) |
 
 ### Example Consumer (Python)
 
 ```python
 from kafka import KafkaConsumer
+import json
 
 consumer = KafkaConsumer(
     'dcim.analytics.metrics',
-    bootstrap_servers='10.70.0.56:9092',
+    bootstrap_servers='10.70.0.56:9094',
     group_id='ai-team-consumer',
     auto_offset_reset='earliest',
+    security_protocol='SSL',
+    ssl_cafile='ca-cert.pem',
     value_deserializer=lambda m: json.loads(m.decode('utf-8'))
 )
 
@@ -179,6 +183,28 @@ Source Devices (Server, CCTV, NAS, UPS, Network)
         ↓
     Continuous Aggregates (hourly, daily)
 ```
+
+---
+
+## Data Polling Intervals & Recommended Query Windows
+
+> [!IMPORTANT]
+> Jangan memukul rata (hardcode) query window ke `INTERVAL '5 minutes'` untuk semua endpoint! Hal ini akan menyebabkan banyak data (seperti `inventory_snapshot`) tampak kosong (0 baris), padahal data tersebut memang di-poll dengan interval yang lebih lama sesuai prioritasnya.
+
+Harap perhatikan **Polling Interval** aktual untuk tiap jenis metrik, dan sesuaikan **Query Window** Anda (di API yang di-deploy terpisah) sesuai dengan target SLA:
+
+| Jenis Data / Metrik | Device / Tipe | Polling Interval Aktual | Rekomendasi Query Window | SLA Target |
+|---|---|---|---|---|
+| Server Health / Thermal | Server | 60 detik | `INTERVAL '5 minutes'` | P1 Critical |
+| CPU & Memory Util | Server | 30 detik | `INTERVAL '5 minutes'` | P1 Critical |
+| Power & Battery | UPS | 60 detik | `INTERVAL '5 minutes'` | P1 Critical |
+| Network Interface | Switch / Router | 60 detik | `INTERVAL '5 minutes'` | P1 Critical |
+| Storage & Disk Temp | NAS | 120 detik | `INTERVAL '5 minutes'` | P1 Critical |
+| Inventory Snapshot | Server | 24 jam (Pukul 01:00) | `INTERVAL '24 hours'` | P3 Medium (Capacity) |
+| Energy (PUE) | Keseluruhan | Agregasi Harian | `INTERVAL '24 hours'` | P3 Medium (Energy) |
+
+> [!TIP]
+> Jika Anda mengembangkan endpoint untuk prediksi *Capacity* atau laporan energi yang mentolerir data harian, sangat disarankan menggunakan tabel Continuous Aggregates (`metrics_hourly` atau `metrics_daily`) dengan query window yang lebih lebar (mis. `INTERVAL '24 hours'`).
 
 ---
 
@@ -241,7 +267,7 @@ ORDER BY time DESC;
 
 | Role | Permissions |
 |------|-------------|
-| `ai_team` | SELECT on metrics, metrics_hourly, metrics_daily |
+| `ai_team` | SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public |
 | `analytics_read` | SELECT only |
 | `analytics_write` | SELECT + INSERT |
 | `analytics_admin` | ALL privileges |
@@ -252,6 +278,26 @@ ORDER BY time DESC;
 2. **Don't write directly to metrics table** - use Kafka for new data
 3. **Use aggregates** for large queries - faster than raw data
 4. **Limit query range** - use time filters to improve performance
+
+---
+
+## Deploy & Migration (Wajib Sebelum Deploy API)
+
+Tabel-tabel hasil analytics (`anomaly_events`, `predictions`, dll.) **tidak terbuat secara otomatis**. Sebelum Anda mende-deploy API Analytics, pastikan Anda atau DBA telah menjalankan *script* migrasi SQL.
+
+### Prosedur Migrasi
+1. Migrasi harus dijalankan menggunakan user **`analytics_user`** (sebagai *schema owner*). User `ai_team` tidak memiliki hak *CREATE TABLE*.
+2. Lokasi file migrasi (pada repo API Anda):
+   - `001_create_timescaledb_schema.sql` (Sudah Dijalankan)
+   - `002_create_analytics_tables.sql` (**Belum Dijalankan - Wajib Dijalankan**)
+
+### Checklist Verifikasi Pra-Deploy
+Jalankan pengecekan berikut. Pastikan *query* mengembalikan angka (bukan *error* tabel tidak ditemukan):
+1. `SELECT COUNT(*) FROM anomaly_events;`
+2. `SELECT COUNT(*) FROM predictions;`
+3. `SELECT COUNT(*) FROM metrics;` (Harus > 0)
+
+Jika *query* pertama/kedua gagal, API Anda akan mengembalikan array kosong atau *error*.
 
 ---
 
@@ -280,11 +326,11 @@ GROUP BY source;
 ### Check Kafka Topics
 
 ```bash
-# List topics
-kafka-topics.sh --bootstrap-server 10.70.0.56:9092 --list
+# List topics (memerlukan file client-ssl.properties)
+kafka-topics.sh --bootstrap-server 10.70.0.56:9094 --command-config client-ssl.properties --list
 
 # Check topic details
-kafka-topics.sh --bootstrap-server 10.70.0.56:9092 --topic dcim.analytics.metrics --describe
+kafka-topics.sh --bootstrap-server 10.70.0.56:9094 --command-config client-ssl.properties --topic dcim.analytics.metrics --describe
 ```
 
 ---

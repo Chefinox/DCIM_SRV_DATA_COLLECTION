@@ -49,6 +49,28 @@
     "metric_field": "ifOperStatus",
     "metric_unit": "status_code"
   },
+  "cctv_metrics": {
+    "metric_name": "status_online",
+    "metric_field": "status_online",
+    "metric_unit": "status_code",
+    "secondary_metrics": [
+      {
+        "field": "cpuUtilization",
+        "name": "cpu_utilization",
+        "unit": "percent"
+      },
+      {
+        "field": "memoryUsage",
+        "name": "memory_usage",
+        "unit": "gigabytes"
+      },
+      {
+        "field": "memoryUsagePct",
+        "name": "memory_usage_pct",
+        "unit": "percent"
+      }
+    ]
+  },
   "default": {
     "metric_name": "general_metric",
     "metric_field": null,
