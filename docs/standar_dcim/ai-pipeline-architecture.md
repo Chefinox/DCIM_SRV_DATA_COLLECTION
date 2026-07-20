@@ -2,8 +2,9 @@
 
 > **Purpose:** Dokumentasi arsitektur pipeline AI/ML untuk DCIM
 > **Created:** 2026-07-08
-> **Version:** 1.0
-> **Status:** Production Ready
+> **Updated:** 2026-07-20
+> **Version:** 1.1
+> **Status:** Production — 24 metrics, ~1,740 events/sec
 
 ---
 
@@ -23,10 +24,10 @@ Dokumen ini menjelaskan arsitektur pipeline AI/ML untuk Data Center Infrastructu
 ┌──────────────┐     ┌──────────────┐     ┌────────────────┐     ┌────────────────┐
 │   Sources    │     │  Ingestion   │     │   Kafka (Raw)  │     │  Processing    │
 ├──────────────┤     ├──────────────┤     ├────────────────┤     ├────────────────┤
-│ Server       │────▶│ NiFi         │────▶│ dcim.raw.*     │────▶│ NiFi           │
-│ CCTV/NVR     │     │ ExecuteProcess│   │ (JSON)         │     │ (Normalizer &  │
-│ NAS          │     │ (Python)     │     │                │     │  Enrichment)   │
-│ UPS          │     │              │     │                │     │                │
+│ Server       │────▶│ NiFi         │────▶│ dcim.raw.*     │────▶│ Normalizer     │
+│ CCTV/NVR     │     │ ExecuteProcess│   │ (JSON)         │     │ (Python, Avro) │
+│ NAS          │     │ (Python)     │     │                │     │ Multi-Metric   │
+│ UPS          │     │              │     │                │     │ Output         │
 │ Network      │     │              │     │                │     │                │
 └──────────────┘     └──────────────┘     └────────────────┘     └────────────────┘
                                                                         │
@@ -44,7 +45,7 @@ Dokumen ini menjelaskan arsitektur pipeline AI/ML untuk Data Center Infrastructu
 ├──────────────┤     ├──────────────┤     ├────────────────┤     ├────────────────┤
 │ PostgreSQL   │◀────│ metrics      │◀────│ Stream         │◀────│ dcim.          │
 │ Elasticsearch│     │ hypertable   │     │ Processor      │     │ analytics.*    │
-│ Redis        │     │              │     │ (Python)       │     │ (JSON)         │
+│ Redis        │     │ (24 types)   │     │ (Python)       │     │ (JSON)         │
 │              │     │ hourly agg   │     │                │     │                │
 │              │     │ daily agg    │     │                │     │                │
 └──────────────┘     └──────────────┘     └────────────────┘     └────────────────┘
@@ -58,11 +59,11 @@ Dokumen ini menjelaskan arsitektur pipeline AI/ML untuk Data Center Infrastructu
 
 | Source | Protocol | Metrics |
 |--------|----------|---------|
-| Server | Redfish, IPMI | CPU, memory, disk, network |
-| CCTV | Hikvision ISAPI | Status, recording |
-| NAS | SNMP | Storage, throughput |
-| UPS | SNMP | Power, battery |
-| Network | SNMP | Interface stats |
+| Server | Redfish, IPMI | CPU, memory, power_state, thermal |
+| CCTV | Hikvision ISAPI | Status, CPU, memory, memory_pct |
+| NAS | SNMP | Disk temp, system temp, volume usage/health |
+| UPS | SNMP | Battery, voltage, current, frequency, load, **computed power** |
+| Network | SNMP | Interface stats, CPU load, memory |
 
 ### 2. Ingestion Layer
 
@@ -88,9 +89,9 @@ Dokumen ini menjelaskan arsitektur pipeline AI/ML untuk Data Center Infrastructu
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| Normalizer | NiFi | Transform to normalized format |
-| Enrichment | NiFi + Redis | Add CI/asset metadata |
-| Stream Processor | Python | Process for TimescaleDB |
+| Normalizer | **Python systemd service** | Transform raw → normalized format (Avro). Multi-metric: 1 raw message → N normalized events. Computed metrics (total_facility_power, it_equipment_power). |
+| Enrichment | NiFi + Redis + FastAPI | Add CI/asset metadata from CMDB |
+| Stream Processor | Python | Process Analytics Bridge output → TimescaleDB |
 
 ### 4. Storage Layer
 
@@ -105,14 +106,14 @@ Dokumen ini menjelaskan arsitektur pipeline AI/ML untuk Data Center Infrastructu
 
 | Component | Description |
 |-----------|-------------|
-| `metrics` | Raw hypertable (Input) |
-| `metrics_hourly` | Hourly continuous aggregate (Input) |
-| `metrics_daily` | Daily continuous aggregate (Input) |
-| `anomaly_events` | Menyimpan hasil deteksi anomali (Output) |
-| `predictions` | Menyimpan hasil prediksi kegagalan (Output) |
-| `rca_reports` | Menyimpan laporan Root Cause Analysis (Output) |
-| `capacity_forecasts` | Menyimpan hasil forecasting kapasitas (Output) |
-| `energy_reports` | Menyimpan laporan optimasi energi (Output) |
+| `metrics` | Raw hypertable — **24 metric types, ~1,740 events/sec** |
+| `metrics_hourly` | Hourly continuous aggregate |
+| `metrics_daily` | Daily continuous aggregate |
+| `anomaly_events` | Hasil deteksi anomali (Output) |
+| `predictions` | Hasil prediksi kegagalan (Output) |
+| `rca_reports` | Laporan Root Cause Analysis (Output) |
+| `capacity_forecasts` | Hasil forecasting kapasitas (Output) |
+| `energy_reports` | Laporan optimasi energi — **data `total_facility_power` & `it_equipment_power` now available** |
 | `ml_models` | Registri model ML (Output) |
 | `model_drift_tracking` | Monitoring drift model ML (Internal) |
 | `audit_log` | Audit trail operasi analytics (Internal) |
@@ -231,9 +232,11 @@ GROUP BY time_bucket('1 day', time), metric_name, source;
 
 ## Performance
 
-| Metric | Target | Actual |
-|--------|--------|--------|
-| Throughput | 430+ metrics/sec | ~500 metrics/sec |
+| Metric | Target | Actual (2026-07-20) |
+|--------|--------|----------------------|
+| Throughput | 430+ metrics/sec | **~1,740 events/sec** (8,703/5min) |
+| Metric Types | N/A | **24** distinct metric names |
+| Device Types | 6 | 6 |
 | Latency | < 1s | < 500ms |
 | Query performance | < 5s | < 2s |
 | Availability | 99.9% | 99.9% |
@@ -321,3 +324,12 @@ GROUP BY time_bucket('1 day', time), metric_name, source;
 - [dcim-wiki: block2-data-ingestion-integration](../reference-designs/block2-data-ingestion-integration.md)
 - [AI Team Access](ai-team-access.md)
 - [TimescaleDB Documentation](https://docs.timescale.com/)
+
+---
+
+## Changelog
+
+| Date | Version | Changes |
+|------|---------|---------|
+| 2026-07-20 | 1.1 | Normalizer upgraded: resolve_metric→resolve_metrics (multi-metric output). Added secondary_metrics processing + computed power metrics. Metric types 5→24. Fixed architecture diagram (normalizer is Python systemd, not NiFi). |
+| 2026-07-08 | 1.0 | Initial version |
