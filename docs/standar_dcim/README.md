@@ -1,7 +1,7 @@
 # Standar DCIM Documentation
 
 > Kumpulan dokumentasi standar DCIM Analytics Pipeline
-> **Last Updated: 2026-07-20** | Version 1.1 | 24 metrics, ~1,740 events/sec
+> **Last Updated: 2026-07-20** | Version 1.2 | 25 metrics, ~3,200 rows/5min
 
 ---
 
@@ -75,16 +75,17 @@ Sources → NiFi (Pollers) → Kafka (Raw JSON) → Normalizer (Python, Multi-Me
                                               Kafka (Enriched Avro)
                                                        ↓
 Tim AI ← TimescaleDB ← Stream Processor ← Kafka (JSON) ← Analytics Bridge
-         (24 metrics, ~1,740/sec)
+         (25 metrics, ~3,200 rows/5min)
 ```
 
 ### ✨ Update 2026-07-20: Metric Gap Fixed
 
 | Sebelum | Sesudah |
 |---------|---------|
-| 5 metric names | **24 metric names** |
+| 5 metric names | **25 metric names** |
 | Energy metrics missing | ✅ `total_facility_power`, `it_equipment_power` |
 | UPS hanya battery | ✅ 10 UPS metrics (battery, voltage, current, frequency, load, power) |
+| `memory_utilization` kosong | ✅ **Fixed** — field name mismatch resolved |
 | CCTV hanya status | ✅ 5 CCTV metrics (+cpu, +memory, +memory_pct, +memory_avail) |
 | NAS hanya disk temp | ✅ 6 NAS metrics (+system temp, +volume usage, +volume health) |
 | Network hanya interface | ✅ 4 Network metrics (+cpu_load, +memory) |
@@ -122,4 +123,4 @@ Untuk pertanyaan atau masalah:
 
 ---
 
-> Last Updated: 2026-07-20 | v1.1
+> Last Updated: 2026-07-20 | v1.2
