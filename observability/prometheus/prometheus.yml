@@ -1,5 +1,10 @@
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
 
 scrape_configs:
   - job_name: 'prometheus'
@@ -8,4 +13,34 @@ scrape_configs:
 
   - job_name: 'node_exporter'
     static_configs:
-      - targets: ['10.70.0.56:9100'] # Assuming node-exporter runs on host
+      - targets: ['10.70.0.56:9100']
+        labels:
+          host: 'srv-rnd-dcim'
+
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['10.70.0.56:9187']
+        labels:
+          role: 'primary'
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['10.70.0.56:9121']
+        labels:
+          role: 'primary'
+
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['10.70.0.56:9308']
+        labels:
+          cluster: 'dcim-kafka'
+
+  - job_name: 'elasticsearch'
+    static_configs:
+      - targets: ['10.70.0.56:9114']
+        labels:
+          cluster: 'dcim-es'
+
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['dcim_grafana:3000']
