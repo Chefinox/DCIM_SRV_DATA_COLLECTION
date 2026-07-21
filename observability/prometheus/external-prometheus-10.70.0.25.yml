@@ -1,0 +1,81 @@
+# =============================================================================
+# External Prometheus Configuration for 10.70.0.25
+# =============================================================================
+# Target: srv-rnd-dcim (10.70.0.56)
+# All exporters are exposed on host network at ports below.
+# Copy this config or merge scrape_configs into your existing prometheus.yml.
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  # --- srv-rnd-dcim (10.70.0.56) Exporters ---
+
+  # Host OS metrics (CPU, RAM, Disk, Network)
+  - job_name: 'dcim-node'
+    static_configs:
+      - targets: ['10.70.0.56:9100']
+        labels:
+          host: 'srv-rnd-dcim'
+          role: 'dcim-host'
+
+  # PostgreSQL database metrics
+  - job_name: 'dcim-postgresql'
+    static_configs:
+      - targets: ['10.70.0.56:9187']
+        labels:
+          host: 'srv-rnd-dcim'
+          db: 'dcim_sot'
+          role: 'primary'
+
+  # Redis cache metrics
+  - job_name: 'dcim-redis'
+    static_configs:
+      - targets: ['10.70.0.56:9121']
+        labels:
+          host: 'srv-rnd-dcim'
+          role: 'enrichment-cache'
+
+  # Kafka 3-node cluster metrics
+  - job_name: 'dcim-kafka'
+    static_configs:
+      - targets: ['10.70.0.56:9308']
+        labels:
+          host: 'srv-rnd-dcim'
+          cluster: 'dcim-kafka-cluster'
+
+  # Elasticsearch metrics
+  - job_name: 'dcim-elasticsearch'
+    static_configs:
+      - targets: ['10.70.0.56:9114']
+        labels:
+          host: 'srv-rnd-dcim'
+          cluster: 'dcim-es'
+
+  # Optional: Prometheus local (federation target)
+  - job_name: 'dcim-prometheus'
+    honor_labels: true
+    metrics_path: '/federate'
+    params:
+      'match[]':
+        - '{job=~"node_exporter|postgresql|redis|kafka|elasticsearch|prometheus"}'
+    static_configs:
+      - targets: ['10.70.0.56:9090']
+
+# =============================================================================
+# Exporter Ports Summary:
+# ┌─────────────────────┬────────┬──────────────────────────────┐
+# │ Exporter            │ Port   │ Endpoint                     │
+# ├─────────────────────┼────────┼──────────────────────────────┤
+# │ Node Exporter       │ 9100   │ http://10.70.0.56:9100/metrics│
+# │ PostgreSQL Exporter │ 9187   │ http://10.70.0.56:9187/metrics│
+# │ Redis Exporter      │ 9121   │ http://10.70.0.56:9121/metrics│
+# │ Kafka Exporter      │ 9308   │ http://10.70.0.56:9308/metrics│
+# │ Elasticsearch Exp.  │ 9114   │ http://10.70.0.56:9114/metrics│
+# │ Prometheus (local)  │ 9090   │ http://10.70.0.56:9090/metrics│
+# │ Grafana             │ 3000   │ http://10.70.0.56:3000        │
+# └─────────────────────┴────────┴──────────────────────────────┘
+# =============================================================================

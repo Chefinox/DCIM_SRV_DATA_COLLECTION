@@ -34,11 +34,7 @@ services:
     ports:
       - "9121:9121"
     environment:
-      # Use redis connection via host IP or password if necessary
       - REDIS_ADDR=redis://10.70.0.56:6379
-      - REDIS_PASSWORD_FILE=/run/secrets/sot_db_pass
-    volumes:
-      - /run/secrets/dcim/sot_db_pass:/run/secrets/sot_db_pass:ro
 
   kafka_exporter:
     image: danielqsj/kafka-exporter:latest
@@ -58,12 +54,7 @@ services:
     ports:
       - "9114:9114"
     command:
-      - '--es.uri=https://10.70.0.56:9200'
+      - '--es.uri=http://10.70.0.56:9200'
       - '--es.all'
       - '--es.indices'
       - '--es.shards'
-      - '--es.ssl-skip-verify'
-    environment:
-      # Need Basic auth if ES requires it
-      - ES_USERNAME=elastic
-      - ES_PASSWORD=C+H+pFb*aIAqWcOo-X8q

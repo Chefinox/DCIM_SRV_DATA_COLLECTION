@@ -12,8 +12,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 log = logging.getLogger(__name__)
 
-ES_URL = "https://10.70.0.56:9200/_bulk"
-ES_AUTH = ("elastic", "C+H+pFb*aIAqWcOo-X8q")
+ES_URL = "http://10.70.0.56:9200/_bulk"
+ES_AUTH = None
 
 def run():
     consumer_conf = {
