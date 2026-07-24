@@ -13,3 +13,6 @@ __pycache__/
 *.pyc
 logs/*.json
 itop/itop/log/*
+
+# Cloned repos (prevent double-tracking)
+DCIM_SRV_DATA_COLLECTION/
