@@ -17,7 +17,12 @@
     "server_redfish": "server",
     "server_redfish_util": "server",
     "server_inventory": "server",
-    "cctv_metrics": "cctv"
+    "cctv_metrics": "cctv",
+    "server_redfish_thermal": "server",
+    "server_redfish_fan": "server",
+    "server_redfish_psu": "server",
+    "server_redfish_power": "server",
+    "dcim_network_storage": "network_switch"
   },
   "dcim_nas": {
     "metric_name": "disk_temperature",
@@ -111,8 +116,20 @@
   },
   "interface": {
     "metric_name": "interface_status",
-    "metric_field": "ifOperStatus",
-    "metric_unit": "status_code"
+    "metric_field": "if_oper_status",
+    "metric_unit": "status_code",
+    "secondary_metrics": [
+      {
+        "field": "if_in_octets",
+        "name": "if_in_octets",
+        "unit": "bytes"
+      },
+      {
+        "field": "if_out_octets",
+        "name": "if_out_octets",
+        "unit": "bytes"
+      }
+    ]
   },
   "cctv_metrics": {
     "metric_name": "status_online",
@@ -188,5 +205,95 @@
   "server_inventory": {
     "metric_name": "inventory_snapshot",
     "metric_field": null
+  },
+  "server_redfish_thermal": {
+    "metric_name": "temperature",
+    "metric_field": "temperature_celsius",
+    "metric_unit": "celsius",
+    "secondary_metrics": [
+      {
+        "field": "health_ok",
+        "name": "health_ok",
+        "unit": "status_code"
+      },
+      {
+        "field": "upper_threshold_critical",
+        "name": "upper_threshold_critical",
+        "unit": "celsius"
+      }
+    ]
+  },
+  "server_redfish_fan": {
+    "metric_name": "fan_speed",
+    "metric_field": "fan_speed_rpm",
+    "metric_unit": "rpm",
+    "secondary_metrics": [
+      {
+        "field": "health_ok",
+        "name": "health_ok",
+        "unit": "status_code"
+      }
+    ]
+  },
+  "server_redfish_psu": {
+    "metric_name": "power_supply",
+    "metric_field": "output_watts",
+    "metric_unit": "watt",
+    "secondary_metrics": [
+      {
+        "field": "capacity_watts",
+        "name": "capacity_watts",
+        "unit": "watt"
+      },
+      {
+        "field": "line_input_voltage",
+        "name": "line_input_voltage",
+        "unit": "volt"
+      },
+      {
+        "field": "health_ok",
+        "name": "health_ok",
+        "unit": "status_code"
+      }
+    ]
+  },
+  "server_redfish_power": {
+    "metric_name": "power_consumed",
+    "metric_field": "power_consumed_watts",
+    "metric_unit": "watt",
+    "secondary_metrics": [
+      {
+        "field": "power_capacity_watts",
+        "name": "power_capacity_watts",
+        "unit": "watt"
+      },
+      {
+        "field": "average_consumed_watts",
+        "name": "average_consumed_watts",
+        "unit": "watt"
+      },
+      {
+        "field": "max_consumed_watts",
+        "name": "max_consumed_watts",
+        "unit": "watt"
+      },
+      {
+        "field": "min_consumed_watts",
+        "name": "min_consumed_watts",
+        "unit": "watt"
+      }
+    ]
+  },
+  "dcim_network_storage": {
+    "metric_name": "storage_used",
+    "metric_field": "storageUsed",
+    "metric_unit": "units",
+    "secondary_metrics": [
+      {
+        "field": "storageSize",
+        "name": "storage_size",
+        "unit": "units"
+      }
+    ]
   }
 }

@@ -169,25 +169,25 @@ def main():
             elif o.startswith(".1.3.6.1.2.1.2.2.1.2.") or o.startswith(".1.3.6.1.2.1.31.1.1.1.1."):
                 idx = o.split(".")[-1]
                 if idx not in interfaces: interfaces[idx] = {}
-                interfaces[idx]["ifName"] = str(v)
+                interfaces[idx]["if_name"] = str(v)
             elif o.startswith(".1.3.6.1.2.1.2.2.1.8."):
                 idx = o.split(".")[-1]
                 if idx not in interfaces: interfaces[idx] = {}
-                interfaces[idx]["ifOperStatus"] = v
+                interfaces[idx]["if_oper_status"] = v
             elif o.startswith(".1.3.6.1.2.1.31.1.1.1.6."):
                 idx = o.split(".")[-1]
                 if idx not in interfaces: interfaces[idx] = {}
-                interfaces[idx]["ifHCInOctets"] = v
+                interfaces[idx]["if_in_octets"] = v
             elif o.startswith(".1.3.6.1.2.1.31.1.1.1.10."):
                 idx = o.split(".")[-1]
                 if idx not in interfaces: interfaces[idx] = {}
-                interfaces[idx]["ifHCOutOctets"] = v
+                interfaces[idx]["if_out_octets"] = v
                 
         for idx, flds in interfaces.items():
             if not flds: continue
             i_tags = base_tags.copy()
-            if "ifName" in flds:
-                i_tags["ifName"] = flds.pop("ifName")
+            if "if_name" in flds:
+                i_tags["if_name"] = flds.pop("if_name")
             elif "ifIndex" in flds:
                 i_tags["ifIndex"] = flds.pop("ifIndex")
             else:

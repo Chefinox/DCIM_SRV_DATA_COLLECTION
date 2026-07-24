@@ -693,6 +693,9 @@ def resolve_extra_fields(data: dict, class_name: str, ci_name: str, itop_client,
     loc_name = raw_tags.get("site") or raw_fields.get("location") or raw_fields.get("site")
     rack_name = raw_tags.get("rack_name") or raw_fields.get("rack_name")
 
+    if not loc_name and (class_name == "Peripheral" or data.get("device_type", "").lower() in ("nvr", "cctv", "camera")):
+        loc_name = "CCTV Network"
+
     if hw_data:
         if not loc_name:
             loc_name = hw_data.get("site")
