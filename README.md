@@ -1,8 +1,8 @@
 # DCIM Metrics Project
 
-**Version**: v4.5.2 (Full NiFi Ingestion, Prometheus Monitoring, AI Pipeline)  
+**Version**: v4.6.1 (Full NiFi Ingestion, Prometheus Monitoring, AI Pipeline, 12-Partition Kafka)  
 **Status**: ✅ Production Active  
-**Last Updated**: 2026-07-24
+**Last Updated**: 2026-07-27
 
 ## Project Overview
 

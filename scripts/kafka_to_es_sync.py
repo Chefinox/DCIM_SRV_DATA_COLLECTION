@@ -1,10 +1,19 @@
 import json
 import os
+import sys
 import requests
 from confluent_kafka import Consumer, KafkaError
 from elasticsearch import Elasticsearch
 from datetime import datetime
 from functools import lru_cache
+
+if "/home/infra/dcim_metrics_project" not in sys.path:
+    sys.path.append("/home/infra/dcim_metrics_project")
+
+from src.utils.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
+
+# Circuit Breaker for ES
+cb_es = CircuitBreaker(name="elasticsearch", failure_threshold=5, recovery_timeout=90.0, success_threshold=2)
 
 # Config
 KAFKA_BROKER = '127.0.0.1:9092'
@@ -82,10 +91,12 @@ try:
             if not data.get("@timestamp"):
                 data["@timestamp"] = datetime.utcnow().isoformat() + "Z"
 
-            # Index to ES
-            res = es.index(index=index_name, document=data)
+            # Index to ES via CircuitBreaker
+            res = cb_es.call(es.index, index=index_name, document=data)
             # print(f"Indexed: {data.get('hostname')} ({data['enrichment_status']})")
 
+        except CircuitBreakerOpenError as e:
+            print(f"[CIRCUIT BREAKER OPEN] ES indexing skipped: {e}")
         except Exception as e:
             print(f"Error processing/indexing: {e}")
 

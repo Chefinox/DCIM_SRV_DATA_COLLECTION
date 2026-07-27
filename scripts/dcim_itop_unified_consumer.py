@@ -35,6 +35,11 @@ sys.path.append("/home/infra/dcim_metrics_project")
 from src.schemas.avro_schemas import NORMALIZED_EVENT_SCHEMA
 import redis
 from src.utils.lineage import track_lineage
+from src.utils.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
+
+# ─── Circuit Breakers ────────────────────────────────────────────────────────
+cb_itop = CircuitBreaker(name="itop", failure_threshold=5, recovery_timeout=120.0, success_threshold=2)
+cb_redis = CircuitBreaker(name="redis", failure_threshold=3, recovery_timeout=30.0, success_threshold=2)
 
 # Custom utils for Postgres / Ralph hardware fallback
 from itop_sync_utils import get_server_hardware, get_network_hardware
@@ -111,18 +116,21 @@ class ITopClient:
         self.session = requests.Session()
 
     def _post(self, payload: dict) -> dict:
-        data = {
-            "auth_user": self.auth_user,
-            "auth_pwd":  self.auth_pwd,
-            "json_data": json.dumps(payload),
-        }
-        r = self.session.post(self.url, data=data, timeout=15)
-        try:
-            r.raise_for_status()
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTP Error: {e} | Response: {r.text[:300]}")
-            raise
-        return r.json()
+        def _execute():
+            data = {
+                "auth_user": self.auth_user,
+                "auth_pwd":  self.auth_pwd,
+                "json_data": json.dumps(payload),
+            }
+            r = self.session.post(self.url, data=data, timeout=15)
+            try:
+                r.raise_for_status()
+            except requests.exceptions.HTTPError as e:
+                logger.error(f"HTTP Error: {e} | Response: {r.text[:300]}")
+                raise
+            return r.json()
+
+        return cb_itop.call(_execute)
 
     # ── Device type → iTop class mapping (shared by resolve_class & create_device) ──
     _CLASS_MAP = {
@@ -1348,6 +1356,22 @@ def main():
                             target_topic="itop_cmdb",
                             processing_ms=processing_ms
                         )
+            except CircuitBreakerOpenError as e:
+                logger.warning(f"[CIRCUIT BREAKER OPEN] iTop API unavailable, event routed to DLQ: {e}")
+                try:
+                    if 'msg_val_obj' in locals() and msg_val_obj and isinstance(msg_val_obj, dict):
+                        event_id = msg_val_obj.get("event_id")
+                        if event_id:
+                            track_lineage(
+                                event_id=event_id,
+                                stage="stored",
+                                status="circuit_breaker_open",
+                                target_topic="itop_cmdb",
+                                error_message=str(e)
+                            )
+                    produce_dlq(producer, TOPIC_DLQ, msg_val_obj if 'msg_val_obj' in locals() and msg_val_obj else {}, f"Circuit breaker OPEN: {e}")
+                except Exception:
+                    pass
             except Exception as e:
                 logger.error(f"Exception processing message: {e}", exc_info=True)
                 try:

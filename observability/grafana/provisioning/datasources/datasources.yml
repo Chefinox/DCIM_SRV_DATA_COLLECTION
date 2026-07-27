@@ -11,13 +11,18 @@ datasources:
   - name: Elasticsearch
     type: elasticsearch
     access: proxy
-    url: http://10.70.0.56:9200
+    url: https://10.70.0.56:9200
+    basicAuth: true
+    basicAuthUser: elastic
+    secureJsonData:
+      basicAuthPassword: "ES_PASSWORD_REDACTED"
     database: "dcim-metrics-unified-*"
     jsonData:
       esVersion: "8.0.0"
       timeField: "@timestamp"
       logMessageField: message
       logLevelField: level
+      tlsSkipVerify: true
 
   - name: PostgreSQL
     type: postgres
@@ -26,7 +31,7 @@ datasources:
     database: dcim_sot
     user: sot_admin
     secureJsonData:
-      password: "literal:<SET_LOCALLY>"
+      password: ${SOT_DB_PASS}
     jsonData:
       sslmode: disable
       maxOpenConns: 5

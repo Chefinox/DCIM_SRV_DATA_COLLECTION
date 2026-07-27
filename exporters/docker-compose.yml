@@ -25,7 +25,7 @@ services:
     environment:
       # Assume connection to the existing postgres container in the default network or host
       # We use host IP or container name if in the same network
-      - DATA_SOURCE_NAME=postgresql://sot_admin:Inovasi%400918@10.70.0.56:5432/postgres?sslmode=disable
+      - DATA_SOURCE_NAME=postgresql://sot_admin:${SOT_DB_PASS}@10.70.0.56:5432/postgres?sslmode=disable
 
   redis_exporter:
     image: oliver006/redis_exporter:latest
@@ -54,7 +54,8 @@ services:
     ports:
       - "9114:9114"
     command:
-      - '--es.uri=http://10.70.0.56:9200'
+      - '--es.uri=https://elastic:${ELASTIC_PASSWORD}@10.70.0.56:9200'
+      - '--es.ssl-skip-verify=true'
       - '--es.all'
       - '--es.indices'
       - '--es.shards'

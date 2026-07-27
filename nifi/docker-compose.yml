@@ -1,15 +1,15 @@
 version: '3.8'
 
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: dcim-redis-cache
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning
-    secrets:
-      - sot_db_pass
+#  redis:
+#    image: redis:7-alpine
+#    container_name: dcim-redis-cache
+#    ports:
+#      - "6379:6379"
+#    restart: unless-stopped
+#    command: redis-server --save 60 1 --loglevel warning
+#    secrets:
+#      - sot_db_pass
 
   nifi:
     build: 
@@ -26,6 +26,7 @@ services:
       - NIFI_WEB_PROXY_HOST=10.70.0.56:8443
     volumes:
       - nifi_conf:/opt/nifi/nifi-current/conf
+#      - ./authorizers.xml:/opt/nifi/nifi-current/conf/authorizers.xml:ro
       - /etc/dcim/registry:/etc/dcim/registry:ro
       - /home/infra/dcim_metrics_project/scripts:/opt/nifi/nifi-current/scripts:ro
     restart: unless-stopped
