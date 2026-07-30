@@ -148,8 +148,12 @@ class ITopClient:
         """Map device_type string to iTop CI class name."""
         return self._CLASS_MAP.get(str(device_type).lower().strip(), "NetworkDevice")
 
-    def find_device(self, ci_name: str, serial_number: str = None, ip: str = None) -> tuple:
-        classes_to_check = ["Server", "NetworkDevice", "NAS", "StorageSystem", "PowerSource", "Peripheral"]
+    def find_device(self, ci_name: str, serial_number: str = None, ip: str = None, expected_class: str = None) -> tuple:
+        all_classes = ["Server", "NetworkDevice", "NAS", "StorageSystem", "PowerSource", "Peripheral"]
+        if expected_class and expected_class in all_classes:
+            classes_to_check = [expected_class] + [c for c in all_classes if c != expected_class]
+        else:
+            classes_to_check = all_classes
         for cls in classes_to_check:
             out_fields = "name,status,brand_name"
             if cls not in ("PowerSource", "Peripheral"):
@@ -957,7 +961,8 @@ def process_message(msg_val: str, itop_client: ITopClient, auto_org_id: str) -> 
         serial_number = serial_number or hw.get("serial_number", "")
 
     # Jika cache mengatakan CI sudah ada dengan data sama (termasuk hardware, lokasi, dan rack) → skip API call
-    resolved_class = itop_client.resolve_class(device_type)
+    resolved_class_hint = itop_client.resolve_class(device_type)
+    resolved_class = resolved_class_hint
     if (cached_state.get("ip") == str(ip) and
         cached_state.get("status") == expected_status and
         cached_state.get("brand") == str(brand_name) and
@@ -1002,7 +1007,7 @@ def process_message(msg_val: str, itop_client: ITopClient, auto_org_id: str) -> 
             # Cache belum ada / berubah → lanjut proses
 
     # ── Find Device in iTop ────────────────────────────────────────────────
-    class_name, objs = itop_client.find_device(ci_name, serial_number, ip)
+    class_name, objs = itop_client.find_device(ci_name, serial_number, ip, expected_class=resolved_class_hint)
 
     if not objs:
         # CI tidak ada di iTop
