@@ -35,7 +35,7 @@ def get_server_hardware(hostname):
             SELECT 
                 e.srv_cpu_components, e.srv_memory_components, e.srv_disk_components, e.raw_tags, e.serial_number
             FROM dcim_events e
-            WHERE e.hostname ILIKE %s
+            WHERE LOWER(e.hostname) = LOWER(%s)
             ORDER BY e.event_time DESC LIMIT 1
         """
         cur.execute("SET statement_timeout = 10000;")
@@ -43,7 +43,7 @@ def get_server_hardware(hostname):
         row = cur.fetchone()
         
         site, rack = None, None
-        cur.execute("SELECT site, rack_name, ip FROM unified_assets WHERE hostname ILIKE %s OR hostname ILIKE %s LIMIT 1", (hostname, alt_host))
+        cur.execute("SELECT site, rack_name, ip FROM unified_assets WHERE LOWER(hostname) = LOWER(%s) OR LOWER(hostname) = LOWER(%s) LIMIT 1", (hostname, alt_host))
         u_row = cur.fetchone()
         if u_row:
             site, rack = u_row[0], u_row[1]
@@ -118,7 +118,7 @@ def get_network_hardware(hostname, ip):
         query = """
             SELECT site, rack_name, serial_number 
             FROM unified_assets 
-            WHERE hostname ILIKE %s OR ip::text = %s 
+            WHERE LOWER(hostname) = LOWER(%s) OR ip::text = %s 
             LIMIT 1
         """
         cur.execute("SET statement_timeout = 10000;")
