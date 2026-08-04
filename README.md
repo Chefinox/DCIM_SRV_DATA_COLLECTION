@@ -1,8 +1,9 @@
 # DCIM Metrics Project
 
-**Version**: v4.6.1 (Full NiFi Ingestion, Prometheus Monitoring, AI Pipeline, 12-Partition Kafka)  
+**Version**: v4.6.2 (Kafka 4.1.2 Upgrade, Log Persistence Fix, iTop Consumer Lag Remediation, 12-Partition Kafka)  
 **Status**: ✅ Production Active  
-**Last Updated**: 2026-07-27
+**Last Updated**: 2026-08-04
+
 
 ## Project Overview
 
@@ -134,7 +135,7 @@ dcim_metrics_project/
 
 | Stack | Containers |
 |---|---|
-| **Kafka Cluster** | `kafka1`, `kafka2`, `kafka3` (3.7.0, KRaft, SSL) |
+| **Kafka Cluster** | `kafka1`, `kafka2`, `kafka3` (4.1.2, KRaft, SSL, Named Volumes) |
 | **Schema Registry** | `schema-registry` (Confluent 7.6.0) |
 | **Vault** | `vault` (HashiCorp 1.15) |
 | **NiFi** | `dcim-nifi` (custom Python3 image) |
@@ -187,7 +188,7 @@ PostgreSQL / iTop → itop_to_ralph_sync.py → Ralph Asset Repository
 
 ## Key Technologies
 
-- **Message Broker**: Apache Kafka (3-node cluster, SSL/TLS, Schema Registry, external `10.70.0.56:9094`)
+- **Message Broker**: Apache Kafka 4.1.2 (3-node cluster, SSL/TLS, Schema Registry, external `10.70.0.56:9094`)
 - **Orchestration & Polling**: Apache NiFi 1.24 (custom Python3 image, 7 process groups)
 - **Cache**: Redis 7
 - **Time-series DB (Analytics)**: TimescaleDB (PostgreSQL 15, port 5433)
@@ -204,7 +205,10 @@ PostgreSQL / iTop → itop_to_ralph_sync.py → Ralph Asset Repository
 
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
-| v4.5.2 | 2026-07-24 | Kafka broker listener fix, ES 9.3.1 restore, Prometheus exporters active, project cleanup | **CURRENT** |
+| v4.6.2 | 2026-08-04 | Kafka 4.1.2 upgrade, log dirs persistence fix, iTop consumer lag remediation (0 lag), MariaDB/Postgres index optimization | **CURRENT** |
+| v4.6.1 | 2026-07-27 | 12-partition topic alignment across all Kafka topics, Kafbat UI compose restoration | Superseded |
+| v4.6.0 | 2026-07-24 | Circuit Breaker Pattern (`src/utils/circuit_breaker.py`), Data Classification Matrix, Prometheus CB exporter | Superseded |
+| v4.5.2 | 2026-07-24 | Kafka broker listener fix, ES 9.3.1 restore, Prometheus exporters active, project cleanup | Superseded |
 | v4.5.1 | 2026-07-21 | CCTV NiFi migration, credential hardening, systemd bridge removal | Superseded |
 | v4.5.0 | 2026-07-20 | Multi-metric normalizer (25 types), computed energy metrics, Ralph asset_id | Superseded |
 | v4.4.0 | 2026-07-10 | Full NiFi Cutover, SIEM Consumer, AI Pipeline (TimescaleDB), Custom Docker NiFi Python3 | Superseded |
