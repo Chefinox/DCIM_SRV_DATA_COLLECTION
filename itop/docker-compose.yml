@@ -33,7 +33,7 @@ services:
       - itop-internal
 
   itop-web:
-    image: vbkunin/itop:3.1.1
+    image: local/itop:3.2.3
     container_name: itop-web
     restart: unless-stopped
     depends_on:

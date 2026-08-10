@@ -56,6 +56,8 @@ services:
     image: ghcr.io/kafbat/kafka-ui:latest
     container_name: dcim-kafka-ui
     network_mode: "host"
+    volumes:
+      - ./kafka-ui-config/config.yml:/etc/kafkaui/config.yml:ro
     environment:
       KAFKA_CLUSTERS_0_NAME: "DCIM-Production"
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "10.70.0.56:9092"
@@ -64,6 +66,9 @@ services:
       KAFKA_CLUSTERS_0_SERDES_0_PROPERTIES_URL: "http://10.70.0.56:8081"
       SERVER_PORT: 9000
       DYNAMIC_CONFIG_ENABLED: "true"
+      SPRING_CONFIG_ADDITIONAL-LOCATION: /etc/kafkaui/config.yml
+
+    restart: unless-stopped
     depends_on:
       - nifi
 
