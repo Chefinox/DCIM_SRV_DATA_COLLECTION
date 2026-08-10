@@ -94,14 +94,43 @@ NVR_USER = os.environ.get("HIKVISION_NVR_USER", "admin")
 NVR_PASS = _read_secret("hikvision_nvr_pass", "HIKVISION_NVR_PASS")
 TIMEOUT = int(os.environ.get("ISAPI_TIMEOUT", "4"))
 
+import sys
+# Import dari modular utilities
+sys.path.append("/home/infra/dcim_metrics_project")
+from src.utils.rate_limiter import get_limiter
+from src.utils.kill_switch import PollerKillSwitch
+
+# Inisialisasi Kill Switch
+kill_switch = PollerKillSwitch("cctv_poller")
+
+# Rate limit configs per ADR-0023
+CCTV_LIMITS = {
+    "max_concurrent": 1,
+    "max_req_per_min": 5
+}
+
 def get_isapi(ip, user, password, path):
+    # Check kill switch before every request
+    if kill_switch.is_killed():
+        sys.stderr.write(f"WARN: Kill switch engaged. Aborting poll for {ip}.\n")
+        return None
+        
     url = f"http://{ip}/ISAPI{path}"
+    
+    # Acquire rate limit slot
+    limiter = get_limiter(ip, CCTV_LIMITS)
+    if not limiter.acquire(timeout_sec=TIMEOUT):
+        sys.stderr.write(f"WARN: Rate limit timeout for {ip}\n")
+        return None
+        
     try:
         resp = requests.get(url, auth=HTTPDigestAuth(user, password), timeout=TIMEOUT)
         if resp.status_code == 200:
             return resp.text
     except Exception:
         pass
+    finally:
+        limiter.release()
     return None
 
 def get_xml_text(root, tag_name):

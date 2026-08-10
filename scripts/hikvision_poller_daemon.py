@@ -178,10 +178,20 @@ def main():
     logger.info(f"Cameras: {len(CCTV_IPS)} devices")
     logger.info("=" * 60)
     
+    import sys
+    sys.path.append("/home/infra/dcim_metrics_project")
+    from src.utils.kill_switch import PollerKillSwitch
+    kill_switch = PollerKillSwitch("hikvision_poller_daemon")
+    
     cycle_count = 0
     
     try:
         while True:
+            # Check kill switch before every cycle
+            if kill_switch.is_killed():
+                logger.warning("Kill switch engaged. Aborting Hikvision daemon loop.")
+                break
+                
             try:
                 cycle_count += 1
                 start_time = time.time()

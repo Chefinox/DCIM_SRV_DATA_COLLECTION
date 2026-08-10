@@ -49,11 +49,38 @@ def snmp_walk(ip, oid):
         sys.stderr.write(f"Error polling {ip} at {oid}: {e}\n")
     return snmp_data
 
+import sys
+# Import dari modular utilities
+sys.path.append("/home/infra/dcim_metrics_project")
+from src.utils.rate_limiter import get_limiter
+from src.utils.kill_switch import PollerKillSwitch
+
+# Inisialisasi Kill Switch
+kill_switch = PollerKillSwitch("nas_poller")
+
+# Rate limit configs per ADR-0023
+NAS_LIMITS = {
+    "max_concurrent": 2,
+    "max_req_per_min": 15
+}
+
 def main():
     timestamp = int(time.time())
     
+    # Check kill switch
+    if kill_switch.is_killed():
+        sys.stderr.write(f"WARN: Kill switch engaged. Aborting NAS poll.\n")
+        return
+    
     for ip in IPS:
-        # 1. Global scalars
+        # Acquire rate limit slot
+        limiter = get_limiter(ip, NAS_LIMITS)
+        if not limiter.acquire(timeout_sec=5):
+            sys.stderr.write(f"WARN: Rate limit timeout for {ip}\n")
+            continue
+            
+        try:
+            # 1. Global scalars
         global_oids = [
             (".1.3.6.1.2.1.1.5.0", "hostname"),
             (".1.3.6.1.4.1.6574.1.5.1.0", "model"),
@@ -200,6 +227,8 @@ def main():
                     "fields": flds,
                     "timestamp": timestamp
                 }))
+        finally:
+            limiter.release()
 
 if __name__ == "__main__":
     main()

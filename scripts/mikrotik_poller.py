@@ -31,11 +31,38 @@ def parse_value(val_str):
         pass
     return val_str
 
+import sys
+# Import dari modular utilities
+sys.path.append("/home/infra/dcim_metrics_project")
+from src.utils.rate_limiter import get_limiter
+from src.utils.kill_switch import PollerKillSwitch
+
+# Inisialisasi Kill Switch
+kill_switch = PollerKillSwitch("mikrotik_poller")
+
+# Rate limit configs per ADR-0023
+SNMP_LIMITS = {
+    "max_concurrent": 1,
+    "max_req_per_min": 10
+}
+
 def main():
     timestamp = int(time.time())
     
+    # Check kill switch
+    if kill_switch.is_killed():
+        sys.stderr.write(f"WARN: Kill switch engaged. Aborting mikrotik poll.\n")
+        return
+    
     for ip in IPS:
-        snmp_data = {}
+        # Acquire rate limit slot
+        limiter = get_limiter(ip, SNMP_LIMITS)
+        if not limiter.acquire(timeout_sec=5):
+            sys.stderr.write(f"WARN: Rate limit timeout for {ip}\n")
+            continue
+            
+        try:
+            snmp_data = {}
         for oid_prefix in OIDS:
             try:
                 # snmpwalk -Oqn outputs: .1.3.6... value
@@ -172,6 +199,9 @@ def main():
                     "timestamp": timestamp
                 }
                 print(json.dumps(st_metric))
+                
+        finally:
+            limiter.release()
 
 if __name__ == "__main__":
     main()

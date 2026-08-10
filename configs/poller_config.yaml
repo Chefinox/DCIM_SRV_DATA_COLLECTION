@@ -1,0 +1,18 @@
+# Master configuration for polling control
+pollers:
+  redfish_poller:
+    enabled: true
+  redfish_telemetry_poller:
+    enabled: true
+  mikrotik_poller:
+    enabled: true
+  snmp_ups_poller:
+    enabled: true
+  nas_poller:
+    enabled: true
+  hikvision_poller_daemon:
+    enabled: true
+  cctv_poller:
+    enabled: true
+  ipmi_poller:
+    enabled: true

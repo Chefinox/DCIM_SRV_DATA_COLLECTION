@@ -83,33 +83,62 @@ def get_snmp_value(ip, oid):
         sys.stderr.write(f"Error polling {oid}: {e}\\n")
     return None
 
+import sys
+# Import dari modular utilities
+sys.path.append("/home/infra/dcim_metrics_project")
+from src.utils.rate_limiter import get_limiter
+from src.utils.kill_switch import PollerKillSwitch
+
+# Inisialisasi Kill Switch
+kill_switch = PollerKillSwitch("snmp_ups_poller")
+
+# Rate limit configs per ADR-0023
+SNMP_LIMITS = {
+    "max_concurrent": 1,
+    "max_req_per_min": 10
+}
+
 def main():
     timestamp = int(time.time())
     
-    tags = {
-        "device_type": "ups",
-        "location": "Server Room",
-        "agent_host": UPS_IP
-    }
-    
-    fields = {}
-    
-    for name, oid in OIDS.items():
-        val = get_snmp_value(UPS_IP, oid)
-        if val is not None:
-            if name in TAG_FIELDS:
-                tags[name] = str(val)
-            else:
-                fields[name] = val
-                
-    if fields:
-        metric = {
-            "name": "ups_apc",
-            "tags": tags,
-            "fields": fields,
-            "timestamp": timestamp
+    # Check kill switch
+    if kill_switch.is_killed():
+        sys.stderr.write(f"WARN: Kill switch engaged. Aborting UPS poll.\n")
+        return
+        
+    # Acquire rate limit slot
+    limiter = get_limiter(UPS_IP, SNMP_LIMITS)
+    if not limiter.acquire(timeout_sec=5):
+        sys.stderr.write(f"WARN: Rate limit timeout for {UPS_IP}\n")
+        return
+        
+    try:
+        tags = {
+            "device_type": "ups",
+            "location": "Server Room",
+            "agent_host": UPS_IP
         }
-        print(json.dumps(metric))
+        
+        fields = {}
+        
+        for name, oid in OIDS.items():
+            val = get_snmp_value(UPS_IP, oid)
+            if val is not None:
+                if name in TAG_FIELDS:
+                    tags[name] = str(val)
+                else:
+                    fields[name] = val
+                    
+        if fields:
+            metric = {
+                "name": "ups_apc",
+                "tags": tags,
+                "fields": fields,
+                "timestamp": timestamp
+            }
+            print(json.dumps(metric))
+    finally:
+        limiter.release()
 
 if __name__ == "__main__":
     main()
