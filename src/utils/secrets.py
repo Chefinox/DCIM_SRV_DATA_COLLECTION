@@ -4,7 +4,7 @@ import hvac
 def get_secret(name: str, fallback_env: str = None) -> str:
     """Read secret from HashiCorp Vault, fallback to env var."""
     
-    vault_addr = os.environ.get('VAULT_ADDR', 'http://127.0.0.1:8200')
+    vault_addr = os.environ.get('VAULT_ADDR', 'http://10.70.0.56:8200')
     role_id_path = os.environ.get('VAULT_ROLE_ID_PATH', '/home/infra/dcim_metrics_project/vault/config/role_id')
     secret_id_path = os.environ.get('VAULT_SECRET_ID_PATH', '/home/infra/dcim_metrics_project/vault/config/secret_id')
     
