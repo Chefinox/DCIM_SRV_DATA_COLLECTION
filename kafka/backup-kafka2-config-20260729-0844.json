@@ -1,0 +1,313 @@
+[
+    {
+        "Id": "11de92fd755729d358718eac5008129e6f9e747e5c9494ce2b336a9d2dead447",
+        "Created": "2026-07-20T23:14:51.097746324Z",
+        "Path": "/__cacert_entrypoint.sh",
+        "Args": [
+            "/etc/kafka/docker/run"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 2307225,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-07-21T09:50:29.45589086Z",
+            "FinishedAt": "2026-07-21T09:50:23.358357937Z"
+        },
+        "Image": "sha256:41c20d65b0a2180b9deca056d47540771752e69fe9225d5748dd65a25a9675d7",
+        "ResolvConfPath": "/var/lib/docker/containers/11de92fd755729d358718eac5008129e6f9e747e5c9494ce2b336a9d2dead447/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/11de92fd755729d358718eac5008129e6f9e747e5c9494ce2b336a9d2dead447/hostname",
+        "HostsPath": "/var/lib/docker/containers/11de92fd755729d358718eac5008129e6f9e747e5c9494ce2b336a9d2dead447/hosts",
+        "LogPath": "/var/lib/docker/containers/11de92fd755729d358718eac5008129e6f9e747e5c9494ce2b336a9d2dead447/11de92fd755729d358718eac5008129e6f9e747e5c9494ce2b336a9d2dead447-json.log",
+        "Name": "/kafka2",
+        "RestartCount": 0,
+        "Driver": "overlayfs",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "docker-default",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "/home/infra/dcim_metrics_project/kafka/certs:/etc/kafka/secrets:rw"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "kafka_default",
+            "PortBindings": {
+                "9095/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "9095"
+                    }
+                ],
+                "9096/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "9096"
+                    }
+                ]
+            },
+            "RestartPolicy": {
+                "Name": "no",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "Storage": {
+            "RootFS": {
+                "Snapshot": {
+                    "Name": "overlayfs"
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "bind",
+                "Source": "/home/infra/dcim_metrics_project/kafka/certs",
+                "Destination": "/etc/kafka/secrets",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": "rprivate"
+            },
+            {
+                "Type": "volume",
+                "Name": "56727c2614f369bbdcbf98bc13f27272a6e350dc67b3dd2bc5846a8ffcaab2ca",
+                "Source": "/var/lib/docker/volumes/56727c2614f369bbdcbf98bc13f27272a6e350dc67b3dd2bc5846a8ffcaab2ca/_data",
+                "Destination": "/mnt/shared/config",
+                "Driver": "local",
+                "Mode": "",
+                "RW": true,
+                "Propagation": ""
+            },
+            {
+                "Type": "volume",
+                "Name": "e0e1cdf2c7008d65558c31457c8fd290784446ce59cc700757c046aca0e51362",
+                "Source": "/var/lib/docker/volumes/e0e1cdf2c7008d65558c31457c8fd290784446ce59cc700757c046aca0e51362/_data",
+                "Destination": "/var/lib/kafka/data",
+                "Driver": "local",
+                "Mode": "",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "11de92fd7557",
+            "Domainname": "",
+            "User": "appuser",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "9092/tcp": {},
+                "9095/tcp": {},
+                "9096/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3",
+                "KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3",
+                "KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL",
+                "KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9095,SSL://localhost:9096,INTERNAL://kafka2:29092",
+                "KAFKA_SSL_KEY_CREDENTIALS=kafka_cred",
+                "KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2",
+                "KAFKA_SSL_TRUSTSTORE_FILENAME=kafka.server.truststore.jks",
+                "KAFKA_DEFAULT_REPLICATION_FACTOR=3",
+                "KAFKA_SSL_KEYSTORE_FILENAME=kafka.server.keystore.jks",
+                "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SSL:SSL,INTERNAL:PLAINTEXT",
+                "KAFKA_SSL_KEYSTORE_CREDENTIALS=kafka_cred",
+                "KAFKA_SSL_TRUSTSTORE_CREDENTIALS=kafka_cred",
+                "KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka1:9093,2@kafka2:9093,3@kafka3:9093",
+                "KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER",
+                "KAFKA_NODE_ID=2",
+                "KAFKA_PROCESS_ROLES=broker,controller",
+                "KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9095,SSL://0.0.0.0:9096,CONTROLLER://0.0.0.0:9093,INTERNAL://0.0.0.0:29092",
+                "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "JAVA_HOME=/opt/java/openjdk",
+                "LANG=en_US.UTF-8",
+                "LANGUAGE=en_US:en",
+                "LC_ALL=en_US.UTF-8",
+                "JAVA_VERSION=jdk-21.0.2+13"
+            ],
+            "Cmd": [
+                "/etc/kafka/docker/run"
+            ],
+            "Image": "apache/kafka:3.7.0",
+            "Volumes": {
+                "/etc/kafka/secrets": {},
+                "/mnt/shared/config": {},
+                "/var/lib/kafka/data": {}
+            },
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/__cacert_entrypoint.sh"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "b8a57b3e4931f41196f49d2a99f5873eadc5fdb0f3dee1944f466bd94a764051",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "",
+                "com.docker.compose.image": "sha256:41c20d65b0a2180b9deca056d47540771752e69fe9225d5748dd65a25a9675d7",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "kafka",
+                "com.docker.compose.project.config_files": "/home/infra/dcim_metrics_project/kafka/docker-compose-cluster.yml",
+                "com.docker.compose.project.working_dir": "/home/infra/dcim_metrics_project/kafka",
+                "com.docker.compose.service": "kafka2",
+                "com.docker.compose.version": "5.1.4",
+                "maintainer": "Apache Kafka",
+                "org.label-schema.build-date": "2024-02-09",
+                "org.label-schema.description": "Apache Kafka",
+                "org.label-schema.name": "kafka",
+                "org.label-schema.vcs-url": "https://github.com/apache/kafka"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "375b2d2a8739cd9348cde9f8531ed30027f7a64201d3453b8fdcb00bfc6cdfc2",
+            "SandboxKey": "/var/run/docker/netns/375b2d2a8739",
+            "Ports": {
+                "9092/tcp": null,
+                "9095/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "9095"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "9095"
+                    }
+                ],
+                "9096/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "9096"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "9096"
+                    }
+                ]
+            },
+            "Networks": {
+                "kafka_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "kafka2",
+                        "kafka2"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "3523bbd1f4841039216b99417c10c02dea0d23f37b76fca74d6ad4cdb1a76612",
+                    "EndpointID": "7b750ee2748d957e7a803f42005f5a2f91c003bacef1e9fa4f555433e125a96e",
+                    "Gateway": "172.19.0.1",
+                    "IPAddress": "172.19.0.3",
+                    "MacAddress": "da:37:62:98:a4:a3",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "kafka2",
+                        "11de92fd7557"
+                    ]
+                }
+            }
+        },
+        "ImageManifestDescriptor": {
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": "sha256:3e324d2bd331570676436b24f625e5dcf1facdfbd62efcffabc6b69b1abc13cc",
+            "size": 2200,
+            "platform": {
+                "architecture": "amd64",
+                "os": "linux"
+            }
+        }
+    }
+]

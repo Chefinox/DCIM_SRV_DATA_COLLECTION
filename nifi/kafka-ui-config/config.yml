@@ -1,0 +1,33 @@
+kafka:
+  clusters:
+    - name: DCIM-Production
+      bootstrapServers: 10.70.0.56:9092
+      schemaRegistry: http://10.70.0.56:8081
+
+auth:
+  type: OAUTH2
+
+  oauth2:
+    client:
+      authentik:
+        provider: authentik
+        clientId: kafka
+        clientSecret: JyMi9wqrjHQr1qEBFG7sEV1Nym9lBWLMtplUnxA7mfxnSl9x8mkZfTGYrQFSKYNrmhhin2OdyBi5kyjTXwvaO2UzyKVQabVfsxfDUq4vidWR3TsAo2H4SwpGcDvDenN5
+
+        client-name: Authentik
+
+        scope:
+          - openid
+          - profile
+          - email
+
+        issuer-uri: http://10.70.0.61:9000/application/o/kafka/
+
+        authorization-grant-type: authorization_code
+
+        redirect-uri: http://10.70.0.56:9000/login/oauth2/code/authentik
+
+        user-name-attribute: preferred_username
+
+        custom-params:
+          type: oauth
