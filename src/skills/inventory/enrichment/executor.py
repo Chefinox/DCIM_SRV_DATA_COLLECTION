@@ -5,6 +5,7 @@ import logging
 import psycopg2
 import sys
 import os
+import time
 
 # Menyesuaikan path agar bisa mengimport tools modular
 sys.path.append("/home/infra/dcim_metrics_project")
@@ -12,6 +13,7 @@ sys.path.append("/home/infra/dcim_metrics_project")
 # Import dari struktur modular yang baru
 from src.configs.database import get_db_config
 from src.schemas.transformers.asset_metadata import extract_metadata
+from src.observability.metrics import dii_events_enriched_total, dii_enrichment_latency_seconds
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,11 +54,21 @@ def determine_enrichment_status(serial_number: str, data: dict) -> str:
 
 @app.get("/enrich/{identifier}")
 def get_enrichment(identifier: str):
+    start_time = time.time()
+    
+    def _record_metrics(status):
+        try:
+            dii_enrichment_latency_seconds.observe(time.time() - start_time)
+            dii_events_enriched_total.labels(status=status).inc()
+        except Exception:
+            pass
+
     ident_clean = identifier.strip()
     ident_upper = ident_clean.upper()
     is_no_id = ident_upper in ("NO_IDENTIFIER", "NO_SN", "UNKNOWN", "")
     if is_no_id:
         redis_client.sadd("assets:no_identifier", ident_clean)
+        _record_metrics("NO_IDENTIFIER")
         return {
             "site": None,
             "rack_name": None,
@@ -92,6 +104,7 @@ def get_enrichment(identifier: str):
     if not data:
         logger.warning(f"Cache miss for SN: {ident_clean} — returning empty enrichment")
         redis_client.sadd("unknown_assets", ident_clean.lower())
+        _record_metrics("NOT_IN_CMDB")
         return {
             "sn": ident_clean,
             "enriched": False,
@@ -102,6 +115,7 @@ def get_enrichment(identifier: str):
         }
 
     status = determine_enrichment_status(ident_clean, data)
+    _record_metrics(status)
     if data:
         data["enrichment_status"] = status
         data["enrichment_match_method"] = method

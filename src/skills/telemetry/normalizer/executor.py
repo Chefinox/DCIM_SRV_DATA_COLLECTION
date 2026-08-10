@@ -10,10 +10,19 @@ from confluent_kafka.schema_registry.avro import AvroSerializer
 from confluent_kafka.serialization import SerializationContext, MessageField
 from src.schemas.avro_schemas import NORMALIZED_EVENT_SCHEMA
 from src.utils.lineage import track_lineage
+from src.observability.metrics import dii_events_ingested_total, dii_events_validated_total, dii_validation_rejected_total, dii_validation_latency_seconds
 import time
+
+# Validation Engine
+from src.validation.config import load_validation_config
+from src.validation.engine import ValidationEngine
 
 # Lokasi config tetap merujuk ke folder config utama
 CONFIG_PATH = "/home/infra/dcim_metrics_project/configs/metric_mapping.json"
+
+# Inisialisasi Validation Engine (dry_run=True sementara untuk safety)
+val_config = load_validation_config()
+validation_engine = ValidationEngine(val_config, dry_run=True)
 
 def load_config():
     if os.path.exists(CONFIG_PATH):
@@ -69,6 +78,12 @@ def resolve_metrics(raw_message):
     return results
 
 def process_message(raw_message, source_topic):
+    # Metrics
+    try:
+        dii_events_ingested_total.labels(source_topic=source_topic).inc()
+    except Exception:
+        pass
+        
     device_type = resolve_device_type(raw_message, source_topic)
     tags = raw_message.get("tags", {})
     fields = raw_message.get("fields", {})
@@ -119,6 +134,42 @@ def process_message(raw_message, source_topic):
     if primary_name == "general_metric":
         if primary_value is None or str(primary_value).strip() == "" or str(primary_value).strip().lower() in ("null", "none", "nan"):
             return None
+
+    # Perform Formal Validation
+    val_start_time = time.time()
+    val_event = {
+        "metric_name": primary_name,
+        "metric_value": primary_value,
+        "source_topic": source_topic,
+        "event_time": raw_message.get("timestamp"),
+        "hostname": hostname,
+        "serial_number": serial_number,
+        "raw_fields": fields
+    }
+    
+    val_result = validation_engine.validate(val_event)
+    
+    try:
+        dii_validation_latency_seconds.observe(time.time() - val_start_time)
+        dii_events_validated_total.labels(status=val_result.status).inc()
+    except Exception:
+        pass
+        
+    if val_result.status != "accepted":
+        # Event is quarantined or duplicate
+        for reason in val_result.failed_rules:
+            try:
+                # Extract main reason (e.g. value_out_of_range from value_out_of_range: 150 < 0)
+                main_reason = reason.split(":")[0] if ":" in reason else reason
+                dii_validation_rejected_total.labels(reason=main_reason).inc()
+            except Exception:
+                pass
+                
+        # Fast exit before building Avro payload
+        error_msg = ",".join(val_result.failed_rules)
+        # Note: in real production we would serialize and push to DLQ topic here
+        # For now, we rely on the normalizer's error handling block to push to DLQ
+        raise ValueError(f"Validation failed ({val_result.status}): {error_msg}")
 
     if device_type in ("cctv", "nvr"):
         tag_model = tags.get("model")
