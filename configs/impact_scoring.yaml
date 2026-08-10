@@ -1,0 +1,17 @@
+criticality_weights:
+  critical: 5
+  high: 4
+  medium: 3
+  low: 2
+  minimal: 1
+
+severity_weights:
+  critical: 5
+  error: 4
+  warning: 3
+  info: 1
+
+impact_thresholds:
+  P1: 15    # e.g., high criticality (4) * error severity (4) = 16 -> P1
+  P2: 6     # e.g., medium criticality (3) * warning severity (3) = 9 -> P2
+  P3: 1

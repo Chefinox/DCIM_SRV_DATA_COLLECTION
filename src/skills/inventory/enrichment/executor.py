@@ -14,6 +14,7 @@ sys.path.append("/home/infra/dcim_metrics_project")
 from src.configs.database import get_db_config
 from src.schemas.transformers.asset_metadata import extract_metadata
 from src.observability.metrics import dii_events_enriched_total, dii_enrichment_latency_seconds
+from src.scoring.impact import ImpactScorer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="DCIM Enrichment API (v3.4 Logic in v4.0 Structure)")
 
 DB_CONFIG = get_db_config()
+impact_scorer = ImpactScorer()
 
 # Connect to Redis
 try:
@@ -53,7 +55,7 @@ def determine_enrichment_status(serial_number: str, data: dict) -> str:
     return "FULL" if (has_site and has_rack and has_identity) else "PARTIAL"
 
 @app.get("/enrich/{identifier}")
-def get_enrichment(identifier: str):
+def get_enrichment(identifier: str, severity: str = "info"):
     start_time = time.time()
     
     def _record_metrics(status):
@@ -120,6 +122,15 @@ def get_enrichment(identifier: str):
         data["enrichment_status"] = status
         data["enrichment_match_method"] = method
         data["enrichment_match_confidence"] = confidence
+        
+        # Kalkulasi Impact Score
+        criticality = data.get("criticality", "low")
+        if not criticality:
+            criticality = "low"
+            
+        impact_result = impact_scorer.calculate(criticality, severity)
+        data.update(impact_result)
+        
         return data
     redis_client.sadd("unknown_assets", ident_clean.lower())
     return {

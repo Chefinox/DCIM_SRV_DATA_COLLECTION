@@ -11,6 +11,7 @@ from confluent_kafka.serialization import SerializationContext, MessageField
 from src.schemas.avro_schemas import NORMALIZED_EVENT_SCHEMA
 from src.utils.lineage import track_lineage
 from src.observability.metrics import dii_events_ingested_total, dii_events_validated_total, dii_validation_rejected_total, dii_validation_latency_seconds
+from src.scoring.data_quality import DataQualityScorecard
 import time
 
 # Validation Engine
@@ -23,6 +24,7 @@ CONFIG_PATH = "/home/infra/dcim_metrics_project/configs/metric_mapping.json"
 # Inisialisasi Validation Engine (dry_run=True sementara untuk safety)
 val_config = load_validation_config()
 validation_engine = ValidationEngine(val_config, dry_run=True)
+dq_scorecard = DataQualityScorecard()
 
 def load_config():
     if os.path.exists(CONFIG_PATH):
@@ -150,6 +152,9 @@ def process_message(raw_message, source_topic):
     val_result = validation_engine.validate(val_event)
     
     try:
+        dq_scorecard.record_validation_result(val_result)
+        dq_scorecard.export_metrics()
+        
         dii_validation_latency_seconds.observe(time.time() - val_start_time)
         dii_events_validated_total.labels(status=val_result.status).inc()
     except Exception:
