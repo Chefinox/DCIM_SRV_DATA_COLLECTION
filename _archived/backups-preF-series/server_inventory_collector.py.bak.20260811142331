@@ -34,11 +34,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # --- CONFIGURATION ---
 REDFISH_SERVERS = [
     {"ip": "10.50.0.2", "hostname": "SERVER-HCI-01"},
-    {"ip": "10.50.0.3", "hostname": "SERVER-HCI-02"},
+    {"ip": "10.50.0.3", "hostname": "SERVER-HCI-02"},``
     {"ip": "10.50.0.4", "hostname": "SERVER-HCI-03"},
     {"ip": "10.50.0.5", "hostname": "SERVER-RENDER-01"},
     {"ip": "10.50.0.6", "hostname": "SERVER-RENDER-02"},
-    {"ip": "192.168.100.152", "hostname": "SERVER-Dummy"}
+    {"ip": "192.168.100.182", "hostname": "SERVER-Dummy"}
 ]
 REDFISH_USER = "hndept"
 REDFISH_PASS = get_secret("redfish_pass")

@@ -40,16 +40,41 @@ SERVERS = [
     {"ip": "10.50.0.3", "host": "server-HCI-02",    "user": "hndept", "pass": REDFISH_PASS},
     {"ip": "10.50.0.4", "host": "server-HCI-03",    "user": "hndept", "pass": REDFISH_PASS},
     {"ip": "10.50.0.5", "host": "server-Render-01", "user": "hndept", "pass": REDFISH_PASS},
-    {"ip": "10.50.0.6", "host": "server-Render-02", "user": "hndept", "pass": REDFISH_PASS},
-    {"ip": "192.168.100.182", "host": "server-dummy", "user": "root",   "pass": REDFISH_PASS}
+    {"ip": "10.50.0.6", "host": "server-Render-02", "user": "hndept", "pass": REDFISH_PASS}
 ]
 
 TIMEOUT = 8  # seconds per HTTP request
 
+import sys
+# Import dari modular utilities
+sys.path.append("/home/infra/dcim_metrics_project")
+from src.utils.rate_limiter import get_limiter
+from src.utils.kill_switch import PollerKillSwitch
+
+# Inisialisasi Kill Switch
+kill_switch = PollerKillSwitch("redfish_poller")
+
+# Rate limit configs per ADR-0023
+REDFISH_LIMITS = {
+    "max_concurrent": 2,
+    "max_req_per_min": 10
+}
 
 def redfish_get(server, path):
     """GET a Redfish endpoint; returns parsed JSON or None."""
+    # Check kill switch before every request
+    if kill_switch.is_killed():
+        sys.stderr.write(f"WARN: Kill switch engaged. Aborting poll for {server['ip']}.\n")
+        return None
+        
     url = f"https://{server['ip']}/redfish/v1{path}"
+    
+    # Acquire rate limit slot
+    limiter = get_limiter(server['ip'], REDFISH_LIMITS)
+    if not limiter.acquire(timeout_sec=TIMEOUT):
+        sys.stderr.write(f"WARN: Rate limit timeout for {server['ip']}\n")
+        return None
+        
     try:
         resp = requests.get(
             url,
@@ -61,6 +86,9 @@ def redfish_get(server, path):
             return resp.json()
     except Exception as e:
         sys.stderr.write(f"WARN: {server['host']} {path}: {e}\n")
+    finally:
+        limiter.release()
+        
     return None
 
 
