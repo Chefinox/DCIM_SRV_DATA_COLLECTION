@@ -1,4 +1,7 @@
 rules:
+  global:
+    dry_run: true
+    
   range:
     enabled: true
     metrics:

@@ -2,7 +2,8 @@
 #
 # remove-redfish-poller-server.sh
 # Menghapus satu entry server (berdasarkan IP) dari list SERVERS
-# di dalam redfish_poller.py, lalu (opsional) copy hasilnya ke container.
+# di dalam redfish_poller.py, menyimpan snapshot entry sebelum dihapus
+# (untuk rollback), lalu (opsional) copy hasilnya ke container.
 #
 # Penggunaan:
 #   ./remove-redfish-poller-server.sh <IP>
@@ -13,6 +14,8 @@
 # Variabel yang bisa di-override lewat environment:
 #   TARGET_FILE       Path file redfish_poller.py di host
 #                      (default: /home/infra/dcim_metrics_project/scripts/redfish_poller.py)
+#   SNAPSHOT_DIR       Path folder snapshot untuk rollback
+#                      (default: /home/infra/dcim_metrics_project/rollback_snapshots)
 #   CONTAINER_NAME     Nama container docker (default: dcim-nifi)
 #   CONTAINER_PATH     Path file di dalam container
 #                      (default: /home/infra/dcim_metrics_project/scripts/redfish_poller.py)
@@ -23,6 +26,7 @@ set -euo pipefail
 
 # ---------- Konfigurasi default ----------
 TARGET_FILE="${TARGET_FILE:-/home/infra/dcim_metrics_project/scripts/redfish_poller.py}"
+SNAPSHOT_DIR="${SNAPSHOT_DIR:-/home/infra/dcim_metrics_project/rollback_snapshots}"
 CONTAINER_NAME="${CONTAINER_NAME:-dcim-nifi}"
 CONTAINER_PATH="${CONTAINER_PATH:-/home/infra/dcim_metrics_project/scripts/redfish_poller.py}"
 COPY_TO_CONTAINER="${COPY_TO_CONTAINER:-false}"
@@ -54,23 +58,27 @@ if ! grep -q "\"ip\": \"$TARGET_IP\"" "$TARGET_FILE"; then
     exit 1
 fi
 
-# ---------- Backup sebelum edit ----------
+mkdir -p "$SNAPSHOT_DIR"
+SNAPSHOT_FILE="$SNAPSHOT_DIR/redfish_poller_${TARGET_IP//./_}.json"
+
+# ---------- Backup file penuh (tetap dipertahankan, untuk audit) ----------
 BACKUP_FILE="${TARGET_FILE}.bak.$(date +%Y%m%d%H%M%S)"
 cp "$TARGET_FILE" "$BACKUP_FILE"
 echo "Backup dibuat: $BACKUP_FILE"
 
-# ---------- Hapus entry menggunakan Python (parsing aman) ----------
-python3 - "$TARGET_FILE" "$TARGET_IP" <<'PYEOF'
+# ---------- Simpan snapshot entry yang akan dihapus, lalu hapus ----------
+python3 - "$TARGET_FILE" "$TARGET_IP" "$SNAPSHOT_FILE" <<'PYEOF'
 import re
 import sys
+import json
 
 target_file = sys.argv[1]
 target_ip = sys.argv[2]
+snapshot_file = sys.argv[3]
 
 with open(target_file, "r", encoding="utf-8") as f:
     content = f.read()
 
-# Cari blok SERVERS = [ ... ]  (bukan REDFISH_SERVERS, dan bukan kata lain yang diakhiri "SERVERS")
 pattern = re.compile(r"(?<![A-Za-z_])(SERVERS\s*=\s*\[)(.*?)(\n\])", re.DOTALL)
 match = pattern.search(content)
 
@@ -80,20 +88,29 @@ if not match:
 
 header, body, footer = match.groups()
 
-# Pecah tiap entry dict {...} di dalam list
 entries = re.findall(r"\{[^{}]*\}", body)
 
 new_entries = []
-removed = False
+removed_entry_text = None
 for entry in entries:
     if f'"{target_ip}"' in entry:
-        removed = True
+        removed_entry_text = entry
         continue
     new_entries.append(entry)
 
-if not removed:
+if removed_entry_text is None:
     print(f"IP {target_ip} tidak ditemukan saat parsing entry.")
     sys.exit(1)
+
+# --- Simpan snapshot SEBELUM menulis file yang sudah diedit ---
+with open(snapshot_file, "w", encoding="utf-8") as f:
+    json.dump({
+        "target_ip": target_ip,
+        "target_file": target_file,
+        "list_name": "SERVERS",
+        "entry_text": removed_entry_text,
+    }, f, indent=2)
+print(f"Snapshot disimpan: {snapshot_file}")
 
 new_body = "\n    " + ",\n    ".join(new_entries) if new_entries else ""
 new_block = header + new_body + footer

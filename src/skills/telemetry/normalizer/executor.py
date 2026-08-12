@@ -21,9 +21,12 @@ from src.validation.engine import ValidationEngine
 # Lokasi config tetap merujuk ke folder config utama
 CONFIG_PATH = "/home/infra/dcim_metrics_project/configs/metric_mapping.json"
 
-# Inisialisasi Validation Engine (dry_run=True sementara untuk safety)
+# Inisialisasi Validation Engine (dry_run diatur via config yaml atau env var)
 val_config = load_validation_config()
-validation_engine = ValidationEngine(val_config, dry_run=True)
+is_dry_run = val_config.get("global", {}).get("dry_run", True)
+if os.environ.get("DII_VALIDATION_DRY_RUN"):
+    is_dry_run = os.environ.get("DII_VALIDATION_DRY_RUN").lower() == "true"
+validation_engine = ValidationEngine(val_config, dry_run=is_dry_run)
 dq_scorecard = DataQualityScorecard()
 
 def load_config():
@@ -399,9 +402,17 @@ def run():
                             print(f"Processed: {topic} -> {normalized['hostname']} [{normalized['device_type']}] {normalized['metric_name']}={normalized['metric_value']}")
                 except Exception as e:
                     print(f"Error processing message: {e}")
-                    # Kirim original payload ke DLQ parse-failure
+                    
+                    error_msg_str = str(e)
+                    dlq_target = "dcim.dlq.parse-failure"
+                    
+                    # If validation failed, route to validation DLQ specifically
+                    if "Validation failed" in error_msg_str:
+                        dlq_target = "dcim.dlq.validation-failure"
+                        
+                    # Kirim original payload ke DLQ
                     producer.produce(
-                        "dcim.dlq.parse-failure",
+                        dlq_target,
                         value=msg.value()
                     )
                     # Track lineage for DLQ
@@ -410,8 +421,8 @@ def run():
                         stage="normalized",
                         status="dlq",
                         source_topic=msg.topic(),
-                        target_topic="dcim.dlq.parse-failure",
-                        error_message=str(e)
+                        target_topic=dlq_target,
+                        error_message=error_msg_str
                     )
             
             # Poll after processing the batch

@@ -20,6 +20,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.skills.security.cctv_poller.executor import CCTVPollerExecutor
 from src.tools.messaging.kafka_client import KafkaClient
+from src.utils.rate_limiter import get_limiter
 
 # --- CONFIGURATION ---
 load_dotenv('/home/infra/dcim_metrics_project/configs/.env')
@@ -37,6 +38,12 @@ CCTV_IPS = [
     "192.168.1.27", "192.168.1.28", "192.168.1.29", "192.168.1.30", "192.168.1.31",
     "192.168.1.33"  # Total: 31 units (192.168.1.2-33, skip .32)
 ]
+
+HIKVISION_LIMITS = {
+    "max_concurrent": 1,
+    "max_req_per_min": 15
+}
+TIMEOUT_SEC = 5.0
 
 DEVICE_USER = os.getenv("HIKVISION_CAM_USER", "admin")
 DEVICE_PASS = os.getenv("HIKVISION_CAM_PASS", "F!tech0918")
@@ -125,6 +132,12 @@ def poll_once():
         offline_count = 0
         
         for ip in CCTV_IPS:
+            limiter = get_limiter(ip, HIKVISION_LIMITS)
+            if not limiter.acquire(timeout_sec=TIMEOUT_SEC):
+                logger.warning(f"Rate limit timeout for IP {ip}")
+                offline_count += 1
+                continue
+                
             cam_metrics = executor.poll_device(ip, DEVICE_USER, DEVICE_PASS, "CCTV")
             
             # Fallback to NVR mapping if device is offline, unauthorized, or placeholder
