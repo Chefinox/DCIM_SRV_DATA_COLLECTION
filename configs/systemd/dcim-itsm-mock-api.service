@@ -1,0 +1,14 @@
+[Unit]
+Description=DCIM ITSM Mock API (Fixture Adapter) for ServiceNow/Jira Readiness
+After=network.target
+
+[Service]
+Type=simple
+User=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+ExecStart=/opt/dcim-python3.12-env/bin/python /home/infra/dcim_metrics_project/src/connectors/itsm/itsm_fixture_api.py
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
