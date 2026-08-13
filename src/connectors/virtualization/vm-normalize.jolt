@@ -1,0 +1,28 @@
+[
+  {
+    "operation": "shift",
+    "spec": {
+      "data": {
+        "*": {
+          "id": "event_id",
+          "name": "hostname",
+          "status": "metrics.status",
+          "cpu": "metrics.cpu_usage",
+          "mem": "metrics.memory_usage",
+          "maxmem": "metrics.memory_total",
+          "disk": "metrics.disk_usage",
+          "maxdisk": "metrics.disk_total",
+          "uptime": "metrics.uptime"
+        }
+      }
+    }
+  },
+  {
+    "operation": "default",
+    "spec": {
+      "source_system": "proxmox-mock-api",
+      "resource_type": "virtualization",
+      "event_type": "telemetry"
+    }
+  }
+]

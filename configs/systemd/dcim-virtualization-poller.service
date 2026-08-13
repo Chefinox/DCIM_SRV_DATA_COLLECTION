@@ -1,0 +1,9 @@
+[Unit]
+Description=DCIM Virtualization Poller (Proxmox via Mock API)
+After=network.target dcim-proxmox-mock-api.service
+
+[Service]
+Type=oneshot
+User=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+ExecStart=/opt/dcim-python3.12-env/bin/python /home/infra/dcim_metrics_project/scripts/virtualization_poller.py

@@ -1,0 +1,14 @@
+[Unit]
+Description=DCIM Proxmox Mock API (Fixture Adapter) for Readiness
+After=network.target
+
+[Service]
+Type=simple
+User=infra
+WorkingDirectory=/home/infra/dcim_metrics_project
+ExecStart=/opt/dcim-python3.12-env/bin/python /home/infra/dcim_metrics_project/src/connectors/virtualization/proxmox_fixture_adapter.py
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
