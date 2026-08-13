@@ -463,5 +463,5 @@ ST-380	Implementasi Fase 2B: Poller Kill Switch (3-tier)	MT-014	Waiting	Low	Imam
 ST-381	Implementasi Fase 3A: Impact Scoring Engine	MT-014	Waiting	Low	Imam Syauqi Achmad			Kalkulasi impact score = criticality_weight × severity_weight.
 ST-382	Implementasi Fase 3B: Data Quality Scorecard (6-Dimensi)	MT-014	Waiting	Low	Imam Syauqi Achmad			Kalkulasi dan export 6-dimensi data quality score ke Prometheus.
 ST-383	Implementasi Fase 4A: Workflow Engine Stub Dokumentasi	MT-014	Waiting	Low	Imam Syauqi Achmad			Mendokumentasikan Workflow engine (Temporal/n8n) sebagai desain target.
-ST-384	Pengerjaan Dokumentasi dan Unit Test	MT-014	Waiting	Low	Imam Syauqi Achmad			Menyelesaikan penulisan testing script dan dokumentasi yang relevan untuk implementasi gap closure ini.
+ST-384	Pengerjaan Dokumentasi dan Unit Test	MT-014	Done	Low	Imam Syauqi Achmad			Menyelesaikan penulisan testing script dan dokumentasi yang relevan untuk implementasi gap closure ini.
 
