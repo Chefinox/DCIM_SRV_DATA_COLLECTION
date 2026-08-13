@@ -6,6 +6,9 @@
 
 Berdasarkan komparasi v4.7.0 dan dokumen referensi Block 2 DCIM-Wiki, berikut adalah rencana implementasi komprehensif untuk gap fungsional yang tersisa. Rencana ini sudah dipetakan dengan sub-tasks ST-391 hingga ST-394.
 
+> **PENGUMUMAN PENTING (PIPELINE READINESS):** 
+> Implementasi untuk Virtualisasi (ST-391) dan ITSM (ST-392) saat ini dibangun menggunakan pendekatan **Synthetic Fixture-Replay Adapters (Mock API)**. Tujuannya adalah untuk membuktikan **kesiapan arsitektur (Pipeline Readiness)** dan memastikan *end-to-end pipeline* tetap sehat tanpa terpengaruh oleh ketiadaan akses ke server fisik. Teknisi selanjutnya hanya perlu mengganti URL Endpoint dari Mock API ke server Proxmox/Jira asli saat konektivitas jaringan sudah siap.
+
 ---
 
 ## 1. ST-391: Virtualization/Cloud Collector (VMware/Proxmox Ingestion Flow)
@@ -13,19 +16,19 @@ Berdasarkan komparasi v4.7.0 dan dokumen referensi Block 2 DCIM-Wiki, berikut ad
 **Status:** Waiting
 
 ### Deskripsi:
-Implementasi NiFi flow dan collector untuk data Virtualization / Cloud (VMware vSphere & Proxmox) sesuai spesifikasi Block 2 DCIM-Wiki (Section 4.5).
+Implementasi NiFi flow dan collector untuk data Virtualization / Cloud (VMware vSphere & Proxmox) menggunakan **Mock API / Fixture** untuk readiness.
 
 ### Rincian Pengerjaan:
-1. **Setup Process Group di NiFi:** Buat Process Group khusus untuk `Virtualization Ingestion`.
-2. **Implementasi Proxmox VE API / vCenter REST API Polling:**
-   - Gunakan processor `InvokeHTTP` untuk mengambil metrik dari hypervisor.
-   - Konfigurasi parameter autentikasi (menggunakan kredensial yang diambil dari HashiCorp Vault melalui `src/utils/secrets.py`).
-3. **Data Normalization:**
+1. **Pembuatan Mock API (Fixture):** Buat script Python lokal untuk mensimulasikan respon Proxmox VE API.
+2. **Setup Process Group di NiFi:** Buat Process Group khusus untuk `Virtualization Ingestion`.
+3. **Implementasi API Polling:**
+   - Gunakan processor `InvokeHTTP` diarahkan ke Mock API lokal.
+   - Konfigurasi parameter autentikasi (menggunakan kredensial dari HashiCorp Vault sebagai simulasi).
+4. **Data Normalization:**
    - Tambahkan processor `JoltTransformJSON` dengan spesifikasi `vm-normalize.jolt`.
-   - Pastikan field hasil normalisasi memuat `hostname`, `metrics`, `timestamp`, `resource_type: virtualization`, dll.
-4. **Validation & Kafka Publishing:**
-   - Tambahkan processor `ValidateRecord` dan konfigurasikan Avro schema `event-schema.avsc` (menggunakan Confluent Schema Registry).
-   - Tambahkan processor `PublishKafka_2_0` untuk publish ke topic `dcim.events.raw` dengan min.insync.replicas=2.
+5. **Validation & Kafka Publishing:**
+   - Tambahkan processor `ValidateRecord` dan konfigurasikan Avro schema `event-schema.avsc`.
+   - Publish ke topic `dcim.events.raw`.
 
 ---
 
@@ -34,43 +37,23 @@ Implementasi NiFi flow dan collector untuk data Virtualization / Cloud (VMware v
 **Status:** Waiting
 
 ### Deskripsi:
-Implementasi konektor REST API OAuth2/API Key bidirectional untuk ServiceNow dan Jira sebagai bagian integrasi ITSM (Block 2 DCIM-Wiki Section 9).
+Implementasi konektor REST API bidirectional untuk ServiceNow dan Jira menggunakan **Mock API / Fixture** untuk readiness.
 
 ### Rincian Pengerjaan:
-1. **ServiceNow Integration (`src/connectors/itsm/servicenow.py`):**
-   - Implementasi `ServiceNowConnector` menggunakan protokol REST API + OAuth2.
-   - Fungsi `transform_to_dcim()`: Ubah ServiceNow incident menjadi DCIM event (untuk status tracking).
-   - Fungsi `create_ticket()`: Petakan DCIM alert event (criticality/severity yang telah di-score) menjadi ServiceNow Incident.
-2. **Jira Integration (`src/connectors/itsm/jira.py`):**
-   - Implementasi `JiraConnector` menggunakan protokol REST API + API Key.
-   - Mapping alert events menjadi Jira Issues untuk tim Facilities atau IT Operations.
-3. **Konfigurasi Autentikasi:**
-   - Tambahkan token OAuth2 dan API Key ke dalam HashiCorp Vault.
-   - Update config loader untuk pull secret ITSM.
-4. **Integrasi ke Enrichment Flow:**
-   - Panggil konektor secara asynchronous / via Kafka event topic saat alert rules Prometheus (atau Block 7) melepaskan notifikasi yang memenuhi threshold insiden.
+1. **Pembuatan Mock API (Fixture):** Buat Mock server untuk merespon request pembuatan tiket Jira/ServiceNow.
+2. **ServiceNow & Jira Integration Script:**
+   - Implementasi `ServiceNowConnector` dan `JiraConnector`.
+   - Event mappings untuk create Incident / Issue.
+3. **Konfigurasi Autentikasi:** Simulasi penarikan token OAuth2/API Key dari HashiCorp Vault.
 
 ---
 
 ## 3. ST-393: S3/MinIO Cold Storage Archiving Pipeline
 **Terkait MT-014 (Data Ingestion Pipelines)**  
-**Status:** Waiting
+**Status:** On-Hold (Ditunda)
 
 ### Deskripsi:
-Implementasi NiFi flow `PutS3Object` untuk pengarsipan pesan Dead Letter Queue (DLQ) dan retention jangka panjang data telemetri ke S3/MinIO.
-
-### Rincian Pengerjaan:
-1. **Persiapan S3/MinIO Object Storage:**
-   - Setup MinIO bucket lokal (untuk dev/staging) atau integrasi ke mock AWS S3.
-   - Bucket target: `dcim-dlq-archive` dan `dcim-telemetry-archive`.
-   - Update credential S3 di HashiCorp Vault.
-2. **DLQ Archiving Flow (NiFi):**
-   - Buat routing tambahan di akhir rute DLQ saat ini (`delivery-failure`, `enrichment-failure`, `parse-failure`).
-   - Gunakan processor `MergeContent` (batching pesan yang gagal) dilanjutkan dengan `PutS3Object` (bucket `dcim-dlq-archive`).
-3. **Telemetry Long-term Retention:**
-   - Buat consumer group baru di Kafka: `dcim_s3_archive_consumer`.
-   - Subscribe ke topic `dcim.events.raw` dan `dcim.enriched.events`.
-   - Batching message setiap jam / setiap 1GB (sesuai SLA wiki) lalu lempar ke bucket `dcim-telemetry-archive`.
+**DITUNDA**: Kebutuhan ini ditunda terlebih dahulu mengingat arsitektur perusahaan saat ini belum membutuhkan dan belum memiliki infrastruktur cloud services (AWS S3) maupun kebutuhan mendesak untuk MinIO Cold Storage.
 
 ---
 
@@ -79,19 +62,10 @@ Implementasi NiFi flow `PutS3Object` untuk pengarsipan pesan Dead Letter Queue (
 **Status:** Waiting
 
 ### Deskripsi:
-Pengujian end-to-end pipeline (target 430 eps sustained, latency p99 < 1s) dan verifikasi seluruh acceptance criteria untuk menyatakan Block 2 dari DCIM-Wiki berstatus DONE 100%.
+Pengujian end-to-end pipeline untuk memverifikasi kesehatan data pipeline dari hulu (termasuk mock api) hingga hilir (Elasticsearch / DB).
 
 ### Rincian Pengerjaan:
-1. **Load Generation & Stress Testing:**
-   - Gunakan synthetic metric generator atau Locust/JMeter untuk memborbardir telemetry ingestion endpoints / Kafka topics.
-   - Sustain traffic di 430+ events per second (eps) selama 1 jam.
-2. **Verifikasi Latency (p99 < 1s):**
-   - Gunakan Grafana monitoring dashboard yang telah ada.
-   - Pastikan processing delay di NiFi dan Normalization script (end-to-end dari `raw` hingga Elasticsearch/TimescaleDB) tidak lebih dari 1 detik di persentil 99 (p99).
-3. **Verifikasi Quality Gates:**
-   - Validasi bahwa payload yang disengaja cacat (missing fields, wrong schema) tertolak dan masuk ke `dcim-dlq-archive`.
-   - Validasi bahwa deduplication checker (Redis) berfungsi maksimal saat load tinggi.
-4. **Final Checklist & Sign-off:**
-   - Cek semua item pada Section 15 (Acceptance Criteria) dari `block2-data-ingestion-integration.md`.
-   - Jika pass, tutup MT-014 dan MT-040 untuk komponen Block 2.
+1. **Load Generation & Stress Testing:** Sustain traffic metrics untuk tes stabilitas.
+2. **Verifikasi Latency (p99 < 1s):** Pastikan processing delay di NiFi dan Normalization script aman.
+3. **Verifikasi Quality Gates:** Validasi bahwa payload yang cacat masuk ke DLQ tanpa merusak pipeline utama.
 
