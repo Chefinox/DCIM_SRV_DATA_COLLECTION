@@ -1,24 +1,11 @@
 import yaml
 import os
 
-CONFIG_PATH = os.environ.get("VALIDATION_CONFIG_PATH", "/home/infra/dcim_metrics_project/configs/validation_rules.yaml")
-
-def load_validation_config():
-    """Load validation rules configuration."""
-    if not os.path.exists(CONFIG_PATH):
-        # Default safe configuration
-        return {
-            "range": {"enabled": False},
-            "format": {"enabled": False},
-            "freshness": {"enabled": False},
-            "source_allowlist": {"enabled": False},
-            "deduplication": {"enabled": False}
-        }
-        
-    try:
-        with open(CONFIG_PATH, 'r') as f:
-            config = yaml.safe_load(f)
-            return config.get("rules", {})
-    except Exception as e:
-        print(f"Error loading validation config: {e}")
+def load_config(config_path: str) -> dict:
+    if not os.path.exists(config_path):
         return {}
+    with open(config_path, 'r') as f:
+        try:
+            return yaml.safe_load(f) or {}
+        except Exception:
+            return {}

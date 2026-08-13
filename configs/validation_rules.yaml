@@ -1,59 +1,15 @@
-rules:
-  global:
-    dry_run: true
-    
-  range:
-    enabled: true
-    metrics:
-      cpu_usage_percent:
-        min: 0
-        max: 100
-      temperature_celsius:
-        min: -40
-        max: 150
-      memory_usage_percent:
-        min: 0
-        max: 100
-      disk_usage_percent:
-        min: 0
-        max: 100
-      input_voltage:
-        min: 0
-        max: 500
-      output_load_percent:
-        min: 0
-        max: 100
-      battery_capacity_percent:
-        min: 0
-        max: 100
+ranges:
+  temperature:
+    min: 0.0
+    max: 100.0
+  cpu_usage:
+    min: 0.0
+    max: 100.0
+  memory_usage:
+    min: 0.0
+    max: 100.0
 
-  format:
-    enabled: true
-    fields:
-      ip_address:
-        pattern: "^(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$"
-      mac_address:
-        pattern: "^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$"
-      uuid:
-        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+freshness:
+  max_age_seconds: 300
 
-  freshness:
-    enabled: true
-    max_staleness_seconds: 300  # 5 minutes
-
-  source_allowlist:
-    enabled: true
-    allowed_topics:
-      - "dcim.raw.hardware.server"
-      - "dcim.raw.network.switch"
-      - "dcim.raw.power.ups"
-      - "dcim.raw.storage.nas"
-      - "dcim.raw.cctv"
-      - "dcim.raw.device.isapi"
-
-  deduplication:
-    enabled: true
-    window_seconds: 60
-    redis_host: "localhost"
-    redis_port: 6379
-    redis_db: 1
+allowlist: []
