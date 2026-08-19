@@ -85,7 +85,7 @@ def get_snmp_value(ip, oid):
 
 import sys
 # Import dari modular utilities
-sys.path.append("/home/infra/dcim_metrics_project")
+sys.path.append("/opt/nifi/nifi-current")
 from src.utils.rate_limiter import get_limiter
 from src.utils.kill_switch import PollerKillSwitch
 

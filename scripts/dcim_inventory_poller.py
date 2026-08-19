@@ -1,3 +1,5 @@
+import sys
+sys.path.append("/opt/nifi/nifi-current")
 #!/usr/bin/env python3
 """
 DCIM Unified Inventory Poller
@@ -28,7 +30,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from dotenv import load_dotenv
 import os
 
-load_dotenv('/home/infra/dcim_metrics_project/configs/.env')
+load_dotenv('/opt/nifi/nifi-current/configs/.env')
 
 # ============================================================
 # CREDENTIAL & DEVICE CONFIGURATION

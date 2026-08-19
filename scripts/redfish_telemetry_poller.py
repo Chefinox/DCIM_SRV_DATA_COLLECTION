@@ -1,3 +1,5 @@
+import sys
+sys.path.append("/opt/nifi/nifi-current")
 #!/usr/bin/env python3
 import requests
 import urllib3

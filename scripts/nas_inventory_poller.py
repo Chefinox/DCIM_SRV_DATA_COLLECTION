@@ -16,8 +16,8 @@ Version : 1.0.0
 import json
 import logging
 import sys
-if "/home/infra/dcim_metrics_project" not in sys.path:
-    sys.path.append("/home/infra/dcim_metrics_project")
+if "/opt/nifi/nifi-current" not in sys.path:
+    sys.path.append("/opt/nifi/nifi-current")
 from src.observability.logging.dcim_logger import setup_logger
 import sys
 import urllib.request
@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 import os
 
-load_dotenv('/home/infra/dcim_metrics_project/configs/.env')
+load_dotenv('/opt/nifi/nifi-current/configs/.env')
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 NAS_HOSTS = [

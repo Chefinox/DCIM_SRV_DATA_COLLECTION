@@ -8,8 +8,8 @@ import os
 import time
 import logging
 import sys
-if "/home/infra/dcim_metrics_project" not in sys.path:
-    sys.path.append("/home/infra/dcim_metrics_project")
+if "/opt/nifi/nifi-current" not in sys.path:
+    sys.path.append("/opt/nifi/nifi-current")
 from src.observability.logging.dcim_logger import setup_logger
 import json
 from datetime import datetime
@@ -23,7 +23,7 @@ from src.tools.messaging.kafka_client import KafkaClient
 from src.utils.rate_limiter import get_limiter
 
 # --- CONFIGURATION ---
-load_dotenv('/home/infra/dcim_metrics_project/configs/.env')
+load_dotenv('/opt/nifi/nifi-current/configs/.env')
 
 POLL_INTERVAL = 120  # seconds (2 minutes)
 KAFKA_TOPIC = "dcim.raw.device.isapi"
@@ -192,7 +192,7 @@ def main():
     logger.info("=" * 60)
     
     import sys
-    sys.path.append("/home/infra/dcim_metrics_project")
+    sys.path.append("/opt/nifi/nifi-current")
     from src.utils.kill_switch import PollerKillSwitch
     kill_switch = PollerKillSwitch("hikvision_poller_daemon")
     

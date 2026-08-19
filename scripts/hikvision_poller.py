@@ -11,7 +11,7 @@ from src.skills.security.cctv_poller.executor import CCTVPollerExecutor
 from src.schemas.output.influx_formatter import format_cctv_to_influx
 
 # --- CONFIGURATION ---
-load_dotenv('/home/infra/dcim_metrics_project/configs/.env')
+load_dotenv('/opt/nifi/nifi-current/configs/.env')
 NVR_IP = "192.168.1.254"
 CCTV_IPS = [
     "192.168.1.2", "192.168.1.3", "192.168.1.4", "192.168.1.5", "192.168.1.6",

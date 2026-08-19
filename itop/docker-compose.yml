@@ -52,7 +52,7 @@ services:
       PHP_POST_MAX_SIZE: ${PHP_POST_MAX_SIZE:-64M}
       TZ: ${TZ:-Asia/Jakarta}
     ports:
-      - "${ITOP_HTTP_BIND:-127.0.0.1}:${ITOP_HTTP_PORT:-8080}:80"
+      - "${ITOP_HTTP_BIND:-0.0.0.0}:${ITOP_HTTP_PORT:-8080}:80"
     volumes:
       - itop_web_data:/var/www/html
       - ./itop/conf:/var/www/html/conf

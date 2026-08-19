@@ -1,3 +1,5 @@
+import sys
+sys.path.append("/opt/nifi/nifi-current")
 import requests
 import json
 import time

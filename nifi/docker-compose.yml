@@ -29,6 +29,8 @@ services:
 #      - ./authorizers.xml:/opt/nifi/nifi-current/conf/authorizers.xml:ro
       - /etc/dcim/registry:/etc/dcim/registry:ro
       - /home/infra/dcim_metrics_project/scripts:/opt/nifi/nifi-current/scripts:ro
+      - /home/infra/dcim_metrics_project/src:/opt/nifi/nifi-current/src:ro
+      - /home/infra/dcim_metrics_project/configs:/opt/nifi/nifi-current/configs:ro
     restart: unless-stopped
     mem_limit: 2g
     secrets:

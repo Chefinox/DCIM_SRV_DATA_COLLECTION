@@ -1,0 +1,6 @@
+{
+  "target_ip": "192.168.100.182",
+  "target_file": "/home/infra/dcim_metrics_project/scripts/redfish_poller.py",
+  "list_name": "SERVERS",
+  "entry_text": "{\"ip\": \"192.168.100.182\", \"host\": \"server-dummy\", \"user\": \"root\",   \"pass\": REDFISH_PASS}"
+}

@@ -1,6 +1,7 @@
+import sys
+sys.path.append("/opt/nifi/nifi-current")
 import requests
 import json
-import time
 from datetime import datetime, timezone
 import uuid
 import sys
@@ -42,9 +43,10 @@ def poll_and_print():
             # Flush stdout to ensure NiFi gets the data immediately
             sys.stdout.flush()
         else:
-            print(f'{{"error": "Failed to poll Mock API: Status {response.status_code}"}}')
+            # Print empty or error to avoid breaking pipeline, or handle silently like redfish_inventory_poller
+            pass
     except Exception as e:
-        print(f'{{"error": "Error polling Mock API: {e}"}}')
+        pass
 
 if __name__ == "__main__":
     poll_and_print()
