@@ -9,6 +9,11 @@ scripts/tmp_*
 configs/ai_reader.credentials
 sql/*.local
 configs/.env
+
+# Vault secrets (never commit)
+vault/config/init.txt
+vault/config/role_id
+vault/config/secret_id
 __pycache__/
 *.pyc
 logs/*.json
