@@ -4,6 +4,27 @@ import json
 import time
 import subprocess
 
+import sys
+import json
+import traceback
+from datetime import datetime, timezone
+
+def global_exception_handler(exc_type, exc_value, exc_traceback):
+    error_event = {
+        "event_id": "error-" + str(int(datetime.now(timezone.utc).timestamp())),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source_system": "python_poller",
+        "resource_type": "script",
+        "event_type": "error",
+        "error_message": str(exc_value),
+        "traceback": "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    }
+    print(json.dumps(error_event))
+
+sys.excepthook = global_exception_handler
+
+
+
 IPS = ["172.16.35.1", "172.16.35.2", "172.16.35.3", "172.16.35.5", "172.16.35.6"]
 
 OIDS = [
@@ -33,7 +54,7 @@ def parse_value(val_str):
 
 import sys
 # Import dari modular utilities
-sys.path.append("/home/infra/dcim_metrics_project")
+sys.path.append("/opt/nifi/nifi-current")
 from src.utils.rate_limiter import get_limiter
 from src.utils.kill_switch import PollerKillSwitch
 

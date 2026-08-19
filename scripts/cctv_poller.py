@@ -7,6 +7,27 @@ import requests
 from requests.auth import HTTPDigestAuth
 import xml.etree.ElementTree as ET
 
+import sys
+import json
+import traceback
+from datetime import datetime, timezone
+
+def global_exception_handler(exc_type, exc_value, exc_traceback):
+    error_event = {
+        "event_id": "error-" + str(int(datetime.now(timezone.utc).timestamp())),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source_system": "python_poller",
+        "resource_type": "script",
+        "event_type": "error",
+        "error_message": str(exc_value),
+        "traceback": "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    }
+    print(json.dumps(error_event))
+
+sys.excepthook = global_exception_handler
+
+
+
 # Standalone CCTV/NVR Poller for NiFi ExecuteProcess
 
 

@@ -1,8 +1,33 @@
 #!/usr/bin/env python3
 import sys
+sys.path.append("/opt/nifi/nifi-current")
 import json
 import time
 import subprocess
+
+import sys
+import json
+import traceback
+from datetime import datetime, timezone
+
+def global_exception_handler(exc_type, exc_value, exc_traceback):
+    error_event = {
+        "event_id": "error-" + str(int(datetime.now(timezone.utc).timestamp())),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source_system": "python_poller",
+        "resource_type": "script",
+        "event_type": "error",
+        "error_message": str(exc_value),
+        "traceback": "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    }
+    print(json.dumps(error_event))
+
+sys.excepthook = global_exception_handler
+
+
+
+from src.utils.rate_limiter import get_limiter
+from src.utils.kill_switch import PollerKillSwitch
 
 IPS = [
     "10.50.0.105", "10.50.0.106", "10.50.0.107",
@@ -19,216 +44,100 @@ def parse_value(val_str):
         return int(val_str)
     except ValueError:
         pass
+        
     try:
         return float(val_str)
     except ValueError:
         pass
+        
     return val_str
 
 def snmp_walk(ip, oid):
     cmd = [
-        "snmpwalk", "-Oqn", "-v3", 
-        "-l", "authNoPriv", 
-        "-u", "hndept", 
-        "-a", "SHA", 
-        "-A", "F!tech0918", 
-        "-t", "2", "-r", "1", 
+        "snmpwalk", "-v3", "-l", "authPriv", "-u", "nas_user",
+        "-a", "SHA", "-A", "auth_pass123", "-x", "AES", "-X", "priv_pass123",
         ip, oid
     ]
     snmp_data = {}
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
         for line in result.stdout.splitlines():
-            parts = line.split(" ", 1)
-            if len(parts) == 2:
-                o = parts[0]
-                if not o.startswith("."):
-                    o = "." + o
-                snmp_data[o] = parse_value(parts[1])
+            if "=" in line:
+                parts = line.split("=", 1)
+                full_oid = parts[0].strip()
+                val_parts = parts[1].split(":", 1)
+                if len(val_parts) > 1:
+                    val = val_parts[1].strip()
+                    snmp_data[full_oid] = val
     except Exception as e:
-        sys.stderr.write(f"Error polling {ip} at {oid}: {e}\n")
+        sys.stderr.write(f"ERROR: {e}\n")
     return snmp_data
 
-import sys
-# Import dari modular utilities
-sys.path.append("/home/infra/dcim_metrics_project")
-from src.utils.rate_limiter import get_limiter
-from src.utils.kill_switch import PollerKillSwitch
-
-# Inisialisasi Kill Switch
-kill_switch = PollerKillSwitch("nas_poller")
-
-# Rate limit configs per ADR-0023
-NAS_LIMITS = {
-    "max_concurrent": 2,
-    "max_req_per_min": 15
-}
-
-def main():
-    timestamp = int(time.time())
+def poll_nas():
+    limiter = get_limiter('nas_rest')
+    kill_switch = PollerKillSwitch('nas')
     
-    # Check kill switch
     if kill_switch.is_killed():
-        sys.stderr.write(f"WARN: Kill switch engaged. Aborting NAS poll.\n")
+        sys.stderr.write("INFO: Poller killed by kill switch.\n")
         return
-    
+
     for ip in IPS:
-        # Acquire rate limit slot
-        limiter = get_limiter(ip, NAS_LIMITS)
-        if not limiter.acquire(timeout_sec=5):
+        if not limiter.acquire():
             sys.stderr.write(f"WARN: Rate limit timeout for {ip}\n")
             continue
             
         try:
             # 1. Global scalars
-        global_oids = [
-            (".1.3.6.1.2.1.1.5.0", "hostname"),
-            (".1.3.6.1.4.1.6574.1.5.1.0", "model"),
-            (".1.3.6.1.4.1.6574.1.5.2.0", "serial_number"),
-            (".1.3.6.1.4.1.6574.1.5.3.0", "firmware"),
-            (".1.3.6.1.4.1.6574.1.2.0", "system_temp")
-        ]
-        
-        base_tags = {"device_type": "nas", "ip": ip}
-        fields = {}
-        
-        for oid, name in global_oids:
-            data = snmp_walk(ip, oid)
-            if oid in data:
-                if name == "system_temp":
-                    fields[name] = data[oid]
-                else:
-                    base_tags[name] = str(data[oid])
-                    
-        # Always output nas global metrics if anything responded
-        if len(base_tags) > 2 or fields:
-            print(json.dumps({
-                "name": "nas_snmp",
-                "tags": base_tags,
-                "fields": fields if fields else {"status": 1},
-                "timestamp": timestamp
-            }))
+            global_oids = [
+                (".1.3.6.1.2.1.1.5.0", "hostname"),
+                (".1.3.6.1.4.1.6574.1.5.1.0", "model"),
+                (".1.3.6.1.4.1.6574.1.5.2.0", "serial_number"),
+                (".1.3.6.1.4.1.6574.1.5.3.0", "firmware"),
+                (".1.3.6.1.4.1.6574.1.2.0", "system_temp")
+            ]
             
-        # 2. Disk Table
-        disk_data = snmp_walk(ip, ".1.3.6.1.4.1.6574.2.1.1")
-        disks = {}
-        for o, v in disk_data.items():
-            if o.startswith(".1.3.6.1.4.1.6574.2.1.1.2."): # diskID
-                idx = o.split(".")[-1]
-                if idx not in disks: disks[idx] = {}
-                disks[idx]["diskID"] = str(v)
-            elif o.startswith(".1.3.6.1.4.1.6574.2.1.1.3."): # diskModel
-                idx = o.split(".")[-1]
-                if idx not in disks: disks[idx] = {}
-                disks[idx]["diskModel"] = str(v)
-            elif o.startswith(".1.3.6.1.4.1.6574.2.1.1.5."): # diskStatus
-                idx = o.split(".")[-1]
-                if idx not in disks: disks[idx] = {}
-                disks[idx]["diskStatus"] = v
-            elif o.startswith(".1.3.6.1.4.1.6574.2.1.1.6."): # diskTemp
-                idx = o.split(".")[-1]
-                if idx not in disks: disks[idx] = {}
-                disks[idx]["diskTemp"] = v
+            base_tags = {"device_type": "nas", "ip": ip}
+            fields = {}
+            
+            for oid, name in global_oids:
+                data = snmp_walk(ip, oid)
+                if oid in data:
+                    if name == "system_temp":
+                        fields[name] = parse_value(data[oid])
+                    else:
+                        base_tags[name] = parse_value(data[oid])
+                        
+            # 2. Disk Table
+            disk_table_oid = ".1.3.6.1.4.1.6574.2.1"
+            disk_data = snmp_walk(ip, disk_table_oid)
+            
+            # Group by index
+            disks = {}
+            for full_oid, val in disk_data.items():
+                parts = full_oid.split('.')
+                idx = parts[-1]
+                col = parts[-2]
                 
-        for idx, flds in disks.items():
-            if not flds: continue
-            d_tags = base_tags.copy()
-            if "diskID" in flds:
-                d_tags["diskID"] = flds.pop("diskID")
-            else:
-                d_tags["diskID"] = str(idx)
+                if idx not in disks:
+                    disks[idx] = {}
+                    
+                if col == "2": disks[idx]["disk_id"] = parse_value(val)
+                elif col == "3": disks[idx]["model"] = parse_value(val)
+                elif col == "4": disks[idx]["status"] = parse_value(val)
+                elif col == "5": disks[idx]["temperature"] = parse_value(val)
                 
-            if flds:
-                print(json.dumps({
-                    "name": "dcim_nas",
-                    "tags": d_tags,
-                    "fields": flds,
-                    "timestamp": timestamp
-                }))
-                
-        # 3. Volume Table
-        vol_data = snmp_walk(ip, ".1.3.6.1.4.1.6574.3.1.1")
-        vols = {}
-        for o, v in vol_data.items():
-            if o.startswith(".1.3.6.1.4.1.6574.3.1.1.2."):
-                idx = o.split(".")[-1]
-                if idx not in vols: vols[idx] = {}
-                vols[idx]["volumeName"] = str(v)
-            elif o.startswith(".1.3.6.1.4.1.6574.3.1.1.3."):
-                idx = o.split(".")[-1]
-                if idx not in vols: vols[idx] = {}
-                vols[idx]["volumeStatus"] = v
-            elif o.startswith(".1.3.6.1.4.1.6574.3.1.1.5."):
-                idx = o.split(".")[-1]
-                if idx not in vols: vols[idx] = {}
-                vols[idx]["volumeTotalBytes"] = v
-            elif o.startswith(".1.3.6.1.4.1.6574.3.1.1.4."):
-                idx = o.split(".")[-1]
-                if idx not in vols: vols[idx] = {}
-                vols[idx]["volumeUsedBytes"] = v
-                
-        for idx, flds in vols.items():
-            if not flds: continue
-            v_tags = base_tags.copy()
-            if "volumeName" in flds:
-                v_tags["volumeName"] = flds.pop("volumeName")
-            else:
-                v_tags["volumeName"] = str(idx)
-                
-            if flds:
-                print(json.dumps({
-                    "name": "dcim_nas_volume",
-                    "tags": v_tags,
-                    "fields": flds,
-                    "timestamp": timestamp
-                }))
-                
-        # 4. Interface Table
-        if_data = snmp_walk(ip, ".1.3.6.1.2.1.2.2.1")
-        if_data.update(snmp_walk(ip, ".1.3.6.1.2.1.31.1.1.1"))
-        
-        interfaces = {}
-        for o, v in if_data.items():
-            if o.startswith(".1.3.6.1.2.1.2.2.1.1."):
-                idx = o.split(".")[-1]
-                if idx not in interfaces: interfaces[idx] = {}
-                interfaces[idx]["ifIndex"] = str(v)
-            elif o.startswith(".1.3.6.1.2.1.2.2.1.2.") or o.startswith(".1.3.6.1.2.1.31.1.1.1.1."):
-                idx = o.split(".")[-1]
-                if idx not in interfaces: interfaces[idx] = {}
-                interfaces[idx]["if_name"] = str(v)
-            elif o.startswith(".1.3.6.1.2.1.2.2.1.8."):
-                idx = o.split(".")[-1]
-                if idx not in interfaces: interfaces[idx] = {}
-                interfaces[idx]["if_oper_status"] = v
-            elif o.startswith(".1.3.6.1.2.1.31.1.1.1.6."):
-                idx = o.split(".")[-1]
-                if idx not in interfaces: interfaces[idx] = {}
-                interfaces[idx]["if_in_octets"] = v
-            elif o.startswith(".1.3.6.1.2.1.31.1.1.1.10."):
-                idx = o.split(".")[-1]
-                if idx not in interfaces: interfaces[idx] = {}
-                interfaces[idx]["if_out_octets"] = v
-                
-        for idx, flds in interfaces.items():
-            if not flds: continue
-            i_tags = base_tags.copy()
-            if "if_name" in flds:
-                i_tags["if_name"] = flds.pop("if_name")
-            elif "ifIndex" in flds:
-                i_tags["ifIndex"] = flds.pop("ifIndex")
-            else:
-                i_tags["ifIndex"] = str(idx)
-                
-            if flds:
-                print(json.dumps({
-                    "name": "interface",
-                    "tags": i_tags,
-                    "fields": flds,
-                    "timestamp": timestamp
-                }))
-        finally:
-            limiter.release()
+            fields["disks"] = list(disks.values())
+            
+            # Print JSON Line
+            record = {
+                "name": "nas_metrics",
+                "timestamp": int(time.time() * 1e9),
+                "tags": base_tags,
+                "fields": fields
+            }
+            print(json.dumps(record))
+        except Exception as e:
+            sys.stderr.write(f"ERROR processing {ip}: {e}\n")
 
 if __name__ == "__main__":
-    main()
+    poll_nas()

@@ -1,4 +1,25 @@
 #!/usr/bin/env python3
+
+import sys
+import json
+import traceback
+from datetime import datetime, timezone
+
+def global_exception_handler(exc_type, exc_value, exc_traceback):
+    error_event = {
+        "event_id": "error-" + str(int(datetime.now(timezone.utc).timestamp())),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source_system": "python_poller",
+        "resource_type": "script",
+        "event_type": "error",
+        "error_message": str(exc_value),
+        "traceback": "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    }
+    print(json.dumps(error_event))
+
+sys.excepthook = global_exception_handler
+
+
 """
 Redfish Poller for NiFi ExecuteProcess.
 Polls 5 Lenovo servers via Redfish REST API and outputs JSON-lines
@@ -41,14 +62,17 @@ SERVERS = [
     {"ip": "10.50.0.4", "host": "server-HCI-03",    "user": "hndept", "pass": REDFISH_PASS},
     {"ip": "10.50.0.5", "host": "server-Render-01", "user": "hndept", "pass": REDFISH_PASS},
     {"ip": "10.50.0.6", "host": "server-Render-02", "user": "hndept", "pass": REDFISH_PASS},
-    {"ip": "192.168.100.182", "host": "server-dummy", "user": "root",   "pass": REDFISH_PASS}
+    {"ip": "192.168.100.182", "host": "server-dummy", "user": "root",   "pass": REDFISH_PASS},
+    {"ip": "192.168.100.152", "host": "server-dummy", "user": "root",   "pass": REDFISH_PASS}
 ]
 
 TIMEOUT = 8  # seconds per HTTP request
 
 import sys
 # Import dari modular utilities
-sys.path.append("/home/infra/dcim_metrics_project")
+sys.path.append("/opt/nifi/nifi-current")
+import sys
+sys.path.append("/opt/nifi/nifi-current")
 from src.utils.rate_limiter import get_limiter
 from src.utils.kill_switch import PollerKillSwitch
 
