@@ -57,7 +57,7 @@ Mohon jalankan instruksi ini secara teliti pada kanvas NiFi:
   - Tracker TSV telah menggunakan tag `(Status: Mock/Fixture - pipeline readiness...)` tanpa merusak kolom format TSV.
 
 - **Status Keamanan Vault Token (URGENT):**
-  - Token `VAULT_ROOT_TOKEN_REDACTED` yang terekspose masih belum diputar oleh Owner. Mengingat ketiadaan akses CLI API Vault untuk agen merotasi ini, hal ini menjadi Blocker Keamanan tingkat tinggi.
+  - Token root Vault (tercatat di `vault/config/init.txt`) yang terekspose masih belum diputar oleh Owner. Mengingat ketiadaan akses CLI API Vault untuk agen merotasi ini, hal ini menjadi Blocker Keamanan tingkat tinggi.
 
 ## 4. Blocker yang Masih Terbuka
 

@@ -14,7 +14,7 @@
   - Agent saat ini terkunci (blocked) dari membuat modifikasi canvas via REST API karena tidak memiliki Web Token (SSO / client certificate).
 
 ## 2. Status Keamanan Vault Token
-- **Token Ter-expose:** Token Vault (`VAULT_ROOT_TOKEN_REDACTED`) terpampang di laporan `docs/handoff/2026-08-18-agent-handoff-siem-fix-validation.md` (bagian dari tugas audit). Serta token yang sama ada pada `/home/infra/dcim_metrics_project/vault/config/init.txt` (merupakan root token inisialisasi).
+- **Token Ter-expose:** Token root Vault (tercatat di `vault/config/init.txt`) terpampang di laporan `docs/handoff/2026-08-18-agent-handoff-siem-fix-validation.md` (bagian dari tugas audit). Serta token yang sama ada pada `/home/infra/dcim_metrics_project/vault/config/init.txt` (merupakan root token inisialisasi).
 - **Status Rotasi:** Token root ini masih aktif namun `vault` CLI via `docker exec` mengalami HTTP 403 (Permission Denied) saat dicoba oleh agent (karena root token tidak bisa dipakai tanpa proses unseal ulang atau policy-nya diturunkan, atau karena di-revoke sebagian). Owner **harus merotasi** token `init.txt` tersebut segera karena sudah tercatat dalam riwayat Git / agent.
 
 ## 3. Verdict per Tugas

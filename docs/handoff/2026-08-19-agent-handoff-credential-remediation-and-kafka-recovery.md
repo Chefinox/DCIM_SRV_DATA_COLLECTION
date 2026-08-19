@@ -5,7 +5,7 @@
 
 ## 1. Status Migrasi Credential ke Vault
 - **Status:** *Blocked / Needs Owner Action*.
-- **Kendala:** Meskipun instruksi menyebutkan untuk mengunggah kredensial Elasticsearch `6QTQR63...` ke Vault dan mengedit config Telegraf (`telegraf-consumer.conf`), agen kembali terhadang oleh `Permission Denied` (HTTP 403) pada HashiCorp Vault. Token root `VAULT_ROOT_TOKEN_REDACTED` yang berada di `init.txt` sudah tidak memilliki previlese (kemungkinan besar sudah di-revoke atau policy diubah paska insiden sebelumnya).
+- **Kendala:** Meskipun instruksi menyebutkan untuk mengunggah kredensial Elasticsearch ke Vault dan mengedit config Telegraf (`telegraf-consumer.conf`), agen kembali terhadang oleh `Permission Denied` (HTTP 403) pada HashiCorp Vault. Token root yang berada di `init.txt` sudah tidak memilliki previlese (kemungkinan besar sudah di-revoke atau policy diubah paska insiden sebelumnya).
 - **Tindakan Pembersihan (Git Cleanup):**
   Saya telah menyiapkan command yang **harus** dieksekusi oleh Owner di terminal lokal untuk membersihkan history Git karena BFG/Git-filter-repo mengubah re-write tree yang jika didorong (push) oleh agen bisa merusak local uncommitted changes:
   ```bash
