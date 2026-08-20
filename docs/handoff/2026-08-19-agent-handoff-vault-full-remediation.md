@@ -12,7 +12,7 @@
 
 1. **Backup repo** dibuat di `/tmp/dcim-repo-backup-pre-filter-repo` sebelum operasi destruktif.
 2. Semua perubahan lokal di-commit agar working tree bersih.
-3. `vault/config/init.txt`, `vault/config/role_id`, `vault/config/secret_id` di-untrack dari git dan ditambahkan ke `.gitignore` — commit `9ebeae9`.
+3. `vault/config/init.txt`, `vault/config/role_id`, `vault/config/secret_id` di-untrack dari git dan ditambahkan ke `.gitignore` — commit `3be5b06`.
 4. `git filter-repo --replace-text` dijalankan dengan 4 pola penggantian:
    - Vault root token (dari `init.txt`) → `VAULT_ROOT_TOKEN_REDACTED`
    - Vault unseal key → `VAULT_UNSEAL_KEY_REDACTED`
@@ -152,7 +152,7 @@ docker logs --tail 5 vault 2>&1 | grep "lease count"
 | `vault/config/secret_id` di `.gitignore` | ✅ Tercantum |
 | File-file masih ter-track? | ❌ Tidak (sudah `git rm --cached`) |
 | `git status` menunjukkan file? | ❌ Tidak muncul |
-| Commit `.gitignore` | `9ebeae9` — `security: add vault credential files to .gitignore and untrack them` |
+| Commit `.gitignore` | `3be5b06` — `security: add vault credential files to .gitignore and untrack them` |
 
 ---
 
@@ -192,4 +192,4 @@ Berikut adalah item yang **TIDAK termasuk** dalam izin task ini dan masih menung
 | Git History Cleanup | ✅ **Selesai** | Remote verified clean (0 match semua credential) |
 | Generate Root Token Baru | ✅ **Selesai** | `vault token lookup` valid, policies=[root] |
 | Cleanup Vault Lease | ✅ **Selesai** | 289,423 lease revoked, warning hilang, 0 lease tersisa |
-| `.gitignore` init.txt | ✅ **Selesai** | Commit `9ebeae9`, file tidak muncul di `git status` |
+| `.gitignore` init.txt | ✅ **Selesai** | Commit `3be5b06`, file tidak muncul di `git status` |

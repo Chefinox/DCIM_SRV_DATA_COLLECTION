@@ -20,7 +20,7 @@ Nilai Vault root token yang tertulis plaintext telah dihapus dari **4 file** ber
 
 Semua referensi diganti dengan deskripsi netral: *"token root yang tercatat di `vault/config/init.txt`"*.
 
-**Commit:** `3394d1a` — `security: redact Vault root token from all handoff reports`
+**Commit:** `f61ec3b` — `security: redact Vault root token from all handoff reports`
 
 ### 1.2 Instruksi Git History Cleanup (Owner Harus Eksekusi Manual)
 

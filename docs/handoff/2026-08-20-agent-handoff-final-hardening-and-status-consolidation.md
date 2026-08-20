@@ -49,8 +49,8 @@ Tabel berikut menyajikan status faktual terbaru dari seluruh 14 item pekerjaan d
 |:--:|:---|:---|:---:|:---|:---|
 | **1** | **SIEM Ingestion (RouteOnContent fix)** | SIEM Remediation | 🔴 **Blocked** | `docs/handoff/2026-08-18-agent-handoff-nifi-access-recovery-and-fix.md` | Menunggu eksekusi manual via NiFi GUI oleh Admin menggunakan akun OIDC (Authentik). Agent terkunci dari REST API. |
 | **2** | **DLQ Writer Fix (`sys.excepthook`)** | Pipeline Remediation | 🟡 **Partially Fixed** | `scripts/{mikrotik,redfish,nas,cctv}_poller.py` | `sys.excepthook` mencegah crash plaintext ke NiFi. Namun `mikrotik_poller.py` & `cctv_poller.py` belum ada `try-except` per-device di loop utama. |
-| **3** | **Kafka KRaft Quorum Recovery** | Infrastructure Recovery | 🟢 **Done (Healthy)** | Commit `af6d6b8`, `docs/handoff/2026-08-19-agent-handoff-vault-cleanup-and-kafka-quorum-recovery.md` | `kafka3` di-restart, quorum 3/3 voter pulih sempurna, `MaxFollowerLag = 0`, 9 consumer group aktif tanpa lag. |
-| **4** | **Load Test ST-394** | ST-394 | 🟢 **Done (Pass)** | Commit `af6d6b8`, CSV stats di `/tmp/kafka_loadtest_run2_stats.csv` | 2x Locust run (5 users, 30s) pada `dcim.events.raw`: 0 failures, ~154 req/s throughput, latency <2ms. |
+| **3** | **Kafka KRaft Quorum Recovery** | Infrastructure Recovery | 🟢 **Done (Healthy)** | Commit `7f7850c`, `docs/handoff/2026-08-19-agent-handoff-vault-cleanup-and-kafka-quorum-recovery.md` | `kafka3` di-restart, quorum 3/3 voter pulih sempurna, `MaxFollowerLag = 0`, 9 consumer group aktif tanpa lag. |
+| **4** | **Load Test ST-394** | ST-394 | 🟢 **Done (Pass)** | Commit `7f7850c` (Code: `e2a917b`), CSV stats di `/tmp/kafka_loadtest_run2_stats.csv` | 2x Locust run (5 users, 30s) pada `dcim.events.raw`: 0 failures, ~154 req/s throughput, latency <2ms. |
 | **5** | **Mock API Adapters (ST-391/392)** | ST-391 / ST-392 | 🟢 **Done (Healthy)** | PIDs `3717754` (Proxmox:8081) & `3870968` (ITSM:8083) | Kedua adapter aktif (uptime >6 hari), merespons skema JSON Proxmox & ServiceNow Incident dengan benar. |
 | **6** | **S3/MinIO Cold Storage (ST-393)** | ST-393 | ⚪ **On-Hold** | `docs/handoff/2026-08-18-agent-handoff-pipeline-fully-healthy-check.md` | Status ditunda sesuai rencana scope v4.2 project (tidak ada perubahan). |
 | **7** | **Vault Credential Leak Remediation** | Security Hardening | 🟢 **Done** | Commit `3be5b06` (Force-pushed ke `origin/main`) | Token Vault & ES password diredact dari 4 file report/prompt. `git filter-repo` membersihkan history Git. Verified 0 match pada fresh clone. |
@@ -91,9 +91,14 @@ Berikut adalah item tersisa yang membutuhkan eksekusi/keputusan dari Owner (Imam
 - **`.gitignore`**: men-exclude `vault/config/init.txt`, `role_id_*`, `secret_id_*`, dan `vault/config/cache/`.
 - **`vault/policies/policy-*.hcl`**: 4 file HCL IaC audited clean dari secrets.
 - **Commits Utama:**
-  - `3be5b06`: `security: redact Vault root token & filter-repo history cleanup`
-  - `af6d6b8`: `docs: add vault cleanup and kafka quorum recovery handoff report`
+  - `f61ec3b`: `security: redact Vault root token from all handoff reports`
+  - `3be5b06`: `security: add vault credential files to .gitignore and untrack them`
+  - `7f7850c`: `docs: add vault cleanup and kafka quorum recovery handoff report`
+  - `d00f62e`: `docs: add vault full remediation handoff report`
   - `0452576`: `docs: update vault remediation report — lease cleanup completed`
   - `392c51e`: `feat: implement per-connector AppRole isolation in Vault`
+  - `07caae4`: `docs: add AppRole per-connector implementation handoff report`
   - `ba3bd67`: `fix(security): implement Vault token caching in secrets.py & commit policy HCLs`
+  - `a115d1c`: `docs: add Vault token caching fix & policy HCL handoff report`
   - `2aa4804`: `fix(security): restrict token cache file permissions to 0o600/0o700 and add VAULT_CONFIG_DIR warning log`
+  - `a144f9a`: `docs: add final hardening and status consolidation report for task tracker`
