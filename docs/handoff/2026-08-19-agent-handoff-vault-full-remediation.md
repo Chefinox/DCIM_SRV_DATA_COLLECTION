@@ -123,12 +123,16 @@ Ini memastikan token baru dari AppRole login akan expire otomatis setelah 1 jam 
 
 ### Status Revocation
 
-Revocation massal via `sys/leases/revoke-prefix/auth/approle/login` **sedang berjalan** (dimulai ~16:57 UTC). Karena volume 289K+ lease sangat besar, proses ini memakan waktu lama.
+Revocation massal via `sys/leases/revoke-prefix/auth/approle/login` **berhasil selesai**.
 
-**Progress saat laporan ditulis:**
-- Revocation sedang berjalan di background
-- Log Vault menunjukkan lease di-revoke satu per satu secara berurutan
-- Tidak ada service yang terdampak karena token AppRole lama sudah tidak dipakai (root token lama invalid sejak 30 Juli)
+| Metric | Nilai |
+|--------|-------|
+| Lease sebelum cleanup | 289,390 |
+| Lease di-revoke | **289,423** |
+| Lease tersisa | **0** (API `sys/leases/lookup/auth/approle/login/` returns empty) |
+| Waktu proses | ~3 jam 13 menit (16:57 – 20:10 UTC) |
+| Warning `lease count exceeds threshold` | **Berhenti muncul** di log setelah revocation selesai |
+| Service terdampak | ❌ Tidak ada — token AppRole lama sudah tidak dipakai aktif |
 
 **Saran monitoring:**
 ```bash
@@ -187,5 +191,5 @@ Berikut adalah item yang **TIDAK termasuk** dalam izin task ini dan masih menung
 |-------|--------|-------|
 | Git History Cleanup | ✅ **Selesai** | Remote verified clean (0 match semua credential) |
 | Generate Root Token Baru | ✅ **Selesai** | `vault token lookup` valid, policies=[root] |
-| Cleanup Vault Lease | 🔄 **Sedang Berjalan** | Revocation 289K lease in progress, TTL fix applied |
+| Cleanup Vault Lease | ✅ **Selesai** | 289,423 lease revoked, warning hilang, 0 lease tersisa |
 | `.gitignore` init.txt | ✅ **Selesai** | Commit `9ebeae9`, file tidak muncul di `git status` |
