@@ -32,20 +32,41 @@ _EXPIRY_BUFFER_SECONDS = 60
 _DEFAULT_TTL_SECONDS = 3600
 
 
-def _cache_dir() -> str:
-    """Return the directory for file-based token cache."""
+def _cache_dir() -> str | None:
+    """Return the directory for file-based token cache with restrictive permissions (0o700).
+
+    Logs an explicit WARNING if the base directory is missing or uncreatable.
+    """
     base = os.environ.get(
         'VAULT_CONFIG_DIR',
         '/home/infra/dcim_metrics_project/vault/config'
     )
+    if not os.path.exists(base):
+        logger.warning(
+            "vault: base config directory '%s' does not exist; file-based token caching disabled.",
+            base
+        )
+        return None
+
     d = os.path.join(base, 'cache')
-    os.makedirs(d, exist_ok=True)
-    return d
+    try:
+        os.makedirs(d, mode=0o700, exist_ok=True)
+        os.chmod(d, 0o700)
+        return d
+    except OSError as exc:
+        logger.warning(
+            "vault: failed to create cache directory '%s': %s; file-based token caching disabled.",
+            d, exc
+        )
+        return None
 
 
-def _cache_file_path(connector_key: str) -> str:
-    """Return the file path for a connector's cached token."""
-    return os.path.join(_cache_dir(), f'token_{connector_key}.json')
+def _cache_file_path(connector_key: str) -> str | None:
+    """Return the file path for a connector's cached token, or None if cache dir unavailable."""
+    d = _cache_dir()
+    if not d:
+        return None
+    return os.path.join(d, f'token_{connector_key}.json')
 
 
 def _read_cached_token(connector_key: str) -> str | None:
@@ -63,6 +84,9 @@ def _read_cached_token(connector_key: str) -> str | None:
 
     # 2. Try file cache (useful when process was restarted but token is still valid)
     cache_file = _cache_file_path(connector_key)
+    if not cache_file:
+        return None
+
     try:
         if os.path.exists(cache_file):
             with open(cache_file, 'r') as f:
@@ -83,7 +107,7 @@ def _read_cached_token(connector_key: str) -> str | None:
 
 
 def _store_cached_token(connector_key: str, token: str, lease_duration: int) -> None:
-    """Store token in both in-memory and file cache."""
+    """Store token in both in-memory and file cache (file permissions 0o600)."""
     ttl = lease_duration if lease_duration > 0 else _DEFAULT_TTL_SECONDS
     expires_at = time.time() + ttl
 
@@ -95,11 +119,15 @@ def _store_cached_token(connector_key: str, token: str, lease_duration: int) -> 
 
     # File (for cross-process / restart reuse)
     cache_file = _cache_file_path(connector_key)
+    if not cache_file:
+        return
+
     try:
         with open(cache_file, 'w') as f:
             json.dump({'token': token, 'expires_at': expires_at}, f)
+        os.chmod(cache_file, 0o600)
     except OSError as exc:
-        logger.debug("vault: failed to write cache file for '%s': %s", connector_key, exc)
+        logger.warning("vault: failed to write or set permissions on cache file for '%s': %s", connector_key, exc)
 
 
 def _resolve_approle_paths(name: str):
@@ -129,11 +157,12 @@ def _invalidate_cache(connector_key: str) -> None:
     """Remove cached token from both in-memory and file cache."""
     _token_cache.pop(connector_key, None)
     cache_file = _cache_file_path(connector_key)
-    try:
-        if os.path.exists(cache_file):
-            os.remove(cache_file)
-    except OSError:
-        pass
+    if cache_file:
+        try:
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+        except OSError:
+            pass
 
 
 def _login_fresh(client, role_id_path: str, secret_id_path: str, connector: str):
