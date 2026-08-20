@@ -1,12 +1,50 @@
 import os
 import hvac
 
+# Map secret names to their scoped AppRole connector suffix.
+# Each connector has its own role_id/secret_id files at:
+#   vault/config/role_id_<connector>  and  vault/config/secret_id_<connector>
+# Fallback: use the generic role_id/secret_id if per-connector files not found.
+_SECRET_TO_CONNECTOR = {
+    'elastic_pass': 'elasticsearch',
+    'kibana_pass': 'elasticsearch',
+    'postgres': 'postgres',
+    'sot_db_pass': 'postgres',
+    'redfish_pass': 'redfish',
+    'ralph': 'ralph',
+    'ralph_new': 'ralph',
+    'ralph_api_token': 'ralph',
+    'ralph_api_token_new': 'ralph',
+}
+
+def _resolve_approle_paths(name: str):
+    """Resolve role_id and secret_id file paths for a given secret name.
+    
+    Uses per-connector AppRole if available, falls back to generic dcim-role.
+    """
+    base_dir = os.environ.get(
+        'VAULT_CONFIG_DIR',
+        '/home/infra/dcim_metrics_project/vault/config'
+    )
+    connector = _SECRET_TO_CONNECTOR.get(name)
+    
+    if connector:
+        scoped_role = os.path.join(base_dir, f'role_id_{connector}')
+        scoped_secret = os.path.join(base_dir, f'secret_id_{connector}')
+        if os.path.exists(scoped_role) and os.path.exists(scoped_secret):
+            return scoped_role, scoped_secret
+    
+    # Fallback to generic (legacy dcim-role) or env-overridden paths
+    role_id_path = os.environ.get('VAULT_ROLE_ID_PATH', os.path.join(base_dir, 'role_id'))
+    secret_id_path = os.environ.get('VAULT_SECRET_ID_PATH', os.path.join(base_dir, 'secret_id'))
+    return role_id_path, secret_id_path
+
+
 def get_secret(name: str, fallback_env: str = None) -> str:
     """Read secret from HashiCorp Vault, fallback to env var."""
     
     vault_addr = os.environ.get('VAULT_ADDR', 'http://10.70.0.56:8200')
-    role_id_path = os.environ.get('VAULT_ROLE_ID_PATH', '/home/infra/dcim_metrics_project/vault/config/role_id')
-    secret_id_path = os.environ.get('VAULT_SECRET_ID_PATH', '/home/infra/dcim_metrics_project/vault/config/secret_id')
+    role_id_path, secret_id_path = _resolve_approle_paths(name)
     
     try:
         # Check if role_id and secret_id exist
