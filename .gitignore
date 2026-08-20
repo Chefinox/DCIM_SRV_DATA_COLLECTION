@@ -16,6 +16,7 @@ vault/config/role_id
 vault/config/role_id_*
 vault/config/secret_id
 vault/config/secret_id_*
+vault/config/cache/
 __pycache__/
 *.pyc
 logs/*.json
