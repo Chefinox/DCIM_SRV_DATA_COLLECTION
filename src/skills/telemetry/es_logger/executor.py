@@ -88,19 +88,51 @@ def run():
             continue
             
         try:
+            val = msg.value()
             ctx = SerializationContext("dcim.enriched.events", MessageField.VALUE)
-            msg_val = avro_deserializer(msg.value(), ctx)
-            if not msg_val: continue
+            msg_val = None
             
-            # Parse raw JSON strings back to dict
-            if isinstance(msg_val.get('raw_fields'), str):
-                msg_val['raw_fields'] = json.loads(msg_val['raw_fields'])
-            if isinstance(msg_val.get('raw_tags'), str):
-                msg_val['raw_tags'] = json.loads(msg_val['raw_tags'])
+            # Check for Avro magic byte (0x00)
+            if val and val.startswith(b'\x00'):
+                try:
+                    msg_val = avro_deserializer(val, ctx)
+                except Exception as de_err:
+                    log.error(json.dumps({"event": "avro_deserialization_error", "error": str(de_err)}))
+                    continue
+            else:
+                # Fallback to pure JSON if no magic byte
+                try:
+                    msg_val = json.loads(val.decode('utf-8', errors='replace'))
+                except Exception as je_err:
+                    log.error(json.dumps({"event": "json_deserialization_error", "error": str(je_err)}))
+                    continue
+
+            if not msg_val or not isinstance(msg_val, dict): 
+                continue
+            
+            # Parse raw JSON strings back to dict safely
+            if 'raw_fields' in msg_val and isinstance(msg_val['raw_fields'], str):
+                try:
+                    msg_val['raw_fields'] = json.loads(msg_val['raw_fields'])
+                except Exception:
+                    pass
+                    
+            if 'raw_tags' in msg_val and isinstance(msg_val['raw_tags'], str):
+                try:
+                    msg_val['raw_tags'] = json.loads(msg_val['raw_tags'])
+                except Exception:
+                    pass
                 
             event_time = msg_val.get("event_time")
             if not event_time:
-                continue
+                timestamp_val = msg_val.get("timestamp")
+                if timestamp_val:
+                    try:
+                        event_time = datetime.utcfromtimestamp(float(timestamp_val)).isoformat() + "+00:00"
+                    except Exception:
+                        continue
+                else:
+                    continue
                 
             try:
                 dt = datetime.fromisoformat(event_time.replace('Z', '+00:00'))
