@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 import sys
-sys.path.append("/opt/nifi/nifi-current")
 import json
 import time
 import subprocess
-
-import sys
-import json
 import traceback
 from datetime import datetime, timezone
+
+# Guarantee project root is in sys.path
+sys.path.insert(0, '/home/infra/dcim_metrics_project')
 
 def global_exception_handler(exc_type, exc_value, exc_traceback):
     error_event = {

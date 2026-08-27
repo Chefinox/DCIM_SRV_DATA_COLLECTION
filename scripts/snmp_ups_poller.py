@@ -3,6 +3,25 @@ import sys
 import json
 import time
 import subprocess
+import traceback
+from datetime import datetime, timezone
+
+# Guarantee project root is in sys.path
+sys.path.insert(0, '/home/infra/dcim_metrics_project')
+
+def global_exception_handler(exc_type, exc_value, exc_traceback):
+    error_event = {
+        "event_id": "error-" + str(int(datetime.now(timezone.utc).timestamp())),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source_system": "python_poller",
+        "resource_type": "script",
+        "event_type": "error",
+        "error_message": str(exc_value),
+        "traceback": "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    }
+    print(json.dumps(error_event))
+
+sys.excepthook = global_exception_handler
 
 # UPS IP and SNMPv3 Settings based on Telegraf config
 UPS_IP = "192.168.100.140"

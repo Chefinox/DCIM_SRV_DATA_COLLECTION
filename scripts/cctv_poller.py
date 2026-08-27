@@ -6,11 +6,11 @@ import time
 import requests
 from requests.auth import HTTPDigestAuth
 import xml.etree.ElementTree as ET
-
-import sys
-import json
 import traceback
 from datetime import datetime, timezone
+
+# Guarantee project root is in sys.path
+sys.path.insert(0, '/home/infra/dcim_metrics_project')
 
 def global_exception_handler(exc_type, exc_value, exc_traceback):
     error_event = {

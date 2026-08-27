@@ -3,11 +3,11 @@ import sys
 import json
 import time
 import subprocess
-
-import sys
-import json
 import traceback
 from datetime import datetime, timezone
+
+# Guarantee project root is in sys.path
+sys.path.insert(0, '/home/infra/dcim_metrics_project')
 
 def global_exception_handler(exc_type, exc_value, exc_traceback):
     error_event = {
@@ -84,24 +84,27 @@ def main():
             
         try:
             snmp_data = {}
-        for oid_prefix in OIDS:
-            try:
-                # snmpwalk -Oqn outputs: .1.3.6... value
-                cmd = ["snmpwalk", "-Oqn", "-v2c", "-c", "public", "-t", "2", "-r", "1", ip, oid_prefix]
-                result = subprocess.run(cmd, capture_output=True, text=True)
+            for oid_prefix in OIDS:
+                try:
+                    # snmpwalk -Oqn outputs: .1.3.6... value
+                    cmd = ["snmpwalk", "-Oqn", "-v2c", "-c", "public", "-t", "2", "-r", "1", ip, oid_prefix]
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    
+                    # Even if returncode != 0 (e.g. lexicographic error), snmpwalk still outputs whatever it gathered to stdout
+                    for line in result.stdout.splitlines():
+                        parts = line.split(" ", 1)
+                        if len(parts) == 2:
+                            oid = parts[0]
+                            if not oid.startswith("."):
+                                oid = "." + oid
+                            snmp_data[oid] = parse_value(parts[1])
+                except Exception as e:
+                    sys.stderr.write(f"Error polling {ip} at {oid_prefix}: {e}\n")
                 
-                # Even if returncode != 0 (e.g. lexicographic error), snmpwalk still outputs whatever it gathered to stdout
-                for line in result.stdout.splitlines():
-                    parts = line.split(" ", 1)
-                    if len(parts) == 2:
-                        oid = parts[0]
-                        if not oid.startswith("."):
-                            oid = "." + oid
-                        snmp_data[oid] = parse_value(parts[1])
-            except Exception as e:
-                sys.stderr.write(f"Error polling {ip} at {oid_prefix}: {e}\n")
-                
-        if not snmp_data:
+            if not snmp_data:
+                continue
+        except Exception as e:
+            sys.stderr.write(f"Error processing {ip}: {e}\n")
             continue
             
         base_tags = {
@@ -220,9 +223,6 @@ def main():
                     "timestamp": timestamp
                 }
                 print(json.dumps(st_metric))
-                
-        finally:
-            limiter.release()
 
 if __name__ == "__main__":
     main()
