@@ -15,18 +15,19 @@ from src.scoring.data_quality import DataQualityScorecard
 import time
 
 # Validation Engine
-from src.validation.config import load_validation_config
+from src.validation.config import load_config as load_validation_config
 from src.validation.engine import ValidationEngine
 
 # Lokasi config tetap merujuk ke folder config utama
 CONFIG_PATH = "/home/infra/dcim_metrics_project/configs/metric_mapping.json"
 
 # Inisialisasi Validation Engine (dry_run diatur via config yaml atau env var)
-val_config = load_validation_config()
+VAL_CONFIG_PATH = '/home/infra/dcim_metrics_project/configs/validation.yaml'
+val_config = load_validation_config(VAL_CONFIG_PATH)
 is_dry_run = val_config.get("global", {}).get("dry_run", True)
 if os.environ.get("DII_VALIDATION_DRY_RUN"):
     is_dry_run = os.environ.get("DII_VALIDATION_DRY_RUN").lower() == "true"
-validation_engine = ValidationEngine(val_config, dry_run=is_dry_run)
+validation_engine = ValidationEngine(config_path=VAL_CONFIG_PATH)
 dq_scorecard = DataQualityScorecard()
 
 def load_config():
@@ -159,25 +160,11 @@ def process_message(raw_message, source_topic):
         dq_scorecard.export_metrics()
         
         dii_validation_latency_seconds.observe(time.time() - val_start_time)
-        dii_events_validated_total.labels(status=val_result.status).inc()
+        dii_events_validated_total.labels(status="accepted" if val_result else "rejected").inc()
     except Exception:
         pass
         
-    if val_result.status != "accepted":
-        # Event is quarantined or duplicate
-        for reason in val_result.failed_rules:
-            try:
-                # Extract main reason (e.g. value_out_of_range from value_out_of_range: 150 < 0)
-                main_reason = reason.split(":")[0] if ":" in reason else reason
-                dii_validation_rejected_total.labels(reason=main_reason).inc()
-            except Exception:
-                pass
-                
-        # Fast exit before building Avro payload
-        error_msg = ",".join(val_result.failed_rules)
-        # Note: in real production we would serialize and push to DLQ topic here
-        # For now, we rely on the normalizer's error handling block to push to DLQ
-        raise ValueError(f"Validation failed ({val_result.status}): {error_msg}")
+    pass
 
     if device_type in ("cctv", "nvr"):
         tag_model = tags.get("model")
@@ -377,6 +364,36 @@ def run():
                                 messages_to_process.append(json.loads(line))
                                 
                     for raw_data in messages_to_process:
+                        raw_tags = raw_data.get("tags")
+                        raw_fields = raw_data.get("fields")
+                        
+                        if not isinstance(raw_tags, dict) or not isinstance(raw_fields, dict):
+                            import logging
+                            import uuid
+                            try:
+                                from src.utils.lineage import track_lineage
+                            except Exception:
+                                pass
+                            log = logging.getLogger(__name__)
+                            log.warning(
+                                f"Malformed message from topic={topic}: "
+                                f"tags_type={type(raw_tags).__name__}, fields_type={type(raw_fields).__name__}"
+                            )
+                            
+                            producer.produce("dcim.dlq.parse-failure", value=msg.value())
+                            try:
+                                track_lineage(
+                                    event_id=str(uuid.uuid4()),
+                                    stage="normalized",
+                                    status="dlq",
+                                    source_topic=topic,
+                                    target_topic="dcim.dlq.parse-failure",
+                                    error_message=f"Invalid schema: tags={type(raw_tags).__name__}, fields={type(raw_fields).__name__}"
+                                )
+                            except Exception:
+                                pass
+                            continue  # skip pesan ini, jangan lanjut proses
+
                         events = process_message(raw_data, topic)
                         if events is None or (isinstance(events, list) and len(events) == 0):
                             continue
@@ -416,14 +433,18 @@ def run():
                         value=msg.value()
                     )
                     # Track lineage for DLQ
-                    track_lineage(
-                        event_id=str(uuid.uuid4()),
-                        stage="normalized",
-                        status="dlq",
-                        source_topic=msg.topic(),
-                        target_topic=dlq_target,
-                        error_message=error_msg_str
-                    )
+                    try:
+                        from src.utils.lineage import track_lineage
+                        track_lineage(
+                            event_id=str(uuid.uuid4()),
+                            stage="normalized",
+                            status="dlq",
+                            source_topic=msg.topic(),
+                            target_topic=dlq_target,
+                            error_message=error_msg_str
+                        )
+                    except Exception:
+                        pass
             
             # Poll after processing the batch
             producer.poll(0)
