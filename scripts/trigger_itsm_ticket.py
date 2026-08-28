@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append("/home/infra/dcim_metrics_project")
+
 from src.connectors.itsm.servicenow import ServiceNowConnector
 from src.connectors.itsm.jira import JiraConnector
 import json

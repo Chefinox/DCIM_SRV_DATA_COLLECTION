@@ -1,13 +1,13 @@
 # DCIM Metrics Project
 
-**Version**: v4.6.2 (Kafka 4.1.2 Upgrade, Log Persistence Fix, iTop Consumer Lag Remediation, 12-Partition Kafka)  
+**Version**: v4.8.0 (Virtualization Ingestion, ITSM Mock Readiness, Pipeline Remediation, Load Test Verified)  
 **Status**: ✅ Production Active  
-**Last Updated**: 2026-08-04
+**Last Updated**: 2026-08-28
 
 
 ## Project Overview
 
-Unified DCIM telemetry and inventory management system using multi-layer decoupled architecture with Apache Kafka as the message broker backbone. All 5 device types use **NiFi ExecuteProcess** for uniform data ingestion.
+Unified DCIM telemetry and inventory management system using multi-layer decoupled architecture with Apache Kafka as the message broker backbone. All 6 device types use **NiFi ExecuteProcess** for uniform data ingestion.
 
 ## Architecture
 
@@ -15,6 +15,7 @@ Unified DCIM telemetry and inventory management system using multi-layer decoupl
 flowchart LR
     Device[DCIM Devices] --> NiFi[Apache NiFi]
     NiFi --> KRaw[Kafka Raw]
+    VM[Proxmox Mock API :8085] --> KRaw
     KRaw --> Norm[dcim-normalizer]
     Norm -- Avro --> KNorm[Kafka Normalized]
     
@@ -34,6 +35,8 @@ flowchart LR
     ES --> Kibana[Kibana]
     ES --> Alert[Alerting]
     Alert --> TG[Telegram]
+    
+    KEnriched -.-> ITSM[ITSM Mock API :8083]
 ```
 
 ### Monitored Infrastructure
@@ -42,8 +45,9 @@ flowchart LR
 - **NAS**: 6 units (Synology DS) - SNMP v3
 - **Network**: 5 units (MikroTik) - SNMP v2c
 - **CCTV/NVR**: 32 units (Hikvision: 31 Cameras + 1 NVR) - ISAPI HTTP
+- **Virtualization**: 3 VMs (Proxmox Mock Fixture Adapter) - REST API
 
-**Total**: 49 devices monitored
+**Total**: 52 devices monitored (49 physical + 3 virtual mock)
 
 ## Directory Structure
 
@@ -57,11 +61,18 @@ dcim_metrics_project/
 │   └── metric_mapping.json     # Normalization rules (25 metric types)
 │
 ├── docs/                       # Documentation
-│   ├── architecture/           # Architecture & design docs (v4.5+)
-│   │   └── _archived/          # Obsolete architecture docs
+│   ├── architecture/           # Architecture & design docs (v4.7, v4.8)
+│   │   └── _archived/         # Superseded architecture docs (v4.6 and older)
+│   ├── handoff/                # Handover reports
+│   │   └── _archived/         # Completed prompt-agent specs
 │   ├── operations/             # Operational/incident reports
+│   │   └── _archived/         # Superseded operation docs
 │   ├── standar_dcim/           # Compliance, SOP, and AI team guides
-│   └── development/            # Development guides & metrics
+│   │   └── _archived/         # Superseded implementation plans & prompts
+│   ├── development/            # Development guides & metrics
+│   ├── changes/                # Change management reports
+│   ├── incidents/              # Post-mortem incident reports
+│   └── Task Tracker/          # Task tracker TSV files (active versions)
 │
 ├── elasticsearch/              # Elasticsearch docker-compose
 ├── exporters/                  # Prometheus exporters docker-compose
@@ -71,21 +82,28 @@ dcim_metrics_project/
 ├── observability/              # Prometheus + Grafana configuration
 ├── schema-registry/            # Confluent Avro schemas
 ├── vault/                      # HashiCorp Vault secrets policies
+├── timescaledb/                # TimescaleDB continuous aggregates schemas
 │
-├── scripts/                    # Utility scripts, cron jobs, pollers
+├── scripts/                    # Active utility scripts, pollers, consumers
 │   ├── redfish_poller.py       # Server Redfish data collector
 │   ├── snmp_ups_poller.py      # UPS SNMP data collector
 │   ├── nas_poller.py           # NAS SNMP data collector
 │   ├── mikrotik_poller.py      # Network SNMP data collector
 │   ├── cctv_poller.py          # CCTV/NVR ISAPI data collector
-│   ├── dcim_itop_unified_consumer.py # iTop CMDB auto-registration (v8)
-│   ├── dcim_telegram_alerter.py      # Alert notification service
-│   ├── dcim_threshold_alerter.py     # Threshold & stale device alerter
-│   └── [other utilities]
+│   ├── virtualization_poller.py         # Virtualization Kafka poller (Port 8085)
+│   ├── virtualization_poller_nifi.py    # Virtualization NiFi poller (Port 8085)
+│   ├── trigger_itsm_ticket.py           # ITSM ServiceNow/Jira ticket trigger
+│   ├── dcim_itop_unified_consumer.py    # iTop CMDB auto-registration (v8)
+│   ├── dcim_telegram_alerter.py         # Alert notification service
+│   ├── dcim_threshold_alerter.py        # Threshold & stale device alerter
+│   └── _archived/              # Legacy/superseded scripts & backup files
 │
 ├── src/                        # Modular Architecture Core
 │   ├── configs/                # Configuration loader (Vault integration)
 │   ├── schemas/                # Pydantic & Avro data models
+│   ├── connectors/             # External system adapters
+│   │   ├── virtualization/     # Proxmox Fixture Adapter (Port 8085)
+│   │   └── itsm/               # ITSM ServiceNow/Jira Mock API (Port 8083)
 │   ├── skills/                 # Core processing logic
 │   │   ├── telemetry/          # Normalizer, ES/SQL consumers, SIEM
 │   │   ├── inventory/          # Enrichment API, Redfish scanner
@@ -95,11 +113,13 @@ dcim_metrics_project/
 │   ├── observability/          # Logging & metrics
 │   └── tools/                  # Integration tools
 │
-├── sql/                        # SQL schemas & migrations
-├── timescaledb/                # TimescaleDB continuous aggregates schemas
+├── tests/                      # Test suites
+│   └── load_testing/           # Locust load test scripts
 │
+├── sql/                        # SQL schemas & migrations
 ├── _archived/                  # Legacy/superseded code & old files
 ├── logs/                       # Application & service logs
+├── rollback_snapshots/         # Rollback snapshots (used/ subfolder)
 └── ai_agent/                   # AI integration & analytics models
 ```
 
@@ -126,35 +146,41 @@ dcim_metrics_project/
 - `dcim-siem-es-consumer.service` - SIEM alerts consumer
 - `dcim-dlq-consumer.service` - Dead letter queue handler & lineage tracking
 - `dcim-threshold-alerter.service` - Threshold + stale-device alerting (120s interval)
+- `dcim-proxmox-mock-api.service` - Proxmox Virtualization Fixture Adapter (:8085)
+- `dcim-itsm-mock-api.service` - ITSM ServiceNow/Jira Fixture Adapter (:8083)
 
 ### Systemd Services (AI Analytics)
 - `dcim-analytics-bridge.service` - Analytics Bridge (Kafka Avro → JSON)
 - `dcim-analytics-stream-processor.service` - Analytics Stream Processor → TimescaleDB
 
-### Docker Containers (25 active)
+### Systemd Timers & Cron Jobs
+- `dcim-virtualization-poller.timer` - Virtualization poller every 1 minute
+- `dcim-itop-ralph-sync.timer` - Daily sync to Ralph CMDB (02:00 WIB)
+- `dcim-telegram-alerter.timer` - Telegram alerter every 5 minutes
+- `dcim-data-quality-check.timer` - Daily pipeline data quality check (06:00 WIB)
+- `0 0 * * *` - Partition management for PostgreSQL `dcim_events`
+- `0 * * * *` - Redis cache maintenance
+- `*/5 * * * *` - PG → iTop inventory sync
+
+### Docker Containers (25+ active)
 
 | Stack | Containers |
 |---|---|
 | **Kafka Cluster** | `kafka1`, `kafka2`, `kafka3` (4.1.2, KRaft, SSL, Named Volumes) |
-| **Schema Registry** | `schema-registry` (Confluent 7.6.0) |
+| **Schema Registry** | `schema-registry` (Confluent 7.6.0, Port 8081) |
 | **Vault** | `vault` (HashiCorp 1.15) |
 | **NiFi** | `dcim-nifi` (custom Python3 image) |
 | **Redis** | `dcim-redis-cache` (7-alpine) |
 | **Elasticsearch + Kibana** | `dcim_elasticsearch`, `dcim_kibana` (9.3.1) |
 | **PostgreSQL** | `dcim_sot_postgres` (15-alpine) |
 | **TimescaleDB** | `dcim-timescaledb` (PG 15) |
-| **iTop** | `itop-web` (3.1.1), `itop-db` (MariaDB 10.11), `itop-cloudbeaver` |
+| **iTop** | `itop-web` (3.2.3), `itop-db` (MariaDB 10.11), `itop-cloudbeaver` |
 | **Ralph** | `ralph_web`, `ralph_nginx`, `ralph_inkpy`, `docker-db-1`, `docker-redis-1` |
 | **Prometheus Exporters** | `dcim_node_exporter`, `dcim_postgres_exporter`, `dcim_redis_exporter`, `dcim_kafka_exporter`, `dcim_elasticsearch_exporter` |
 | **Observability** | Prometheus + Grafana (external `10.70.0.25`) |
 | **PgAdmin** | `dcim_pgadmin` |
-
-### Systemd Timers & Cron Jobs
-- `dcim-itop-ralph-sync.timer` - Daily sync to Ralph CMDB (02:00 WIB)
-- `dcim-data-quality-check.timer` - Daily pipeline data quality check (06:00 WIB)
-- `0 0 * * *` - Partition management for PostgreSQL `dcim_events`
-- `0 * * * *` - Redis cache maintenance
-- `*/5 * * * *` - PG → iTop inventory sync
+| **Kafka UI** | `dcim-kafka-ui` (Kafbat UI) |
+| **Telegraf** | `dcim-telegraf-consumer` |
 
 ## Data Flow
 
@@ -194,30 +220,28 @@ PostgreSQL / iTop → itop_to_ralph_sync.py → Ralph Asset Repository
 - **Time-series DB (Analytics)**: TimescaleDB (PostgreSQL 15, port 5433)
 - **Search & Telemetry**: Elasticsearch 9.3.1
 - **Relational DB**: PostgreSQL 15
-- **Secrets Management**: HashiCorp Vault 1.15 (AppRole auth)
-- **CMDB (Primary)**: iTop 3.1.1 (10.70.0.56:8080)
+- **Secrets Management**: HashiCorp Vault 1.15 (AppRole auth, per-connector isolation)
+- **CMDB (Primary)**: iTop 3.2.3 (10.70.0.56:8080)
 - **Asset Repository**: Ralph (10.70.0.56:8082)
 - **Visualization**: Kibana 9.3.1
 - **Monitoring**: Prometheus + Grafana + 5 Exporters (Node, PG, Redis, Kafka, ES)
 - **Data Collection**: NiFi ExecuteProcess (Python pollers)
+- **Load Testing**: Locust (219+ req/s, 0% error rate verified)
 
 ## Version History
 
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
-| v4.6.2 | 2026-08-04 | Kafka 4.1.2 upgrade, log dirs persistence fix, iTop consumer lag remediation (0 lag), MariaDB/Postgres index optimization | **CURRENT** |
+| v4.8.0 | 2026-08-28 | Virtualization Ingestion (Port 8085), ITSM Mock Readiness (Port 8083), Normalizer DLQ Reject Fix, Load Test Verified (219 req/s), Repository Cleanup & Archival | **CURRENT** |
+| v4.7.0 | 2026-08-11 | Validation Engine (Range, Regex, Duplicate, Freshness), DLQ 3-Topic + 4-Stage Lineage, Impact Scoring, Data Quality Scorecard, Fixture-Replay Connectors | Superseded |
+| v4.6.2 | 2026-08-04 | Kafka 4.1.2 upgrade, log dirs persistence fix, iTop consumer lag remediation (0 lag), MariaDB/Postgres index optimization | Superseded |
 | v4.6.1 | 2026-07-27 | 12-partition topic alignment across all Kafka topics, Kafbat UI compose restoration | Superseded |
-| v4.6.0 | 2026-07-24 | Circuit Breaker Pattern (`src/utils/circuit_breaker.py`), Data Classification Matrix, Prometheus CB exporter | Superseded |
+| v4.6.0 | 2026-07-24 | Circuit Breaker Pattern, Data Classification Matrix, Prometheus CB exporter | Superseded |
 | v4.5.2 | 2026-07-24 | Kafka broker listener fix, ES 9.3.1 restore, Prometheus exporters active, project cleanup | Superseded |
 | v4.5.1 | 2026-07-21 | CCTV NiFi migration, credential hardening, systemd bridge removal | Superseded |
 | v4.5.0 | 2026-07-20 | Multi-metric normalizer (25 types), computed energy metrics, Ralph asset_id | Superseded |
-| v4.4.0 | 2026-07-10 | Full NiFi Cutover, SIEM Consumer, AI Pipeline (TimescaleDB), Custom Docker NiFi Python3 | Superseded |
+| v4.4.0 | 2026-07-10 | Full NiFi Cutover, SIEM Consumer, AI Pipeline (TimescaleDB) | Superseded |
 | v4.3.0 | 2026-07-01 | Kafka 3-Node SSL Cluster, Schema Registry (Avro), HashiCorp Vault Integration | Superseded |
-| v4.2.0 | 2026-06-30 | Initial transition to NiFi for data collection, Avro schema integration testing | Superseded |
-| v4.1.0 | 2026-06-15 | Telegram Alerting, JSON Structured Logging, AI Training Data Archive | Superseded |
-| v4.0.0 | 2026-06-12 | L4-L5 Modularization (Normalizer & Enrichment API), L10 DLQ, L8 CMDB Automation | Superseded |
-| v3.5.6 | 2026-05-26 | CCTV Influx JSON format, NVR real SN fallback, CMDB placeholder cleanup | Superseded |
-| v3.0.0 | 2026-04-28 | Baseline: Unified Kafka Pipeline | Superseded |
 
 ## Quick Start
 
@@ -225,6 +249,9 @@ PostgreSQL / iTop → itop_to_ralph_sync.py → Ralph Asset Repository
 ```bash
 # Check core pipeline services
 sudo systemctl status dcim-normalizer dcim-enrichment-api dcim-sql-consumer dcim-es-consumer dcim-itop-unified
+
+# Check mock fixture services
+sudo systemctl status dcim-proxmox-mock-api dcim-itsm-mock-api dcim-virtualization-poller.timer
 
 # Check infrastructure containers
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "dcim|kafka|schema|vault|itop|ralph"
@@ -234,32 +261,15 @@ curl -sk https://localhost:8443/nifi-api/process-groups/root/process-groups | py
 
 # Check active service logs via journalctl
 sudo journalctl -u dcim-normalizer -f
-
-# Check Prometheus exporters
-docker ps | grep exporter
 ```
-
 
 ## Documentation
 
-- **Architecture**: See `docs/architecture/v4.5-pipeline-architecture.md`
-- **Comparison**: See `docs/architecture/v4.5-pipeline-architecture-komparasi.md`
+- **Architecture**: See `docs/architecture/v4.8-pipeline-architecture.md`
+- **Comparison**: See `docs/architecture/v4.8-pipeline-architecture-komparasi.md`
+- **Gap Analysis**: See `docs/architecture/v4.7-gap-analysis-aktual-vs-wiki.md`
+- **Implementation Plan**: See `docs/architecture/v4.7-implementation-plan-data-ingestion-gaps.md`
 - **Versioning**: See `docs/architecture/24-versioning-change-management-standard.md`
 - **Operations**: See `docs/operations/` for incident reports
 - **AI Team**: See `docs/standar_dcim/` for AI access guides
 - **Development**: See `docs/development/` for guides and metrics
-
-## Compliance
-
-- **FIT041**: Versioning & Change Management Standard
-- **FIT157**: System Architecture Design (Kafka Backbone)
-- **MT-018**: Credential Hardening (Vault → Docker secret → Env var)
-
-## Support
-
-For issues or questions, refer to documentation in `docs/` directory or check logs in `logs/` directory.
-
----
-**Last Updated**: 2026-07-24  
-**Version**: v4.5.2  
-**Maintained By**: Infrastructure Team
