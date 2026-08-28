@@ -7,9 +7,8 @@ import uuid
 import sys
 
 def poll_and_print():
-    # URL of our Mock API
-    # Since NiFi runs with network_mode: host, it can reach localhost:8081
-    api_url = "http://localhost:8081/api2/json/cluster/resources"
+    # URL of our Mock API (Port 8085)
+    api_url = "http://localhost:8085/api2/json/cluster/resources"
     
     try:
         response = requests.get(api_url, timeout=5)
@@ -18,32 +17,36 @@ def poll_and_print():
             vms = data.get('data', [])
             
             for vm in vms:
-                # Basic Normalization 
-                normalized_event = {
-                    "event_id": str(uuid.uuid4()),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "hostname": vm.get("name", "unknown"),
-                    "source_system": "proxmox-mock-api",
-                    "resource_type": "virtualization",
-                    "event_type": "telemetry",
-                    "metrics": {
-                        "status": vm.get("status"),
-                        "cpu_usage": vm.get("cpu"),
-                        "memory_usage": vm.get("mem"),
-                        "memory_total": vm.get("maxmem"),
-                        "disk_usage": vm.get("disk"),
-                        "disk_total": vm.get("maxdisk"),
-                        "uptime": vm.get("uptime")
-                    }
+                # Telegraf Standard JSON Format (tags & fields) for Normalizer compatibility
+                status_val = 1 if vm.get("status") == "running" else 0
+                cpu_pct = float(vm.get("cpu", 0.0)) * 100.0
+                
+                telegraf_payload = {
+                    "name": "dcim_virtualization_utilization",
+                    "tags": {
+                        "hostname": vm.get("name", "unknown_vm"),
+                        "device_type": "virtual_machine",
+                        "category": "virtualization",
+                        "source_system": "proxmox-mock-api",
+                        "ip": vm.get("ip", "10.70.0.30")
+                    },
+                    "fields": {
+                        "status": status_val,
+                        "cpu_utilization": cpu_pct,
+                        "memory_used_bytes": int(vm.get("mem", 0)),
+                        "memory_total_bytes": int(vm.get("maxmem", 0)),
+                        "disk_used_bytes": int(vm.get("disk", 0)),
+                        "disk_total_bytes": int(vm.get("maxdisk", 0)),
+                        "uptime_seconds": int(vm.get("uptime", 0))
+                    },
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }
                 
-                # Print to STDOUT so NiFi ExecuteProcess can capture it as FlowFile content
-                print(json.dumps(normalized_event))
+                # Print to STDOUT so NiFi ExecuteProcess / Pipeline can capture it
+                print(json.dumps(telegraf_payload))
             
-            # Flush stdout to ensure NiFi gets the data immediately
             sys.stdout.flush()
         else:
-            # Print empty or error to avoid breaking pipeline, or handle silently like redfish_inventory_poller
             pass
     except Exception as e:
         pass

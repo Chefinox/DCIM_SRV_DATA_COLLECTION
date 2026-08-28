@@ -9,8 +9,8 @@ import os
 import uuid
 
 # Kafka configuration
-KAFKA_BROKERS = "10.70.0.56:9092,10.70.0.56:9093,10.70.0.56:9094"
-TOPIC = "dcim.events.raw"
+KAFKA_BROKERS = "10.70.0.56:9092"
+TOPIC = "dcim.raw.virtualization"
 
 def get_kafka_producer():
     conf = {
@@ -24,7 +24,7 @@ def poll_and_publish():
     producer = get_kafka_producer()
     
     # URL of our Mock API
-    api_url = "http://localhost:8081/api2/json/cluster/resources"
+    api_url = "http://localhost:8085/api2/json/cluster/resources"
     
     try:
         response = requests.get(api_url, timeout=5)
@@ -35,27 +35,32 @@ def poll_and_publish():
             vms = data.get('data', [])
             
             for vm in vms:
-                # Basic Normalization matching vm-normalize.jolt logic
-                normalized_event = {
-                    "event_id": str(uuid.uuid4()),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "hostname": vm.get("name", "unknown"),
-                    "source_system": "proxmox-mock-api",
-                    "resource_type": "virtualization",
-                    "event_type": "telemetry",
-                    "metrics": {
-                        "status": vm.get("status"),
-                        "cpu_usage": vm.get("cpu"),
-                        "memory_usage": vm.get("mem"),
-                        "memory_total": vm.get("maxmem"),
-                        "disk_usage": vm.get("disk"),
-                        "disk_total": vm.get("maxdisk"),
-                        "uptime": vm.get("uptime")
-                    }
+                status_val = 1 if vm.get("status") == "running" else 0
+                cpu_pct = float(vm.get("cpu", 0.0)) * 100.0
+                
+                telegraf_payload = {
+                    "name": "dcim_virtualization_utilization",
+                    "tags": {
+                        "hostname": vm.get("name", "unknown_vm"),
+                        "device_type": "virtual_machine",
+                        "category": "virtualization",
+                        "source_system": "proxmox-mock-api",
+                        "ip": vm.get("ip", "10.70.0.30")
+                    },
+                    "fields": {
+                        "status": status_val,
+                        "cpu_utilization": cpu_pct,
+                        "memory_used_bytes": int(vm.get("mem", 0)),
+                        "memory_total_bytes": int(vm.get("maxmem", 0)),
+                        "disk_used_bytes": int(vm.get("disk", 0)),
+                        "disk_total_bytes": int(vm.get("maxdisk", 0)),
+                        "uptime_seconds": int(vm.get("uptime", 0))
+                    },
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }
                 
                 # Publish to Kafka
-                producer.produce(TOPIC, key=normalized_event["hostname"], value=json.dumps(normalized_event))
+                producer.produce(TOPIC, key=telegraf_payload["tags"]["hostname"], value=json.dumps(telegraf_payload))
                 
             producer.flush()
             print(f"[{datetime.now().isoformat()}] Published {len(vms)} VM events to {TOPIC}")

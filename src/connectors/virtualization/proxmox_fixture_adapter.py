@@ -66,7 +66,7 @@ class ProxmoxFixtureHandler(BaseHTTPRequestHandler):
         
         self.wfile.write(json.dumps(response_data).encode('utf-8'))
 
-def run_server(port=8081):
+def run_server(port=8085):
     server_address = ('', port)
     httpd = HTTPServer(server_address, ProxmoxFixtureHandler)
     print(f"Starting Proxmox Fixture Adapter (Mock API) on port {port}...")
