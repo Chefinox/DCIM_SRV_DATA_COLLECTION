@@ -32,6 +32,14 @@ try:
 except Exception as e:
     logger.error(f"Failed to connect to Redis: {e}")
 
+@app.get("/health")
+def health():
+    redis_ok = False
+    try:
+        redis_ok = redis_client.ping()
+    except Exception:
+        pass
+    return {"status": "ok", "service": "dcim-enrichment-api", "redis_connected": redis_ok}
 
 def determine_enrichment_status(serial_number: str, data: dict) -> str:
     """Determine enrichment completeness status.
